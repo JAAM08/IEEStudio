@@ -11,9 +11,10 @@ use voltforge_project::{
     Project, ProjectResult, RunResult, Settings, Source, Status, FORMAT_VERSION,
 };
 
+use crate::quick_view::QuickView;
 use crate::theme::{self, Palette, ACCENTS};
 
-const SYSTEMS: [(&str, System); 6] = [
+pub(crate) const SYSTEMS: [(&str, System); 6] = [
     ("1F-2H 127 V", System::SINGLE_127),
     ("1F-3H 240/120 V", System::SPLIT_240_120),
     ("3F-4H 220Y/127 V", System::WYE_220_127),
@@ -22,13 +23,13 @@ const SYSTEMS: [(&str, System); 6] = [
     ("3F-3H 440 V", System::DELTA_440),
 ];
 
-const KINDS: [(&str, CircuitKind); 3] = [
+pub(crate) const KINDS: [(&str, CircuitKind); 3] = [
     ("1 fase", CircuitKind::LineToNeutral),
     ("2 fases", CircuitKind::LineToLine),
     ("3 fases", CircuitKind::ThreePhase),
 ];
 
-const MATERIALS: [(&str, Material); 2] = [
+pub(crate) const MATERIALS: [(&str, Material); 2] = [
     ("Cobre", Material::Copper),
     ("Aluminio", Material::Aluminum),
 ];
@@ -48,7 +49,7 @@ const INSULATIONS: [(&str, Insulation); 12] = [
     ("RHW-2", Insulation::Rhw2),
 ];
 
-const CONDUITS: [(&str, ConduitType); 5] = [
+pub(crate) const CONDUITS: [(&str, ConduitType); 5] = [
     ("EMT", ConduitType::Emt),
     ("IMC", ConduitType::Imc),
     ("RMC", ConduitType::Rmc),
@@ -71,7 +72,7 @@ fn label_of<T: PartialEq + Copy>(options: &[(&'static str, T)], value: T) -> &'s
 }
 
 /// Lista desplegable sobre un conjunto fijo de opciones. Devuelve `true` si cambió.
-fn combo<T: PartialEq + Copy>(
+pub(crate) fn combo<T: PartialEq + Copy>(
     ui: &mut egui::Ui,
     id: &str,
     value: &mut T,
@@ -89,7 +90,7 @@ fn combo<T: PartialEq + Copy>(
     changed
 }
 
-fn number(
+pub(crate) fn number(
     ui: &mut egui::Ui,
     value: &mut f64,
     speed: f64,
@@ -118,7 +119,16 @@ struct Capture {
     frames: u32,
 }
 
+/// Vista que ocupa la ventana.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum View {
+    Project,
+    Quick,
+}
+
 pub struct App {
+    view: View,
+    quick: QuickView,
     project: Project,
     path: Option<PathBuf>,
     dirty: bool,
@@ -164,12 +174,15 @@ impl App {
         open: Option<PathBuf>,
         capture: Option<PathBuf>,
         light: bool,
+        quick: bool,
     ) -> Self {
         theme::install_fonts(&cc.egui_ctx);
         let dark = !light;
         let palette = Palette::new(dark, ACCENTS[0].1);
         theme::apply(&cc.egui_ctx, &palette);
         let mut app = App {
+            view: if quick { View::Quick } else { View::Project },
+            quick: QuickView::default(),
             project: example::house(),
             path: None,
             dirty: false,
@@ -297,8 +310,12 @@ impl App {
             ui.label(RichText::new("⚡").color(self.palette.accent).size(16.0));
             ui.label(self.strong("VoltForge").size(15.0));
             ui.add_space(8.0);
+            ui.selectable_value(&mut self.view, View::Project, "Proyecto");
+            ui.selectable_value(&mut self.view, View::Quick, "Cálculo rápido");
+            ui.add_space(8.0);
             ui.menu_button("Archivo", |ui| {
                 if ui.button("Nuevo").clicked() {
+                    self.view = View::Project;
                     self.set_project(empty_project(), None);
                     ui.close();
                 }
@@ -316,6 +333,7 @@ impl App {
                 }
                 ui.separator();
                 if ui.button("Cargar el ejemplo").clicked() {
+                    self.view = View::Project;
                     self.set_project(example::house(), None);
                     self.selection = Selection::Circuit(1);
                     ui.close();
@@ -347,8 +365,10 @@ impl App {
                     .map_or("sin guardar".to_string(), |n| {
                         n.to_string_lossy().into_owned()
                     });
-                ui.label(self.muted(file));
-                ui.label(&self.project.name);
+                if self.view == View::Project {
+                    ui.label(self.muted(file));
+                    ui.label(&self.project.name);
+                }
             });
         });
     }
@@ -356,6 +376,15 @@ impl App {
     // ------------------------------------------------------------ barra inferior
 
     fn status_bar(&mut self, ui: &mut egui::Ui) {
+        if self.view == View::Quick {
+            ui.horizontal(|ui| {
+                ui.label(self.muted(self.quick.summary()));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(self.muted("Sin aprobación profesional"));
+                });
+            });
+            return;
+        }
         ui.horizontal(|ui| {
             match &self.result {
                 Ok(r) => {
@@ -934,6 +963,12 @@ impl eframe::App for App {
         egui::Panel::bottom("estado")
             .frame(bar)
             .show(ui, |ui| self.status_bar(ui));
+
+        if self.view == View::Quick {
+            self.quick.ui(ui, &p);
+            self.handle_capture(ui.ctx());
+            return;
+        }
 
         let mut changed = false;
         egui::Panel::left("proyecto")

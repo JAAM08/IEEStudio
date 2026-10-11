@@ -6,6 +6,7 @@
 mod calc;
 pub mod example;
 mod model;
+pub mod quick;
 
 pub use calc::{
     calculate, Check, ConduitChoice, PanelResult, ProjectResult, Run, RunResult, Status,

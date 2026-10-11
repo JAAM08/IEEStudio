@@ -68,7 +68,12 @@ impl CircuitKind {
         match v {
             Some(v) if v > 0.0 => Ok(v),
             _ => Err(Error::InvalidInput(format!(
-                "el sistema no tiene la tensión que requiere un circuito {self:?}"
+                "el sistema elegido no tiene la tensión que requiere un circuito de {}",
+                match self {
+                    CircuitKind::LineToNeutral => "una fase y neutro",
+                    CircuitKind::LineToLine => "dos fases",
+                    CircuitKind::ThreePhase => "tres fases",
+                }
             ))),
         }
     }

@@ -38,6 +38,7 @@ pub struct VoltageDropInput {
 
 /// Resultado y valores intermedios, para poder mostrar el procedimiento.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct VoltageDropResult {
     /// Tensión contra la que se expresa el porcentaje.
     pub reference_voltage_v: f64,
