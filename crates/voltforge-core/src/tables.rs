@@ -1,0 +1,414 @@
+//! Tablas normativas del perfil activo.
+//!
+//! Los valores no están escritos en el código: se leen de los archivos CSV de
+//! `data/<perfil>/`, que se incrustan en el binario al compilar.
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+use crate::csv;
+use crate::error::{Error, Result};
+
+/// Material del conductor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Material {
+    Copper,
+    Aluminum,
+}
+
+/// Material de la canalización, que determina la columna de la Tabla 9.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RacewayMaterial {
+    Pvc,
+    Aluminum,
+    Steel,
+}
+
+/// Tipo de tubo conduit de la Tabla 4.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ConduitType {
+    Emt,
+    Imc,
+    Rmc,
+    Pvc40,
+    Pvc80,
+}
+
+impl ConduitType {
+    pub const ALL: [ConduitType; 5] = [Self::Emt, Self::Imc, Self::Rmc, Self::Pvc40, Self::Pvc80];
+
+    fn code(self) -> &'static str {
+        match self {
+            Self::Emt => "EMT",
+            Self::Imc => "IMC",
+            Self::Rmc => "RMC",
+            Self::Pvc40 => "PVC40",
+            Self::Pvc80 => "PVC80",
+        }
+    }
+
+    /// Material de la canalización para la Tabla 9.
+    pub fn raceway_material(self) -> RacewayMaterial {
+        match self {
+            Self::Emt | Self::Imc | Self::Rmc => RacewayMaterial::Steel,
+            Self::Pvc40 | Self::Pvc80 => RacewayMaterial::Pvc,
+        }
+    }
+}
+
+impl std::fmt::Display for ConduitType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code())
+    }
+}
+
+/// Grupo de aislamientos con las mismas dimensiones en la Tabla 5.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InsulationGroup {
+    /// TW, THW, THHW, THW-2
+    TwThwThhw,
+    /// RHH, RHW, RHW-2 (con cubierta)
+    RhhRhw,
+    /// THHN, THWN, THWN-2
+    ThhnThwn,
+    /// XHHW, XHHW-2, XHH
+    Xhhw,
+}
+
+impl InsulationGroup {
+    fn code(self) -> &'static str {
+        match self {
+            Self::TwThwThhw => "TW_THW_THHW_THW2",
+            Self::RhhRhw => "RHH_RHW_RHW2",
+            Self::ThhnThwn => "THHN_THWN_THWN2",
+            Self::Xhhw => "XHHW_XHHW2_XHH",
+        }
+    }
+}
+
+/// Calibre del conductor tal como lo nombra la norma: `"14"`, `"1/0"`, `"250"`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Size(pub String);
+
+impl Size {
+    pub fn new(s: &str) -> Self {
+        Size(s.trim().to_string())
+    }
+}
+
+impl std::fmt::Display for Size {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Fila de la Tabla 8 (cableado clase B).
+#[derive(Debug, Clone)]
+pub struct ConductorProperties {
+    pub size: String,
+    pub area_mm2: f64,
+    pub kcmil: Option<f64>,
+    pub strands: u32,
+    pub bare_diameter_mm: f64,
+    pub bare_area_mm2: f64,
+}
+
+/// Fila de la Tabla 9: ohms al neutro por kilómetro, a 75 °C.
+#[derive(Debug, Clone)]
+pub struct ImpedanceRow {
+    pub size: String,
+    pub x_pvc_or_aluminum: f64,
+    pub x_steel: f64,
+    pub r_cu_pvc: Option<f64>,
+    pub r_cu_aluminum: Option<f64>,
+    pub r_cu_steel: Option<f64>,
+    pub r_al_pvc: Option<f64>,
+    pub r_al_aluminum: Option<f64>,
+    pub r_al_steel: Option<f64>,
+}
+
+/// Fila de la Tabla 5.
+#[derive(Debug, Clone)]
+pub struct InsulatedConductor {
+    pub insulation_group: String,
+    pub size: String,
+    pub diameter_mm: f64,
+    pub area_mm2: f64,
+}
+
+/// Fila de la Tabla 4.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConduitRow {
+    pub conduit_type: String,
+    pub metric_designator: u32,
+    pub trade_size: String,
+    pub internal_diameter_mm: f64,
+    pub area_100_mm2: f64,
+    pub area_60_mm2: f64,
+    pub area_53_mm2: f64,
+    pub area_31_mm2: f64,
+    pub area_40_mm2: f64,
+}
+
+/// Fila de la Tabla 310-15(b)(16).
+#[derive(Debug, Clone)]
+pub struct AmpacityRow {
+    pub size: String,
+    pub cu_60c: Option<f64>,
+    pub cu_75c: Option<f64>,
+    pub cu_90c: Option<f64>,
+    pub al_60c: Option<f64>,
+    pub al_75c: Option<f64>,
+    pub al_90c: Option<f64>,
+}
+
+/// Fila de la Tabla 310-15(b)(2)(a).
+#[derive(Debug, Clone)]
+pub struct TemperatureCorrectionRow {
+    pub ambient_min_c: Option<f64>,
+    pub ambient_max_c: f64,
+    pub factor_60c: Option<f64>,
+    pub factor_75c: Option<f64>,
+    pub factor_90c: Option<f64>,
+}
+
+/// Fila de la Tabla 310-15(b)(3)(a).
+#[derive(Debug, Clone)]
+pub struct BundlingAdjustmentRow {
+    pub conductors_min: u32,
+    pub conductors_max: Option<u32>,
+    pub factor: f64,
+}
+
+/// Fila de la Tabla 1 del capítulo 10.
+#[derive(Debug, Clone)]
+pub struct FillRow {
+    pub conductors_min: u32,
+    pub conductors_max: Option<u32>,
+    pub fill_fraction: f64,
+}
+
+/// Fila de la Tabla 250-122.
+#[derive(Debug, Clone)]
+pub struct GroundingRow {
+    pub max_overcurrent_a: f64,
+    pub copper_size: String,
+    pub aluminum_size: Option<String>,
+}
+
+/// Perfil normativo: el conjunto de tablas con el que se calcula.
+#[derive(Debug)]
+pub struct Profile {
+    pub id: &'static str,
+    pub title: &'static str,
+    /// Calibres en orden creciente (Tabla 8).
+    pub sizes: Vec<ConductorProperties>,
+    size_index: HashMap<String, usize>,
+    impedance: HashMap<String, ImpedanceRow>,
+    insulated: HashMap<(String, String), InsulatedConductor>,
+    pub conduits: Vec<ConduitRow>,
+    pub ampacity: Vec<AmpacityRow>,
+    pub temperature_correction: Vec<TemperatureCorrectionRow>,
+    pub bundling_adjustment: Vec<BundlingAdjustmentRow>,
+    pub fill: Vec<FillRow>,
+    pub grounding: Vec<GroundingRow>,
+    pub standard_ratings_a: Vec<f64>,
+}
+
+macro_rules! table {
+    ($profile:literal, $file:literal, $build:expr) => {
+        csv::parse(
+            $file,
+            include_str!(concat!("../../../data/", $profile, "/", $file)),
+            $build,
+        )
+    };
+}
+
+impl Profile {
+    /// NOM-001-SEDE-2012, Instalaciones Eléctricas (utilización).
+    pub fn nom_001_sede_2012() -> &'static Profile {
+        static PROFILE: OnceLock<Profile> = OnceLock::new();
+        PROFILE.get_or_init(|| {
+            let sizes = table!(
+                "nom-001-sede-2012",
+                "table_8_conductor_properties.csv",
+                |r| {
+                    ConductorProperties {
+                        size: r.text("size"),
+                        area_mm2: r.get("area_mm2"),
+                        kcmil: r.opt("kcmil"),
+                        strands: r.get("strands"),
+                        bare_diameter_mm: r.get("bare_diameter_mm"),
+                        bare_area_mm2: r.get("bare_area_mm2"),
+                    }
+                }
+            );
+            let impedance = table!("nom-001-sede-2012", "table_9_impedance.csv", |r| {
+                ImpedanceRow {
+                    size: r.text("size"),
+                    x_pvc_or_aluminum: r.get("x_pvc_or_aluminum"),
+                    x_steel: r.get("x_steel"),
+                    r_cu_pvc: r.opt("r_cu_pvc"),
+                    r_cu_aluminum: r.opt("r_cu_aluminum"),
+                    r_cu_steel: r.opt("r_cu_steel"),
+                    r_al_pvc: r.opt("r_al_pvc"),
+                    r_al_aluminum: r.opt("r_al_aluminum"),
+                    r_al_steel: r.opt("r_al_steel"),
+                }
+            });
+            let insulated = table!(
+                "nom-001-sede-2012",
+                "table_5_insulated_conductors.csv",
+                |r| {
+                    InsulatedConductor {
+                        insulation_group: r.text("insulation_group"),
+                        size: r.text("size"),
+                        diameter_mm: r.get("diameter_mm"),
+                        area_mm2: r.get("area_mm2"),
+                    }
+                }
+            );
+            Profile {
+                id: "nom-001-sede-2012",
+                title: "NOM-001-SEDE-2012, Instalaciones Eléctricas (utilización)",
+                size_index: sizes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| (c.size.clone(), i))
+                    .collect(),
+                sizes,
+                impedance: impedance.into_iter().map(|r| (r.size.clone(), r)).collect(),
+                insulated: insulated
+                    .into_iter()
+                    .map(|r| ((r.insulation_group.clone(), r.size.clone()), r))
+                    .collect(),
+                conduits: table!("nom-001-sede-2012", "table_4_conduit.csv", |r| ConduitRow {
+                    conduit_type: r.text("type"),
+                    metric_designator: r.get("metric_designator"),
+                    trade_size: r.text("trade_size"),
+                    internal_diameter_mm: r.get("internal_diameter_mm"),
+                    area_100_mm2: r.get("area_100_mm2"),
+                    area_60_mm2: r.get("area_60_mm2"),
+                    area_53_mm2: r.get("area_53_mm2"),
+                    area_31_mm2: r.get("area_31_mm2"),
+                    area_40_mm2: r.get("area_40_mm2"),
+                }),
+                ampacity: table!("nom-001-sede-2012", "table_310_15_b_16_ampacity.csv", |r| {
+                    AmpacityRow {
+                        size: r.text("size"),
+                        cu_60c: r.opt("cu_60c"),
+                        cu_75c: r.opt("cu_75c"),
+                        cu_90c: r.opt("cu_90c"),
+                        al_60c: r.opt("al_60c"),
+                        al_75c: r.opt("al_75c"),
+                        al_90c: r.opt("al_90c"),
+                    }
+                }),
+                temperature_correction: table!(
+                    "nom-001-sede-2012",
+                    "table_310_15_b_2_a_temperature_correction.csv",
+                    |r| TemperatureCorrectionRow {
+                        ambient_min_c: r.opt("ambient_min_c"),
+                        ambient_max_c: r.get("ambient_max_c"),
+                        factor_60c: r.opt("factor_60c"),
+                        factor_75c: r.opt("factor_75c"),
+                        factor_90c: r.opt("factor_90c"),
+                    }
+                ),
+                bundling_adjustment: table!(
+                    "nom-001-sede-2012",
+                    "table_310_15_b_3_a_bundling_adjustment.csv",
+                    |r| BundlingAdjustmentRow {
+                        conductors_min: r.get("conductors_min"),
+                        conductors_max: r.opt("conductors_max"),
+                        factor: r.get("factor"),
+                    }
+                ),
+                fill: table!("nom-001-sede-2012", "table_1_conduit_fill.csv", |r| {
+                    FillRow {
+                        conductors_min: r.get("conductors_min"),
+                        conductors_max: r.opt("conductors_max"),
+                        fill_fraction: r.get("fill_fraction"),
+                    }
+                }),
+                grounding: table!(
+                    "nom-001-sede-2012",
+                    "table_250_122_equipment_grounding.csv",
+                    |r| GroundingRow {
+                        max_overcurrent_a: r.get("max_overcurrent_a"),
+                        copper_size: r.text("copper_size"),
+                        aluminum_size: r.opt_text("aluminum_size"),
+                    }
+                ),
+                standard_ratings_a: table!(
+                    "nom-001-sede-2012",
+                    "section_240_6_standard_ratings.csv",
+                    |r| r.get("rating_a")
+                ),
+            }
+        })
+    }
+
+    /// Propiedades del conductor desnudo (Tabla 8).
+    pub fn conductor(&self, size: &Size) -> Result<&ConductorProperties> {
+        self.size_index
+            .get(&size.0)
+            .map(|&i| &self.sizes[i])
+            .ok_or_else(|| Error::UnknownSize(size.0.clone()))
+    }
+
+    /// Posición del calibre en el orden creciente de la Tabla 8.
+    pub fn size_rank(&self, size: &Size) -> Result<usize> {
+        self.size_index
+            .get(&size.0)
+            .copied()
+            .ok_or_else(|| Error::UnknownSize(size.0.clone()))
+    }
+
+    /// Resistencia y reactancia de la Tabla 9, en ohms por kilómetro a 75 °C.
+    pub fn impedance(
+        &self,
+        size: &Size,
+        material: Material,
+        raceway: RacewayMaterial,
+    ) -> Result<(f64, f64)> {
+        self.conductor(size)?;
+        let missing = || Error::NotInTable {
+            table: "la Tabla 9",
+            what: format!("calibre {size}, {material:?}, canalización {raceway:?}"),
+        };
+        let row = self.impedance.get(&size.0).ok_or_else(missing)?;
+        let x = match raceway {
+            RacewayMaterial::Steel => row.x_steel,
+            RacewayMaterial::Pvc | RacewayMaterial::Aluminum => row.x_pvc_or_aluminum,
+        };
+        let r = match (material, raceway) {
+            (Material::Copper, RacewayMaterial::Pvc) => row.r_cu_pvc,
+            (Material::Copper, RacewayMaterial::Aluminum) => row.r_cu_aluminum,
+            (Material::Copper, RacewayMaterial::Steel) => row.r_cu_steel,
+            (Material::Aluminum, RacewayMaterial::Pvc) => row.r_al_pvc,
+            (Material::Aluminum, RacewayMaterial::Aluminum) => row.r_al_aluminum,
+            (Material::Aluminum, RacewayMaterial::Steel) => row.r_al_steel,
+        };
+        Ok((r.ok_or_else(missing)?, x))
+    }
+
+    /// Diámetro y área con aislamiento (Tabla 5).
+    pub fn insulated(&self, group: InsulationGroup, size: &Size) -> Result<&InsulatedConductor> {
+        self.conductor(size)?;
+        self.insulated
+            .get(&(group.code().to_string(), size.0.clone()))
+            .ok_or_else(|| Error::NotInTable {
+                table: "la Tabla 5",
+                what: format!("calibre {size}, aislamiento {group:?}"),
+            })
+    }
+
+    /// Filas de la Tabla 4 para un tipo de tubo, de menor a mayor.
+    pub fn conduit_rows(&self, conduit: ConduitType) -> impl Iterator<Item = &ConduitRow> {
+        self.conduits
+            .iter()
+            .filter(move |r| r.conduit_type == conduit.code())
+    }
+}

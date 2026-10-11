@@ -1,0 +1,11 @@
+[package]
+name = "voltforge-core"
+description = "Motor de cálculo de VoltForge: instalaciones eléctricas de baja tensión"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# Sin dependencias externas: el motor solo usa la biblioteca estándar.
+[dependencies]

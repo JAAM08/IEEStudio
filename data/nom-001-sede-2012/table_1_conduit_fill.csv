@@ -1,0 +1,4 @@
+conductors_min,conductors_max,fill_fraction
+1,1,0.53
+2,2,0.31
+3,,0.40
