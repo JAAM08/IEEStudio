@@ -63,12 +63,15 @@ Hecho:
 - Motor: corriente, caída de tensión, conductor, interruptor, puesta a tierra y tubería.
 - Modelo del proyecto con subtableros, cuadro de cargas y caída acumulada.
 - Línea de comandos: `ejemplo` y `calcular`, con salida en JSON.
-- Integración continua en Windows y Linux, que publica el ejecutable.
+- Interfaz gráfica, pantalla principal: árbol, criterios, cuadro de cargas,
+  detalle editable, abrir y guardar, tema oscuro o claro y acento.
+- Integración continua en Windows y Linux, que publica los ejecutables.
 
 Pendiente, en orden:
 
-1. Interfaz gráfica: pantalla principal y cálculo rápido.
+1. Interfaz gráfica: cálculo rápido de un solo circuito, sin cuadro de cargas.
 2. Vista de procedimiento paso a paso y recomendaciones aplicables.
+   También: agregar y quitar tableros desde la interfaz y guardar el tema elegido.
 3. Memoria de cálculo en PDF.
 4. Diagrama unifilar automático para instalaciones radiales.
 5. Instalador de Windows.

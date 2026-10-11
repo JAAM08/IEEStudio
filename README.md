@@ -7,8 +7,8 @@ cálculos, el cuadro de cargas, el diagrama unifilar y la memoria de cálculo.
 El perfil normativo inicial es la NOM-001-SEDE-2012.
 
 > **Estado: desarrollo temprano.** Hoy existen el motor de cálculo, el modelo
-> del proyecto y una línea de comandos. Todavía no hay interfaz gráfica ni
-> instalador.
+> del proyecto y una línea de comandos. Ya hay una primera interfaz gráfica; todavía no
+> hay instalador.
 
 ## Qué funciona hoy
 
@@ -25,26 +25,31 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 
 | Proyecto | Fuente, tableros y subtableros, circuitos y cargas en un archivo JSON |
 | Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
+| Interfaz gráfica | Pantalla principal: árbol del proyecto, criterios, cuadro de cargas y detalle editable del elemento seleccionado; recalcula con cada cambio. Tema oscuro o claro y color de acento a elegir |
+
+![Pantalla principal de VoltForge](docs/pantalla-principal.png)
 
 Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. Los
 motores y equipos de aire acondicionado se calculan como carga general y
 quedan sin evaluar, porque sus reglas propias aún no están implementadas.
 
-Lo siguiente en el plan: interfaz gráfica, memoria de cálculo en PDF y
-diagrama unifilar.
+Lo siguiente en el plan: cálculo rápido con procedimiento paso a paso,
+memoria de cálculo en PDF y diagrama unifilar.
 
 ## Probarlo
 
-Requiere [Rust](https://rustup.rs) 1.80 o posterior.
+Requiere [Rust](https://rustup.rs) 1.95 o posterior (1.80 basta para el
+motor y la línea de comandos).
 
 ```
 cargo test                                     # ejecuta los casos de referencia
 cargo run -p voltforge-cli -- ejemplo casa.json   # escribe un proyecto de ejemplo
 cargo run -p voltforge-cli -- calcular casa.json  # muestra su cuadro de cargas
+cargo run -p voltforge-app -- casa.json           # abre la interfaz gráfica
 ```
 
-Sin instalar Rust: cada compilación publica el ejecutable `voltforge` para
-Windows y Linux en la pestaña *Actions* del repositorio, dentro de la
+Sin instalar Rust: cada compilación publica los ejecutables `voltforge` (línea de
+comandos) y `voltforge-app` (interfaz gráfica) para Windows y Linux en la pestaña *Actions* del repositorio, dentro de la
 ejecución más reciente, en la sección *Artifacts*.
 
 ## Organización
@@ -53,6 +58,7 @@ ejecución más reciente, en la sección *Artifacts*.
 crates/voltforge-core/     motor de cálculo, sin dependencias obligatorias
 crates/voltforge-project/  modelo del proyecto y cuadro de cargas
 crates/voltforge-cli/      línea de comandos
+crates/voltforge-app/      interfaz gráfica de escritorio (egui)
 data/nom-001-sede-2012/    tablas de la norma en CSV, revisables en una hoja de cálculo
 tools/                     extracción y validación de las tablas desde el texto de la norma
 ```

@@ -27,17 +27,21 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       - name: Pruebas
         run: cargo test
-      - name: Compilar la línea de comandos
-        run: cargo build --release -p voltforge-cli
+      - name: Compilar los ejecutables
+        run: cargo build --release -p voltforge-cli -p voltforge-app
       - name: Publicar el ejecutable de Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: voltforge-windows
-          path: target/release/voltforge.exe
+          path: |
+            target/release/voltforge.exe
+            target/release/voltforge-app.exe
       - name: Publicar el ejecutable de Linux
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: voltforge-linux
-          path: target/release/voltforge
+          path: |
+            target/release/voltforge
+            target/release/voltforge-app
