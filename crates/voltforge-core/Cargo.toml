@@ -7,5 +7,10 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-# Sin dependencias externas: el motor solo usa la biblioteca estándar.
+[features]
+# El motor no tiene dependencias obligatorias. `serde` permite guardar y leer
+# sus tipos de entrada, y lo activan los crates que manejan archivos.
+serde = ["dep:serde"]
+
 [dependencies]
+serde = { version = "1", features = ["derive"], optional = true }

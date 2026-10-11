@@ -4,6 +4,7 @@ use crate::error::{Error, Result};
 
 /// Tensiones nominales del sistema, en volts.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct System {
     /// Tensión entre fases. `None` en un servicio de una fase y neutro.
     pub line_to_line_v: Option<f64>,
@@ -46,6 +47,7 @@ impl System {
 
 /// Conexión del circuito al sistema.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CircuitKind {
     /// Una fase y neutro (1F-2H).
     LineToNeutral,

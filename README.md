@@ -6,8 +6,9 @@ VoltForge modela una instalación una sola vez y de ese modelo deriva los
 cálculos, el cuadro de cargas, el diagrama unifilar y la memoria de cálculo.
 El perfil normativo inicial es la NOM-001-SEDE-2012.
 
-> **Estado: desarrollo temprano.** Hoy existe el motor de cálculo con sus
-> tablas y pruebas. Todavía no hay interfaz gráfica ni instalador.
+> **Estado: desarrollo temprano.** Hoy existen el motor de cálculo, el modelo
+> del proyecto y una línea de comandos. Todavía no hay interfaz gráfica ni
+> instalador.
 
 ## Qué funciona hoy
 
@@ -22,24 +23,38 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Puesta a tierra | Tabla 250-122, con el incremento proporcional cuando el conductor de fase se sobredimensiona |
 | Tubería conduit | EMT, IMC, RMC y PVC cédula 40 y 80; ocupación de 53, 31 y 40 % según el número de conductores, niples al 60 % y verificación de atascamiento |
 
-Lo siguiente en el plan: modelo del proyecto, cuadro de cargas, línea de
-comandos e interfaz gráfica.
+| Proyecto | Fuente, tableros y subtableros, circuitos y cargas en un archivo JSON |
+| Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
+
+Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. Los
+motores y equipos de aire acondicionado se calculan como carga general y
+quedan sin evaluar, porque sus reglas propias aún no están implementadas.
+
+Lo siguiente en el plan: interfaz gráfica, memoria de cálculo en PDF y
+diagrama unifilar.
 
 ## Probarlo
 
 Requiere [Rust](https://rustup.rs) 1.80 o posterior.
 
 ```
-cargo test                          # ejecuta los casos de referencia
-cargo run --example procedimiento   # imprime dos cálculos paso a paso
+cargo test                                     # ejecuta los casos de referencia
+cargo run -p voltforge-cli -- ejemplo casa.json   # escribe un proyecto de ejemplo
+cargo run -p voltforge-cli -- calcular casa.json  # muestra su cuadro de cargas
 ```
+
+Sin instalar Rust: cada compilación publica el ejecutable `voltforge` para
+Windows y Linux en la pestaña *Actions* del repositorio, dentro de la
+ejecución más reciente, en la sección *Artifacts*.
 
 ## Organización
 
 ```
-crates/voltforge-core/   motor de cálculo, sin dependencias externas
-data/nom-001-sede-2012/  tablas de la norma en CSV, revisables en una hoja de cálculo
-tools/                   extracción y validación de las tablas desde el texto de la norma
+crates/voltforge-core/     motor de cálculo, sin dependencias obligatorias
+crates/voltforge-project/  modelo del proyecto y cuadro de cargas
+crates/voltforge-cli/      línea de comandos
+data/nom-001-sede-2012/    tablas de la norma en CSV, revisables en una hoja de cálculo
+tools/                     extracción y validación de las tablas desde el texto de la norma
 ```
 
 El motor no depende de ninguna interfaz, calcula con precisión completa y no

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/voltforge-core"]
+members = ["crates/voltforge-core", "crates/voltforge-project", "crates/voltforge-cli"]
 
 [workspace.package]
 version = "0.1.0"

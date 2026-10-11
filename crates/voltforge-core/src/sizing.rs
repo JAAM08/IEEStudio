@@ -35,6 +35,7 @@ pub const SMALLEST_PARALLEL_SIZE: &str = "1/0";
 
 /// Tipo de aislamiento del conductor (Tabla 310-104(a)).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Insulation {
     Tw,
     Thw,

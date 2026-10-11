@@ -1,0 +1,17 @@
+[package]
+name = "voltforge-cli"
+description = "Línea de comandos de VoltForge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "voltforge"
+path = "src/main.rs"
+
+[dependencies]
+voltforge-core = { path = "../voltforge-core" }
+voltforge-project = { path = "../voltforge-project" }
+serde_json = "1"

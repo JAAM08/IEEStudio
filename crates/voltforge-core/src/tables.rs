@@ -11,6 +11,7 @@ use crate::error::{Error, Result};
 
 /// Material del conductor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Material {
     Copper,
     Aluminum,
@@ -18,6 +19,7 @@ pub enum Material {
 
 /// Material de la canalización, que determina la columna de la Tabla 9.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RacewayMaterial {
     Pvc,
     Aluminum,
@@ -26,6 +28,7 @@ pub enum RacewayMaterial {
 
 /// Tipo de tubo conduit de la Tabla 4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ConduitType {
     Emt,
     Imc,
@@ -64,6 +67,7 @@ impl std::fmt::Display for ConduitType {
 
 /// Grupo de aislamientos con las mismas dimensiones en la Tabla 5.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum InsulationGroup {
     /// TW, THW, THHW, THW-2
     TwThwThhw,
@@ -88,6 +92,8 @@ impl InsulationGroup {
 
 /// Calibre del conductor tal como lo nombra la norma: `"14"`, `"1/0"`, `"250"`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Size(pub String);
 
 impl Size {
@@ -215,6 +221,7 @@ pub struct SmallConductorLimit {
 
 /// Columna de temperatura de la tabla de ampacidades.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TempRating {
     C60,
     C75,
