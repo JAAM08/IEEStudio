@@ -1,12 +1,12 @@
-//! Cálculo rápido: caída de tensión de un solo circuito, con su
-//! procedimiento y alternativas cuando no cumple.
+//! Cálculo rápido de un solo circuito: corriente, protección, conductor y
+//! caída de tensión, con su procedimiento y alternativas cuando no cumple.
 
 use eframe::egui::{self, Align, Layout, RichText};
 use voltforge_core::{Profile, Size};
-use voltforge_project::quick::{quick_voltage_drop, size_label, QuickInput, QuickResult};
+use voltforge_project::quick::{quick_circuit, size_label, QuickInput, QuickResult};
 use voltforge_project::Status;
 
-use crate::app::{combo, number, CONDUITS, KINDS, MATERIALS, SYSTEMS};
+use crate::app::{combo, number, CONDUITS, INSULATIONS, KINDS, MATERIALS, SYSTEMS};
 use crate::theme::{self, Palette};
 
 pub struct QuickView {
@@ -17,7 +17,7 @@ pub struct QuickView {
 impl Default for QuickView {
     fn default() -> Self {
         let input = QuickInput::default();
-        let result = quick_voltage_drop(Profile::nom_001_sede_2012(), &input);
+        let result = quick_circuit(Profile::nom_001_sede_2012(), &input);
         QuickView { input, result }
     }
 }
@@ -67,7 +67,7 @@ impl QuickView {
                     .show(ui, |ui| self.procedure(ui, p));
             });
         if changed {
-            self.result = quick_voltage_drop(Profile::nom_001_sede_2012(), &self.input);
+            self.result = quick_circuit(Profile::nom_001_sede_2012(), &self.input);
         }
     }
 
@@ -77,11 +77,13 @@ impl QuickView {
         let mut changed = false;
         ui.label(caption(p, "Cálculo rápido"));
         ui.label(
-            RichText::new("Caída de tensión")
+            RichText::new("Circuito")
                 .family(theme::semibold())
                 .size(18.0),
         );
-        ui.label(muted("Un solo circuito, sin cuadro de cargas."));
+        ui.label(muted(
+            "Corriente, protección y caída de tensión de un solo circuito, sin proyecto.",
+        ));
         ui.add_space(10.0);
 
         egui::Grid::new("rapido-grid")
@@ -127,12 +129,27 @@ impl QuickView {
                     .changed();
                 ui.end_row();
 
+                ui.label(muted("Tipo de carga"));
+                changed |= ui
+                    .checkbox(&mut input.continuous, "Continua (3 h o más)")
+                    .changed();
+                ui.end_row();
+
                 ui.label(muted("Longitud"));
                 changed |= number(ui, &mut input.length_m, 0.5, 0.0, 100_000.0, " m");
                 ui.end_row();
 
                 ui.label(muted("Conductor"));
                 changed |= combo(ui, "rapido-material", &mut input.material, &MATERIALS);
+                ui.end_row();
+
+                ui.label(muted("Aislamiento"));
+                changed |= combo(
+                    ui,
+                    "rapido-aislamiento",
+                    &mut input.insulation,
+                    &INSULATIONS,
+                );
                 ui.end_row();
 
                 ui.label(muted("Calibre"));
@@ -162,6 +179,18 @@ impl QuickView {
 
                 ui.label(muted("Canalización"));
                 changed |= combo(ui, "rapido-tubo", &mut input.conduit, &CONDUITS);
+                ui.end_row();
+
+                if input.kind == voltforge_core::CircuitKind::LineToLine {
+                    ui.label(muted("Neutro"));
+                    changed |= ui
+                        .checkbox(&mut input.has_neutral, "Lleva neutro")
+                        .changed();
+                    ui.end_row();
+                }
+
+                ui.label(muted("Temp. ambiente"));
+                changed |= number(ui, &mut input.ambient_c, 0.5, -10.0, 80.0, " °C");
                 ui.end_row();
 
                 ui.label(muted("Límite de caída"));
@@ -205,36 +234,89 @@ impl QuickView {
                 return;
             }
         };
-        let (color, verdict) = match r.status {
-            Status::Complies => (
-                p.ok,
-                format!(
-                    "✔ Cumple: no excede el límite de {:.2} %",
-                    self.input.limit_percent
-                ),
-            ),
-            _ => (
-                p.bad,
-                format!(
-                    "✖ No cumple: excede el límite de {:.2} %",
-                    self.input.limit_percent
-                ),
-            ),
+        let limit = self.input.limit_percent;
+        let (drop_color, drop_verdict) = match r.status {
+            Status::Complies => (p.ok, format!("✔ Cumple el límite de {limit:.2} %")),
+            _ => (p.bad, format!("✖ Excede el límite de {limit:.2} %")),
         };
+        let size = size_label(&self.input.size);
+        let big = |t: String| RichText::new(t).family(theme::semibold()).size(30.0);
 
-        card(p).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(caption(p, "Caída de tensión"));
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!("{:.2} %", r.drop.drop_percent))
-                        .family(theme::semibold())
-                        .size(40.0)
-                        .color(color),
-                );
-                ui.add_space(12.0);
-                ui.vertical(|ui| {
-                    ui.add_space(10.0);
+        ui.columns(3, |cols| {
+            cols[0].vertical(|ui| {
+                card(p).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.set_min_height(118.0);
+                    ui.label(caption(p, "Corriente"));
+                    ui.label(big(format!("{:.2} A", r.current_a)));
+                    match &r.protection {
+                        Ok(pr) => {
+                            ui.label(
+                                RichText::new(format!("De diseño: {:.2} A", pr.design_a))
+                                    .monospace(),
+                            );
+                            ui.label(muted(if self.input.continuous {
+                                "Carga continua: 125 %".to_string()
+                            } else {
+                                "Carga no continua".to_string()
+                            }));
+                        }
+                        Err(_) => {
+                            ui.label(muted("Corriente nominal de la carga".to_string()));
+                        }
+                    }
+                });
+            });
+            cols[1].vertical(|ui| {
+                card(p).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.set_min_height(118.0);
+                    ui.label(caption(p, "Protección"));
+                    match &r.protection {
+                        Ok(pr) => {
+                            let ok = pr.status == Status::Complies;
+                            let color = if ok { p.ok } else { p.bad };
+                            ui.label(
+                                big(format!("{}P-{:.0} A", pr.poles, pr.breaker_a)).color(color),
+                            );
+                            let verdict = if ok {
+                                format!(
+                                    "✔ {size} cumple: {:.0} A permitidos",
+                                    pr.allowable_ampacity_a
+                                )
+                            } else {
+                                match &pr.minimum_size {
+                                    Some(min) => format!(
+                                        "✖ {size} no cumple: {:.0} A permitidos; mínimo {}",
+                                        pr.allowable_ampacity_a,
+                                        size_label(min)
+                                    ),
+                                    None => format!(
+                                        "✖ {size} no cumple: {:.0} A permitidos",
+                                        pr.allowable_ampacity_a
+                                    ),
+                                }
+                            };
+                            ui.label(RichText::new(verdict).color(color));
+                            if let Some(ground) = &pr.grounding_size {
+                                ui.label(muted(format!("Puesta a tierra: {}", size_label(ground))));
+                            }
+                        }
+                        Err(message) => {
+                            ui.label(big("—".to_string()).color(p.na));
+                            ui.label(RichText::new("No evaluado").color(p.na));
+                            ui.label(muted(format!("{message}.")));
+                        }
+                    }
+                });
+            });
+            cols[2].vertical(|ui| {
+                card(p).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.set_min_height(118.0);
+                    ui.label(caption(p, "Caída de tensión"));
+                    ui.label(big(format!("{:.2} %", r.drop.drop_percent)).color(drop_color));
+                    ui.label(RichText::new(drop_verdict).color(drop_color));
                     ui.label(
                         RichText::new(format!(
                             "{:.2} V de {:.0} V",
@@ -242,10 +324,8 @@ impl QuickView {
                         ))
                         .monospace(),
                     );
-                    ui.label(muted(format!("Corriente: {:.2} A", r.current_a)));
                 });
             });
-            ui.label(RichText::new(verdict).color(color));
         });
 
         for warning in &r.warnings {
@@ -287,10 +367,15 @@ impl QuickView {
         let muted = |t: &str| RichText::new(t).color(p.ink2);
         let mut apply = None;
         let (title, intro) = match &self.result {
-            Ok(r) if r.status == Status::Complies => (
-                "Resultado",
-                "La selección actual cumple; no hace falta cambiarla.",
-            ),
+            Ok(r)
+                if r.status == Status::Complies
+                    && !matches!(&r.protection, Ok(pr) if pr.status == Status::Fails) =>
+            {
+                (
+                    "Resultado",
+                    "La selección actual cumple; no hace falta cambiarla.",
+                )
+            }
             _ => (
                 "Recomendaciones",
                 "Alternativas ya calculadas. Ninguna se aplica sin que la elijas.",
@@ -329,9 +414,9 @@ impl QuickView {
 
         ui.add_space(6.0);
         ui.label(muted(
-            "Este cálculo revisa la caída de tensión y compara la corriente con la \
-             ampacidad de tabla, sin factores de corrección. La temperatura ambiente, \
-             el agrupamiento y la protección se verifican en el proyecto.",
+            "Este cálculo revisa corriente, interruptor, ampacidad con sus factores, \
+             puesta a tierra y caída de tensión, en lugar seco y con carga lineal. \
+             La tubería y los demás casos se calculan en el proyecto.",
         ));
 
         match apply {

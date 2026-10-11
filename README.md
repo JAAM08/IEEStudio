@@ -26,11 +26,11 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Proyecto | Fuente, tableros y subtableros, circuitos y cargas en un archivo JSON |
 | Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
 | Interfaz gráfica | Pantalla principal: árbol del proyecto, criterios, cuadro de cargas y detalle editable del elemento seleccionado; recalcula con cada cambio. Tema oscuro o claro y color de acento a elegir |
-| Cálculo rápido | Caída de tensión de un solo circuito, sin proyecto: fórmula y procedimiento con los valores sustituidos, comprobación exacta y, si no cumple, alternativas ya calculadas (calibre mayor, conductores en paralelo, longitud máxima) que se aplican con un clic |
+| Cálculo rápido | Un solo circuito, sin proyecto: corriente nominal y de diseño, interruptor, verificación del conductor, puesta a tierra y caída de tensión; fórmula y procedimiento con los valores sustituidos, comprobación exacta y, si no cumple, alternativas ya calculadas (calibre mayor, conductores en paralelo, longitud máxima) que se aplican con un clic |
 
 ![Pantalla principal de VoltForge](docs/pantalla-principal.png)
 
-![Cálculo rápido de caída de tensión](docs/calculo-rapido.png)
+![Cálculo rápido de un circuito](docs/calculo-rapido.png)
 
 Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. Los
 motores y equipos de aire acondicionado se calculan como carga general y

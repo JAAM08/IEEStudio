@@ -34,7 +34,7 @@ pub(crate) const MATERIALS: [(&str, Material); 2] = [
     ("Aluminio", Material::Aluminum),
 ];
 
-const INSULATIONS: [(&str, Insulation); 12] = [
+pub(crate) const INSULATIONS: [(&str, Insulation); 12] = [
     ("TW", Insulation::Tw),
     ("THW", Insulation::Thw),
     ("THHW", Insulation::Thhw),

@@ -65,17 +65,18 @@ Hecho:
 - Línea de comandos: `ejemplo` y `calcular`, con salida en JSON.
 - Interfaz gráfica, pantalla principal: árbol, criterios, cuadro de cargas,
   detalle editable, abrir y guardar, tema oscuro o claro y acento.
-- Cálculo rápido de caída de tensión de un solo circuito (`voltforge_project::quick`
-  y su vista): procedimiento con valores sustituidos y recomendaciones. Una
-  alternativa solo se propone si su ampacidad de tabla cubre la corriente
-  (columna de 60 °C hasta 100 A, de 75 °C por encima, sin factores de corrección).
+- Cálculo rápido de un solo circuito (`voltforge_project::quick` y su vista):
+  corriente, interruptor, verificación del conductor, puesta a tierra y caída
+  de tensión, con procedimiento y recomendaciones. Supone lugar seco, carga
+  lineal y todos los conductores en la misma tubería. Una alternativa solo se
+  propone si cumple ampacidad, protección y caída.
 - Integración continua en Windows y Linux, que publica los ejecutables.
 
 Pendiente, en orden:
 
 1. Procedimiento paso a paso y recomendaciones dentro del proyecto (conductor,
    tubería y caída de cada circuito); pasar un cálculo rápido a un proyecto.
-2. Cálculos rápidos de conductor y de tubería.
+2. Cálculo rápido de tubería.
    También: agregar y quitar tableros desde la interfaz y guardar el tema elegido.
 3. Memoria de cálculo en PDF.
 4. Diagrama unifilar automático para instalaciones radiales.

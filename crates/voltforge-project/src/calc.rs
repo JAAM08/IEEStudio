@@ -153,7 +153,7 @@ struct RunSpec<'a> {
     upstream_drop_percent: f64,
 }
 
-fn poles(kind: CircuitKind) -> u32 {
+pub(crate) fn poles(kind: CircuitKind) -> u32 {
     match kind {
         CircuitKind::LineToNeutral => 1,
         CircuitKind::LineToLine => 2,
@@ -162,7 +162,7 @@ fn poles(kind: CircuitKind) -> u32 {
 }
 
 /// Un sistema en estrella tiene la tensión entre fases √3 veces la de fase a neutro.
-fn is_wye(system: &System) -> bool {
+pub(crate) fn is_wye(system: &System) -> bool {
     match (system.line_to_line_v, system.line_to_neutral_v) {
         (Some(ll), Some(ln)) => (ll / ln - 3f64.sqrt()).abs() < 0.05,
         _ => false,
