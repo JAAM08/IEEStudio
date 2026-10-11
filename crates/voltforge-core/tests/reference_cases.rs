@@ -359,7 +359,7 @@ fn embedded_tables_are_complete_and_consistent() {
     let p = nom();
     assert_eq!(p.sizes.len(), 30);
     assert_eq!(p.ampacity.len(), 30);
-    assert_eq!(p.standard_ratings_a.len(), 40);
+    assert_eq!(p.standard_ratings.len(), 40);
     assert_eq!(p.grounding.len(), 19);
     assert_eq!(p.temperature_correction.len(), 16);
     assert_eq!(p.bundling_adjustment.len(), 6);

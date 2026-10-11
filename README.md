@@ -17,10 +17,12 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Corriente de diseño | 125 % de la carga continua más 100 % de la no continua |
 | Caída de tensión | Por impedancia con la Tabla 9, conductores en paralelo, ajuste opcional de resistencia por temperatura y comprobación con la fórmula exacta |
 | Longitud máxima | Longitud con la que un tramo cumple un límite de caída |
+| Conductor | Menor calibre que cumple terminales, temperatura ambiente, agrupamiento, protección y, si se pide, un límite de caída de tensión; indica qué criterio lo determinó |
+| Interruptor | Capacidad normalizada inmediata superior a la corriente de diseño |
+| Puesta a tierra | Tabla 250-122, con el incremento proporcional cuando el conductor de fase se sobredimensiona |
 | Tubería conduit | EMT, IMC, RMC y PVC cédula 40 y 80; ocupación de 53, 31 y 40 % según el número de conductores, niples al 60 % y verificación de atascamiento |
 
-Lo siguiente en el plan: selección de conductor por ampacidad, interruptor
-termomagnético, conductor de puesta a tierra, modelo del proyecto, línea de
+Lo siguiente en el plan: modelo del proyecto, cuadro de cargas, línea de
 comandos e interfaz gráfica.
 
 ## Probarlo
@@ -49,7 +51,7 @@ error que explica qué falta en lugar de suponer un valor.
 - Las tablas se validan por consistencia interna y se cotejaron contra una
   captura independiente. Ver [`data/nom-001-sede-2012/README.md`](data/nom-001-sede-2012/README.md).
 - Cada cálculo tiene casos de prueba con resultado conocido en
-  [`crates/voltforge-core/tests/reference_cases.rs`](crates/voltforge-core/tests/reference_cases.rs).
+  [`crates/voltforge-core/tests/`](crates/voltforge-core/tests/).
 
 ## Responsabilidad profesional
 

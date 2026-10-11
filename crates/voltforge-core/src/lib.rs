@@ -11,10 +11,13 @@ pub mod conduit;
 mod csv;
 pub mod current;
 mod error;
+pub mod sizing;
 pub mod system;
 pub mod tables;
 pub mod voltage_drop;
 
 pub use error::{Error, Result};
 pub use system::{CircuitKind, System};
-pub use tables::{ConduitType, InsulationGroup, Material, Profile, RacewayMaterial, Size};
+pub use tables::{
+    ConduitType, InsulationGroup, Material, Profile, RacewayMaterial, Size, TempRating,
+};

@@ -196,6 +196,41 @@ pub struct GroundingRow {
     pub aluminum_size: Option<String>,
 }
 
+/// Capacidad normalizada de un dispositivo de sobrecorriente (240-6).
+#[derive(Debug, Clone, PartialEq)]
+pub struct StandardRating {
+    pub rating_a: f64,
+    /// `false` para los valores de la serie IEC (16, 32 y 63 A), poco comunes
+    /// en interruptores termomagnéticos del mercado mexicano.
+    pub common: bool,
+}
+
+/// Límite de protección de un conductor pequeño (240-4(d)).
+#[derive(Debug, Clone)]
+pub struct SmallConductorLimit {
+    pub material: Material,
+    pub size: String,
+    pub max_overcurrent_a: f64,
+}
+
+/// Columna de temperatura de la tabla de ampacidades.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TempRating {
+    C60,
+    C75,
+    C90,
+}
+
+impl TempRating {
+    pub fn celsius(self) -> f64 {
+        match self {
+            TempRating::C60 => 60.0,
+            TempRating::C75 => 75.0,
+            TempRating::C90 => 90.0,
+        }
+    }
+}
+
 /// Perfil normativo: el conjunto de tablas con el que se calcula.
 #[derive(Debug)]
 pub struct Profile {
@@ -212,7 +247,8 @@ pub struct Profile {
     pub bundling_adjustment: Vec<BundlingAdjustmentRow>,
     pub fill: Vec<FillRow>,
     pub grounding: Vec<GroundingRow>,
-    pub standard_ratings_a: Vec<f64>,
+    pub standard_ratings: Vec<StandardRating>,
+    pub small_conductor_limits: Vec<SmallConductorLimit>,
 }
 
 macro_rules! table {
@@ -341,10 +377,26 @@ impl Profile {
                         aluminum_size: r.opt_text("aluminum_size"),
                     }
                 ),
-                standard_ratings_a: table!(
+                standard_ratings: table!(
                     "nom-001-sede-2012",
                     "section_240_6_standard_ratings.csv",
-                    |r| r.get("rating_a")
+                    |r| StandardRating {
+                        rating_a: r.get("rating_a"),
+                        common: r.text("series") == "common",
+                    }
+                ),
+                small_conductor_limits: table!(
+                    "nom-001-sede-2012",
+                    "section_240_4_d_small_conductors.csv",
+                    |r| SmallConductorLimit {
+                        material: match r.text("material").as_str() {
+                            "copper" => Material::Copper,
+                            "aluminum" => Material::Aluminum,
+                            other => panic!("material desconocido: {other}"),
+                        },
+                        size: r.text("size"),
+                        max_overcurrent_a: r.get("max_overcurrent_a"),
+                    }
                 ),
             }
         })
@@ -403,6 +455,64 @@ impl Profile {
                 table: "la Tabla 5",
                 what: format!("calibre {size}, aislamiento {group:?}"),
             })
+    }
+
+    /// Ampacidad de la Tabla 310-15(b)(16), en amperes.
+    pub fn ampacity(&self, size: &Size, material: Material, column: TempRating) -> Result<f64> {
+        self.conductor(size)?;
+        let missing = || Error::NotInTable {
+            table: "la Tabla 310-15(b)(16)",
+            what: format!("calibre {size}, {material:?}, {} °C", column.celsius()),
+        };
+        let row = self
+            .ampacity
+            .iter()
+            .find(|r| r.size == size.0)
+            .ok_or_else(missing)?;
+        match (material, column) {
+            (Material::Copper, TempRating::C60) => row.cu_60c,
+            (Material::Copper, TempRating::C75) => row.cu_75c,
+            (Material::Copper, TempRating::C90) => row.cu_90c,
+            (Material::Aluminum, TempRating::C60) => row.al_60c,
+            (Material::Aluminum, TempRating::C75) => row.al_75c,
+            (Material::Aluminum, TempRating::C90) => row.al_90c,
+        }
+        .ok_or_else(missing)
+    }
+
+    /// Factor de corrección por temperatura ambiente, Tabla 310-15(b)(2)(a).
+    pub fn temperature_factor(&self, ambient_c: f64, column: TempRating) -> Result<f64> {
+        let missing = || Error::NotInTable {
+            table: "la Tabla 310-15(b)(2)(a)",
+            what: format!(
+                "{ambient_c} °C ambiente con conductor de {} °C",
+                column.celsius()
+            ),
+        };
+        // Un valor entre dos intervalos toma el de mayor temperatura.
+        let row = self
+            .temperature_correction
+            .iter()
+            .find(|r| ambient_c <= r.ambient_max_c)
+            .ok_or_else(missing)?;
+        match column {
+            TempRating::C60 => row.factor_60c,
+            TempRating::C75 => row.factor_75c,
+            TempRating::C90 => row.factor_90c,
+        }
+        .ok_or_else(missing)
+    }
+
+    /// Factor de ajuste por número de conductores portadores de corriente,
+    /// Tabla 310-15(b)(3)(a). Hasta tres conductores no hay ajuste.
+    pub fn bundling_factor(&self, current_carrying: u32) -> f64 {
+        self.bundling_adjustment
+            .iter()
+            .find(|r| {
+                current_carrying >= r.conductors_min
+                    && r.conductors_max.map_or(true, |max| current_carrying <= max)
+            })
+            .map_or(1.0, |r| r.factor)
     }
 
     /// Filas de la Tabla 4 para un tipo de tubo, de menor a mayor.

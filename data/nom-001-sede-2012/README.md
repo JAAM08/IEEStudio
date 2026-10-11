@@ -16,7 +16,8 @@ de cálculo.
 | `table_310_15_b_2_a_temperature_correction.csv` | Tabla 310-15(b)(2)(a) |
 | `table_310_15_b_3_a_bundling_adjustment.csv` | Tabla 310-15(b)(3)(a) |
 | `table_250_122_equipment_grounding.csv` | Tabla 250-122 |
-| `section_240_6_standard_ratings.csv` | Sección 240-6(a) |
+| `section_240_6_standard_ratings.csv` | Sección 240-6(a). La columna `series` separa los valores de uso común en México de los de la serie IEC (16, 32 y 63 A) |
+| `section_240_4_d_small_conductors.csv` | Sección 240-4(d), calibres 14 a 10 AWG |
 
 ## Cómo se capturaron
 
