@@ -7,6 +7,7 @@ use egui_extras::{Column, TableBuilder};
 use voltforge_core::Insulation;
 use voltforge_core::{CircuitKind, ConduitType, Material, Size, System};
 use voltforge_diagrams::single_line;
+use voltforge_project::verdict::{Calculation, Compliance, Verdict};
 use voltforge_project::{
     calculate, example, Circuit, Feeder, Load, LoadKind, Overrides, Panel, PanelResult, Phase,
     Project, ProjectResult, RunResult, Settings, Source, Status, FORMAT_VERSION,
@@ -445,7 +446,9 @@ impl App {
                     ui.label(RichText::new(done).color(self.palette.ok));
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(self.muted("Sin aprobación profesional"));
+                    if let Some(verdict) = self.quick.verdict() {
+                        verdict_chips(ui, &self.palette, &verdict);
+                    }
                 });
             });
             return;
@@ -482,7 +485,10 @@ impl App {
                 } else {
                     "Guardado"
                 }));
-                ui.label(self.muted("Sin aprobación profesional"));
+                ui.label(self.muted("·"));
+                if let Ok(r) = &self.result {
+                    verdict_chips(ui, &self.palette, &r.verdict);
+                }
             });
         });
     }
@@ -1033,6 +1039,36 @@ fn self_overrides(ui: &mut egui::Ui, ov: &mut Overrides, palette: &Palette) -> b
     }
     ui.end_row();
     changed
+}
+
+/// Los tres niveles del veredicto, de derecha a izquierda, con su explicación
+/// al pasar el cursor.
+fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
+    let lines = verdict.lines("la norma");
+    let color = |s: Status| match s {
+        Status::Complies => p.ok,
+        Status::Fails => p.bad,
+        Status::NotEvaluated => p.na,
+    };
+    let short = [
+        match verdict.calculation {
+            Calculation::Complete => "Cálculo completo",
+            Calculation::Incomplete => "Cálculo incompleto",
+        },
+        match verdict.compliance {
+            Compliance::Conforms => "Conforme",
+            Compliance::DoesNotConform => "No conforme",
+            Compliance::Pending => "Verificación pendiente",
+        },
+        "Aprobación profesional pendiente",
+    ];
+    for (i, (level, status, detail)) in lines.iter().enumerate().rev() {
+        let text = RichText::new(short[i]).color(if i == 2 { p.ink2 } else { color(*status) });
+        ui.label(text).on_hover_text(format!("{level}: {detail}"));
+        if i > 0 {
+            ui.label(RichText::new("·").color(p.ink2));
+        }
+    }
 }
 
 impl eframe::App for App {

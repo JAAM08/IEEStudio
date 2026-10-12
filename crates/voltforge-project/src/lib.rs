@@ -8,6 +8,7 @@ pub mod example;
 mod model;
 mod procedure;
 pub mod quick;
+pub mod verdict;
 
 pub use calc::{
     calculate, Check, ConduitChoice, PanelResult, ProjectResult, Run, RunResult, Status,

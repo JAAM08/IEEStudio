@@ -96,7 +96,10 @@ fn print_report(result: &ProjectResult) {
     for warning in &result.warnings {
         println!("Aviso: {warning}");
     }
-    println!("Sin aprobación profesional: el resultado debe revisarlo quien firma el proyecto.");
+    println!();
+    for (level, _, detail) in result.verdict.lines("la norma") {
+        println!("{level}: {detail}");
+    }
 }
 
 fn print_panel(panel: &PanelResult) {

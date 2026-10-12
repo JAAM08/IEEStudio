@@ -241,3 +241,36 @@ fn every_run_carries_its_procedure() {
         "I = 1,800 / (127 · 0.90) = 15.75 A"
     );
 }
+
+/// El veredicto separa cálculo, verificación y aprobación profesional, y no
+/// declara conforme lo que tiene verificaciones pendientes.
+#[test]
+fn verdict_keeps_three_levels_apart() {
+    use voltforge_project::verdict::{Calculation, Compliance};
+
+    // La casa: todo se calcula, C-04 no cumple y C-03 queda sin evaluar.
+    let house = calculate(&example::house()).unwrap().verdict;
+    assert_eq!(house.calculation, Calculation::Complete);
+    assert_eq!(house.compliance, Compliance::DoesNotConform);
+    assert!(!house.professionally_approved);
+
+    // Sin C-04 nada incumple, pero C-03 (climatización) sigue sin evaluar:
+    // el proyecto no puede declararse conforme.
+    let mut project = example::house();
+    project.panels[0].circuits.retain(|c| c.id != "C-04");
+    let pending = calculate(&project).unwrap().verdict;
+    assert_eq!(pending.compliance, Compliance::Pending);
+    assert_eq!(pending.pending_checks, 1);
+
+    // Sin C-03 tampoco: todo cumple, pero la aprobación sigue pendiente.
+    project.panels[0].circuits.retain(|c| c.id != "C-03");
+    let conforms = calculate(&project).unwrap().verdict;
+    assert_eq!(conforms.compliance, Compliance::Conforms);
+    assert!(!conforms.professionally_approved);
+
+    // Un proyecto sin circuitos no tiene nada calculado.
+    project.panels[0].circuits.clear();
+    let empty = calculate(&project).unwrap().verdict;
+    assert_eq!(empty.calculation, Calculation::Incomplete);
+    assert_ne!(empty.compliance, Compliance::Conforms);
+}

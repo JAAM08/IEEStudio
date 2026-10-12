@@ -10,6 +10,7 @@ use typst_as_lib::TypstEngine;
 use voltforge_core::{CircuitKind, System};
 use voltforge_diagrams::single_line;
 use voltforge_project::quick::{QuickInput, QuickResult};
+use voltforge_project::verdict::Verdict;
 use voltforge_project::{
     insulation_name, material_name, size_label, PanelResult, Project, ProjectResult, RunResult,
     Status, Step,
@@ -214,6 +215,32 @@ fn signatures(out: &mut String) {
     );
 }
 
+/// Cálculo, verificación normativa y aprobación profesional, en tres filas.
+fn verdict_table(out: &mut String, verdict: &Verdict, code: &str) {
+    out.push_str("#table(columns: (4.2cm, 2.6cm, 1fr), stroke: (x, y) => (bottom: 0.5pt + linea), inset: (x: 0pt, y: 5pt),\n");
+    for (level, status, detail) in verdict.lines(code) {
+        let state = match status {
+            Status::Complies => "Cumple",
+            Status::Fails => "No cumple",
+            Status::NotEvaluated => "Pendiente",
+        };
+        let label = detail.split(':').next().unwrap_or_default().to_string();
+        let explanation = detail
+            .split_once(": ")
+            .map_or(String::new(), |(_, e)| e.to_string());
+        let _ = writeln!(
+            out,
+            "  text(fill: gris, {}), text(font: \"IBM Plex Sans SmBld\", fill: if {} == \"Cumple\" {{ bien }} else if {} == \"No cumple\" {{ mal }} else {{ duda }}, {}), {},",
+            q(level),
+            q(state),
+            q(state),
+            q(&label),
+            q(&explanation)
+        );
+    }
+    out.push_str(")\n");
+}
+
 fn schedule_row(out: &mut String, id: &str, item: &RunResult) {
     let cells: Vec<String> = match &item.run {
         Some(run) => {
@@ -347,6 +374,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     );
 
     out.push_str("\n= Resumen\n");
+    verdict_table(&mut out, &result.verdict, &profile.document.code);
     let _ = writeln!(
         out,
         "De los tramos calculados, #text(fill: bien, font: \"IBM Plex Sans SmBld\")[{} cumplen], #text(fill: mal, font: \"IBM Plex Sans SmBld\")[{} no cumplen] y #text(fill: duda, font: \"IBM Plex Sans SmBld\")[{} no se evaluaron]. Un tramo «no evaluado» no está aprobado: falta un dato o su regla aún no está implementada.",
@@ -517,12 +545,8 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
 
     out.push_str("\n= Resultado\n");
     let mut rows = vec![("Corriente nominal", format!("{:.2} A", result.current_a))];
-    let mut verdict = result.status;
     match &result.protection {
         Ok(p) => {
-            if p.status == Status::Fails {
-                verdict = Status::Fails;
-            }
             rows.push(("Corriente de diseño", format!("{:.2} A", p.design_a)));
             rows.push(("Interruptor", format!("{}P-{:.0} A", p.poles, p.breaker_a)));
             rows.push((
@@ -542,7 +566,6 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             }
         }
         Err(e) => {
-            verdict = Status::NotEvaluated;
             rows.push(("Protección y conductor", format!("No evaluado: {e}")));
         }
     }
@@ -556,7 +579,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             result.status.label().to_lowercase()
         ),
     ));
-    let _ = writeln!(out, "#estado({})", q(verdict.label()));
+    verdict_table(&mut out, &result.verdict(), "NOM-001-SEDE-2012");
     data_table(&mut out, &rows);
     for warning in &result.warnings {
         let _ = writeln!(

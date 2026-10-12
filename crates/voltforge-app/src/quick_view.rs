@@ -79,6 +79,11 @@ impl QuickView {
         voltforge_reports::quick_pdf(&self.input, result)
     }
 
+    /// Veredicto del cálculo actual, si se pudo calcular.
+    pub fn verdict(&self) -> Option<voltforge_project::verdict::Verdict> {
+        self.result.as_ref().ok().map(|r| r.verdict())
+    }
+
     /// Texto de la barra inferior.
     pub fn summary(&self) -> String {
         let adjust = match self.input.resistance_temperature_c {

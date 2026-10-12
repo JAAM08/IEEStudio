@@ -20,6 +20,7 @@ use crate::calc::{is_wye, poles};
 use crate::procedure::{
     conductor_steps, conduit_step, current_step, drop_steps, plain, size_label, ConductorData, Step,
 };
+use crate::verdict::Verdict;
 use crate::Status;
 use voltforge_core::Insulation;
 use voltforge_rules::Profile;
@@ -119,6 +120,22 @@ pub struct Protection {
     /// Tubería para las fases, el neutro y la tierra desnuda.
     pub conduit: Option<String>,
     pub status: Status,
+}
+
+impl QuickResult {
+    /// Veredicto del circuito: calculado si se pudo evaluar la protección, y
+    /// conforme solo si la protección y la caída de tensión cumplen.
+    pub fn verdict(&self) -> Verdict {
+        let protection = match &self.protection {
+            Ok(p) => p.status,
+            Err(_) => Status::NotEvaluated,
+        };
+        Verdict::new(
+            1,
+            usize::from(self.protection.is_err()),
+            [protection, self.status],
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

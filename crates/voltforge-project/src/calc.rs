@@ -17,6 +17,7 @@ use crate::model::{LoadKind, Overrides, Panel, Phase, Project, Settings};
 use crate::procedure::{
     conductor_steps, conduit_step, cumulative_step, current_step, drop_steps, ConductorData, Step,
 };
+use crate::verdict::Verdict;
 use voltforge_rules::{Profile, Rule, RuleReference};
 
 /// Resultado de una comprobación o de un elemento completo.
@@ -158,6 +159,8 @@ pub struct ProjectResult {
     pub not_evaluated: usize,
     /// Avisos que no cambian el estado de ningún elemento.
     pub warnings: Vec<String>,
+    /// Cálculo, verificación normativa y aprobación profesional, por separado.
+    pub verdict: Verdict,
 }
 
 struct RunSpec<'a> {
@@ -777,6 +780,15 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         .flat_map(|p| std::iter::once(p.feeder.status).chain(p.circuits.iter().map(|c| c.status)))
         .collect();
     let tally = |s: Status| statuses.iter().filter(|&&x| x == s).count();
+    let runs: Vec<&RunResult> = panels
+        .iter()
+        .flat_map(|p| std::iter::once(&p.feeder).chain(&p.circuits))
+        .collect();
+    let verdict = Verdict::new(
+        runs.len(),
+        runs.iter().filter(|r| r.run.is_none()).count(),
+        runs.iter().flat_map(|r| r.checks.iter().map(|c| c.status)),
+    );
     Ok(ProjectResult {
         project: project.name.clone(),
         profile: profile.title.to_string(),
@@ -785,5 +797,6 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         not_evaluated: tally(Status::NotEvaluated),
         panels,
         warnings: ctx.warnings,
+        verdict,
     })
 }
