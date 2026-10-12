@@ -12,12 +12,15 @@
 - Cálculo rápido de un circuito con recomendaciones.
 - Diagrama unifilar automático.
 - Memoria de cálculo y hoja de cálculo rápido en PDF.
-- Aplicación de escritorio (egui) y línea de comandos con salida JSON.
+- Aplicación de escritorio con paneles acoplables, espacios de trabajo,
+  navegador del proyecto, propiedades en Datos / Resultados / Normativa,
+  vista previa de la memoria y preferencias guardadas; línea de comandos con
+  salida JSON.
 - Integración continua en Windows y Linux que publica los ejecutables.
 
 ## Pendiente, en orden
 
-1. Exportar el unifilar a DXF para AutoCAD. Agregar y quitar tableros desde la
+1. Deshacer y rehacer. Exportar el unifilar a DXF para AutoCAD. Agregar y quitar tableros desde la
    interfaz, guardar el tema elegido, pasar un cálculo rápido a un proyecto y
    alternativas (paralelo, longitud máxima) también dentro del proyecto.
 2. Instalador de Windows, con la reducción del tamaño del ejecutable.

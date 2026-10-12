@@ -13,4 +13,7 @@ voltforge-project = { path = "../voltforge-project" }
 voltforge-diagrams = { path = "../voltforge-diagrams" }
 typst-as-lib = "0.17"
 typst-pdf = "0.15"
+typst-render = "0.15"
+typst-layout = "0.15"
+typst-utils = "0.15"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

@@ -14,6 +14,8 @@ cargo test
 cargo run -p voltforge-cli -- calcular casa.json
 cargo run -p voltforge-app -- casa.json
 xvfb-run -a cargo run -p voltforge-app -- --captura captura.png   # revisar la interfaz sin pantalla
+# con --espacio calculo|diagrama|documentacion, --panel rapido|unifilar|memoria,
+# --propiedades datos|resultados|normativa y --claro
 ```
 
 Los tres primeros deben pasar antes de cada commit; la integración continua

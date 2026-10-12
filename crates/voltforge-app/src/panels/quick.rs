@@ -4,10 +4,10 @@
 use eframe::egui::{self, Align, Layout, RichText};
 use voltforge_core::Size;
 use voltforge_project::quick::{quick_circuit, QuickInput, QuickResult};
-use voltforge_project::{size_label, Status, Step};
+use voltforge_project::{size_label, Status};
 
-use crate::app::{combo, number, CONDUITS, INSULATIONS, KINDS, MATERIALS, SYSTEMS};
 use crate::theme::{self, Palette};
+use crate::widgets::{combo, number, steps_ui, CONDUITS, INSULATIONS, KINDS, MATERIALS, SYSTEMS};
 use voltforge_rules::Profile;
 
 pub struct QuickView {
@@ -23,45 +23,8 @@ impl Default for QuickView {
     }
 }
 
-pub(crate) fn caption(p: &Palette, text: &str) -> RichText {
+fn caption(p: &Palette, text: &str) -> RichText {
     RichText::new(text.to_uppercase()).small().color(p.ink2)
-}
-
-/// Tarjetas numeradas con el procedimiento paso a paso.
-pub(crate) fn steps_ui(ui: &mut egui::Ui, p: &Palette, steps: &[Step]) {
-    let width = ui.available_width().min(1000.0);
-    for (i, step) in steps.iter().enumerate() {
-        card(p).show(ui, |ui| {
-            ui.set_width(width - 30.0);
-            ui.horizontal_top(|ui| {
-                ui.label(
-                    RichText::new(format!("{}", i + 1))
-                        .family(theme::semibold())
-                        .size(16.0)
-                        .color(p.accent),
-                );
-                ui.add_space(8.0);
-                ui.vertical(|ui| {
-                    ui.label(RichText::new(&step.title).family(theme::semibold()));
-                    if let Some(formula) = &step.formula {
-                        ui.label(RichText::new(formula).monospace().color(p.ink2));
-                    }
-                    ui.label(RichText::new(&step.substitution).monospace());
-                    if let Some(note) = &step.note {
-                        ui.label(RichText::new(note).color(p.ink2));
-                    }
-                    if let Some(cite) = voltforge_rules::cite_all(&step.references) {
-                        ui.label(
-                            RichText::new(format!("Referencia: {cite}"))
-                                .small()
-                                .color(p.accent),
-                        );
-                    }
-                });
-            });
-        });
-        ui.add_space(6.0);
-    }
 }
 
 fn card(p: &Palette) -> egui::Frame {
@@ -94,26 +57,66 @@ impl QuickView {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, p: &Palette) {
+        egui::Panel::top("rapido-aviso")
+            .frame(egui::Frame::new().fill(p.raise).inner_margin(egui::Margin::symmetric(10, 5)))
+            .show(ui, |ui| {
+                ui.label(
+                    RichText::new(format!(
+                        "{} Herramienta fuera del proyecto: este cálculo no cambia ni se guarda en el proyecto abierto.",
+                        egui_phosphor::regular::INFO
+                    ))
+                    .color(p.ink2),
+                );
+            });
+        egui::Panel::bottom("rapido-estado")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.raise)
+                    .inner_margin(egui::Margin::symmetric(10, 4)),
+            )
+            .show(ui, |ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if let Some(v) = self.verdict() {
+                        crate::widgets::verdict_chips(ui, p, &v);
+                    }
+                    ui.add(
+                        egui::Label::new(RichText::new(self.summary()).color(p.ink2)).truncate(),
+                    );
+                });
+            });
         let side = egui::Frame::new().fill(p.panel).inner_margin(14);
         let mut changed = false;
         egui::Panel::left("rapido-datos")
             .frame(side)
-            .default_size(300.0)
+            .default_size(270.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| changed |= self.inputs(ui, p));
             });
-        egui::Panel::right("rapido-recomendaciones")
-            .frame(side)
-            .default_size(340.0)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| changed |= self.recommendations(ui, p));
-            });
+        // Con espacio, las recomendaciones van en su columna; si no, debajo
+        // del resultado.
+        let wide = ui.available_width() >= 1040.0;
+        if wide {
+            egui::Panel::right("rapido-recomendaciones")
+                .frame(side)
+                .default_size(320.0)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .show(ui, |ui| changed |= self.recommendations(ui, p));
+                });
+        }
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(p.bg).inner_margin(16))
+            .frame(egui::Frame::new().fill(p.bg).inner_margin(12))
             .show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
-                    .show(ui, |ui| self.procedure(ui, p));
+                    .show(ui, |ui| {
+                        self.procedure(ui, p);
+                        if !wide {
+                            ui.add_space(12.0);
+                            changed |= self.recommendations(ui, p);
+                        }
+                        self.steps(ui, p);
+                    });
             });
         if changed {
             self.result = quick_circuit(Profile::nom_001_sede_2012(), &self.input);
@@ -274,7 +277,7 @@ impl QuickView {
                     ui.set_width(ui.available_width());
                     ui.label(
                         RichText::new("— No evaluado")
-                            .color(p.na)
+                            .color(p.warn)
                             .family(theme::semibold())
                             .size(18.0),
                     );
@@ -291,8 +294,8 @@ impl QuickView {
         let size = size_label(&self.input.size);
         let big = |t: String| RichText::new(t).family(theme::semibold()).size(30.0);
 
-        ui.columns(3, |cols| {
-            cols[0].vertical(|ui| {
+        let card0 = |ui: &mut egui::Ui| {
+            ui.vertical(|ui| {
                 card(p).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.set_min_height(118.0);
@@ -316,7 +319,9 @@ impl QuickView {
                     }
                 });
             });
-            cols[1].vertical(|ui| {
+        };
+        let card1 = |ui: &mut egui::Ui| {
+            ui.vertical(|ui| {
                 card(p).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.set_min_height(118.0);
@@ -355,14 +360,16 @@ impl QuickView {
                             }
                         }
                         Err(message) => {
-                            ui.label(big("—".to_string()).color(p.na));
-                            ui.label(RichText::new("No evaluado").color(p.na));
+                            ui.label(big("—".to_string()).color(p.warn));
+                            ui.label(RichText::new("No evaluado").color(p.warn));
                             ui.label(muted(format!("{message}.")));
                         }
                     }
                 });
             });
-            cols[2].vertical(|ui| {
+        };
+        let card2 = |ui: &mut egui::Ui| {
+            ui.vertical(|ui| {
                 card(p).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.set_min_height(118.0);
@@ -378,17 +385,36 @@ impl QuickView {
                     );
                 });
             });
-        });
+        };
+        // Tres columnas si caben; si el panel es angosto, una debajo de otra.
+        if ui.available_width() >= 620.0 {
+            ui.columns(3, |cols| {
+                card0(&mut cols[0]);
+                card1(&mut cols[1]);
+                card2(&mut cols[2]);
+            });
+        } else {
+            card0(ui);
+            ui.add_space(6.0);
+            card1(ui);
+            ui.add_space(6.0);
+            card2(ui);
+        }
 
         for warning in &r.warnings {
             ui.add_space(6.0);
-            ui.label(RichText::new(format!("Aviso · {warning}")).color(p.na));
+            ui.label(RichText::new(format!("Aviso · {warning}")).color(p.warn));
         }
+    }
 
+    fn steps(&self, ui: &mut egui::Ui, p: &Palette) {
+        let Ok(r) = &self.result else {
+            return;
+        };
         ui.add_space(14.0);
         ui.label(caption(p, "Procedimiento"));
         ui.add_space(2.0);
-        steps_ui(ui, p, &r.steps);
+        steps_ui(ui, p, "rapido", &r.steps, None);
     }
 
     fn recommendations(&mut self, ui: &mut egui::Ui, p: &Palette) -> bool {

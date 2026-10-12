@@ -7,6 +7,7 @@
 use std::fmt::Write as _;
 
 use typst_as_lib::TypstEngine;
+use typst_layout::PagedDocument;
 use voltforge_core::{CircuitKind, System};
 use voltforge_diagrams::single_line;
 use voltforge_project::quick::{QuickInput, QuickResult};
@@ -608,17 +609,58 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
     out
 }
 
-fn render(source: String) -> Result<Vec<u8>, String> {
+fn compose(source: String) -> Result<PagedDocument, String> {
     let engine = TypstEngine::builder()
         .main_file(source)
         .fonts(FONTS)
         .build();
-    let document = engine
+    engine
         .compile()
         .output
-        .map_err(|e| format!("no se pudo componer el documento: {e}"))?;
+        .map_err(|e| format!("no se pudo componer el documento: {e}"))
+}
+
+fn render(source: String) -> Result<Vec<u8>, String> {
+    let document = compose(source)?;
     typst_pdf::pdf(&document, &Default::default())
         .map_err(|e| format!("no se pudo generar el PDF: {e:?}"))
+}
+
+/// Página rasterizada para mostrarla en pantalla: RGBA de 8 bits.
+pub struct PageImage {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+
+fn rasterize(source: String, pixels_per_point: f64) -> Result<Vec<PageImage>, String> {
+    let document = compose(source)?;
+    let options = typst_render::RenderOptions {
+        pixel_per_pt: typst_utils::Scalar::new(pixels_per_point),
+        ..Default::default()
+    };
+    Ok(document
+        .pages()
+        .iter()
+        .map(|page| {
+            let pixmap = typst_render::render(page, &options);
+            // Las páginas son opacas: el RGBA premultiplicado es igual al directo.
+            PageImage {
+                width: pixmap.width(),
+                height: pixmap.height(),
+                rgba: pixmap.data().to_vec(),
+            }
+        })
+        .collect())
+}
+
+/// Páginas de la memoria de un proyecto como imágenes, para la vista previa.
+pub fn project_pages(
+    project: &Project,
+    result: &ProjectResult,
+    pixels_per_point: f64,
+) -> Result<Vec<PageImage>, String> {
+    rasterize(project_source(project, result), pixels_per_point)
 }
 
 /// Memoria de cálculo de un proyecto, en PDF.

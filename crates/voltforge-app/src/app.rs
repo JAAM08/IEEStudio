@@ -1,120 +1,31 @@
-//! Pantalla principal: árbol del proyecto, cuadro de cargas y detalle.
+//! Ventana principal: menús, espacios de trabajo, paneles acoplables y barra
+//! de estado alrededor de un único proyecto.
 
 use std::path::PathBuf;
 
-use eframe::egui::{self, Align, Color32, Layout, RichText, Sense};
-use egui_extras::{Column, TableBuilder};
-use voltforge_core::Insulation;
-use voltforge_core::{CircuitKind, ConduitType, Material, Size, System};
-use voltforge_diagrams::single_line;
-use voltforge_project::verdict::{Calculation, Compliance, Verdict};
-use voltforge_project::{
-    calculate, example, Circuit, Feeder, Load, LoadKind, Overrides, Panel, PanelResult, Phase,
-    Project, ProjectResult, RunResult, Settings, Source, Status, FORMAT_VERSION,
-};
+use eframe::egui::{self, Align, Layout, RichText};
+use egui_dock::{DockArea, DockState, NodeIndex, Style};
+use egui_phosphor::regular as icon;
+use serde::{Deserialize, Serialize};
+use voltforge_project::{example, Project};
 
-use crate::diagram_view;
-use crate::quick_view::{caption, steps_ui, QuickView};
+use crate::panels::{schedule, Shared, Viewer};
+use crate::state::{empty_project, Doc, Selection};
 use crate::theme::{self, Palette, ACCENTS};
-use voltforge_rules::Profile;
+use crate::widgets::{muted, strong, verdict_chips};
+use crate::workspace::{Tab, Workspace};
 
-pub(crate) const SYSTEMS: [(&str, System); 6] = [
-    ("1F-2H 127 V", System::SINGLE_127),
-    ("1F-3H 240/120 V", System::SPLIT_240_120),
-    ("3F-4H 220Y/127 V", System::WYE_220_127),
-    ("3F-4H 208Y/120 V", System::WYE_208_120),
-    ("3F-4H 480Y/277 V", System::WYE_480_277),
-    ("3F-3H 440 V", System::DELTA_440),
-];
+const STORAGE_KEY: &str = "voltforge-interfaz-1";
 
-pub(crate) const KINDS: [(&str, CircuitKind); 3] = [
-    ("1 fase", CircuitKind::LineToNeutral),
-    ("2 fases", CircuitKind::LineToLine),
-    ("3 fases", CircuitKind::ThreePhase),
-];
-
-pub(crate) const MATERIALS: [(&str, Material); 2] = [
-    ("Cobre", Material::Copper),
-    ("Aluminio", Material::Aluminum),
-];
-
-pub(crate) const INSULATIONS: [(&str, Insulation); 12] = [
-    ("TW", Insulation::Tw),
-    ("THW", Insulation::Thw),
-    ("THHW", Insulation::Thhw),
-    ("THW-2", Insulation::Thw2),
-    ("THHN", Insulation::Thhn),
-    ("THWN", Insulation::Thwn),
-    ("THWN-2", Insulation::Thwn2),
-    ("XHHW", Insulation::Xhhw),
-    ("XHHW-2", Insulation::Xhhw2),
-    ("RHH", Insulation::Rhh),
-    ("RHW", Insulation::Rhw),
-    ("RHW-2", Insulation::Rhw2),
-];
-
-pub(crate) const CONDUITS: [(&str, ConduitType); 5] = [
-    ("EMT", ConduitType::Emt),
-    ("IMC", ConduitType::Imc),
-    ("RMC", ConduitType::Rmc),
-    ("PVC cédula 40", ConduitType::Pvc40),
-    ("PVC cédula 80", ConduitType::Pvc80),
-];
-
-const LOAD_KINDS: [(&str, LoadKind); 4] = [
-    ("General", LoadKind::General),
-    ("Alumbrado", LoadKind::Lighting),
-    ("Motor", LoadKind::Motor),
-    ("Aire acondicionado", LoadKind::AirConditioning),
-];
-
-fn label_of<T: PartialEq + Copy>(options: &[(&'static str, T)], value: T) -> &'static str {
-    options
-        .iter()
-        .find(|(_, v)| *v == value)
-        .map_or("?", |(l, _)| l)
-}
-
-/// Lista desplegable sobre un conjunto fijo de opciones. Devuelve `true` si cambió.
-pub(crate) fn combo<T: PartialEq + Copy>(
-    ui: &mut egui::Ui,
-    id: &str,
-    value: &mut T,
-    options: &[(&'static str, T)],
-) -> bool {
-    let mut changed = false;
-    egui::ComboBox::from_id_salt(id)
-        .selected_text(label_of(options, *value))
-        .width(150.0)
-        .show_ui(ui, |ui| {
-            for (label, option) in options {
-                changed |= ui.selectable_value(value, *option, *label).changed();
-            }
-        });
-    changed
-}
-
-pub(crate) fn number(
-    ui: &mut egui::Ui,
-    value: &mut f64,
-    speed: f64,
-    min: f64,
-    max: f64,
-    suffix: &str,
-) -> bool {
-    ui.add(
-        egui::DragValue::new(value)
-            .speed(speed)
-            .range(min..=max)
-            .suffix(suffix),
-    )
-    .changed()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Selection {
-    Feeder,
-    Circuit(usize),
+/// Preferencias de interfaz que se guardan al cerrar.
+#[derive(Serialize, Deserialize)]
+struct Prefs {
+    dark: bool,
+    accent: usize,
+    workspace: Workspace,
+    dock: DockState<Tab>,
+    columns: schedule::Columns,
+    diagram_zoom: f32,
 }
 
 /// Captura de pantalla pedida por línea de comandos, para pruebas visuales.
@@ -123,111 +34,97 @@ struct Capture {
     frames: u32,
 }
 
-/// Vista que ocupa la ventana.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum View {
-    Project,
-    Diagram,
-    Quick,
-}
-
 pub struct App {
-    view: View,
-    quick: QuickView,
-    /// Zoom del diagrama unifilar.
-    zoom: f32,
-    project: Project,
-    path: Option<PathBuf>,
-    dirty: bool,
-    result: Result<ProjectResult, String>,
-    panel: usize,
-    selection: Selection,
+    doc: Doc,
+    shared: Shared,
+    dock: DockState<Tab>,
+    workspace: Workspace,
     dark: bool,
     accent: usize,
-    palette: Palette,
     notice: Option<String>,
-    /// Aviso de una acción terminada, por ejemplo un PDF guardado.
     done: Option<String>,
+    about: bool,
     capture: Option<Capture>,
 }
 
-fn empty_project() -> Project {
-    Project {
-        format_version: FORMAT_VERSION,
-        name: "Proyecto nuevo".to_string(),
-        profile: "nom-001-sede-2012".to_string(),
-        settings: Settings::default(),
-        source: Source {
-            name: "Acometida".to_string(),
-            system: System::WYE_220_127,
-        },
-        panels: vec![Panel {
-            id: "TG-1".to_string(),
-            name: "Tablero TG-1".to_string(),
-            parent: None,
-            kind: CircuitKind::ThreePhase,
-            feeder: Feeder {
-                length_m: 10.0,
-                demand_factor: 1.0,
-                has_neutral: true,
-                overrides: Overrides::default(),
-            },
-            circuits: vec![],
-        }],
-    }
+pub struct Options {
+    pub open: Option<PathBuf>,
+    pub capture: Option<PathBuf>,
+    pub light: bool,
+    pub workspace: Option<Workspace>,
+    pub focus: Option<Tab>,
+    /// Pestaña inicial de Propiedades: `datos`, `resultados` o `normativa`.
+    pub properties: Option<String>,
 }
 
 impl App {
-    pub fn new(
-        cc: &eframe::CreationContext<'_>,
-        open: Option<PathBuf>,
-        capture: Option<PathBuf>,
-        light: bool,
-        view: Option<&str>,
-    ) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, options: Options) -> Self {
         theme::install_fonts(&cc.egui_ctx);
-        let dark = !light;
-        let palette = Palette::new(dark, ACCENTS[0].1);
+        // Las capturas de prueba ignoran lo guardado para ser reproducibles.
+        let prefs: Option<Prefs> = if options.capture.is_some() {
+            None
+        } else {
+            cc.storage
+                .and_then(|s| s.get_string(STORAGE_KEY))
+                .and_then(|text| serde_json::from_str(&text).ok())
+        };
+        let (dark, accent, workspace, dock, columns, zoom) = match prefs {
+            Some(p) => (
+                p.dark,
+                p.accent.min(ACCENTS.len() - 1),
+                p.workspace,
+                p.dock,
+                p.columns,
+                p.diagram_zoom,
+            ),
+            None => {
+                let ws = options.workspace.unwrap_or(Workspace::Calculation);
+                (
+                    !options.light,
+                    0,
+                    ws,
+                    ws.layout(),
+                    schedule::Columns::default(),
+                    1.3,
+                )
+            }
+        };
+        let palette = Palette::new(dark, ACCENTS[accent].1);
         theme::apply(&cc.egui_ctx, &palette);
+        let mut shared = Shared::new(palette);
+        shared.columns = columns;
+        shared.diagram_zoom = zoom;
         let mut app = App {
-            view: match view {
-                Some("rapido") => View::Quick,
-                Some("unifilar") => View::Diagram,
-                _ => View::Project,
-            },
-            quick: QuickView::default(),
-            zoom: 1.4,
-            project: example::house(),
-            path: None,
-            dirty: false,
-            result: Err(String::new()),
-            panel: 0,
-            selection: Selection::Circuit(1),
+            doc: Doc::new(example::house(), None),
+            shared,
+            dock,
+            workspace,
             dark,
-            accent: 0,
-            palette,
+            accent,
             notice: None,
             done: None,
-            capture: capture.map(|path| Capture { path, frames: 0 }),
+            about: false,
+            capture: options.capture.map(|path| Capture { path, frames: 0 }),
         };
-        if let Some(path) = open {
+        app.doc.selection = Selection::Circuit(0, 1);
+        if let Some(path) = options.open {
             app.load(path);
         }
-        app.recalculate();
+        app.shared.props_tab = match options.properties.as_deref() {
+            Some("resultados") => crate::panels::properties::PropsTab::Results,
+            Some("normativa") => crate::panels::properties::PropsTab::Normative,
+            _ => crate::panels::properties::PropsTab::Inputs,
+        };
+        if let Some(tab) = options.focus {
+            app.focus_tab(tab);
+        }
         app
     }
 
-    fn recalculate(&mut self) {
-        self.result = calculate(&self.project);
-    }
+    // ------------------------------------------------------------ archivos
 
     fn set_project(&mut self, project: Project, path: Option<PathBuf>) {
-        self.project = project;
-        self.path = path;
-        self.dirty = false;
-        self.panel = 0;
-        self.selection = Selection::Feeder;
-        self.recalculate();
+        self.doc = Doc::new(project, path);
     }
 
     fn load(&mut self, path: PathBuf) {
@@ -243,41 +140,50 @@ impl App {
         }
     }
 
-    fn save_to(&mut self, path: PathBuf) {
-        match std::fs::write(&path, self.project.to_json()) {
-            Ok(()) => {
-                self.path = Some(path);
-                self.dirty = false;
-                self.notice = None;
-            }
-            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
-        }
-    }
-
     fn save(&mut self, ask: bool) {
-        let target = match (&self.path, ask) {
+        let target = match (&self.doc.path, ask) {
             (Some(path), false) => Some(path.clone()),
             _ => rfd::FileDialog::new()
                 .add_filter("Proyecto de VoltForge", &["json"])
                 .set_file_name("proyecto.json")
                 .save_file(),
         };
-        if let Some(path) = target {
-            self.save_to(path);
+        let Some(path) = target else {
+            return;
+        };
+        match std::fs::write(&path, self.doc.project.to_json()) {
+            Ok(()) => {
+                self.done = Some(format!("Guardado en {}", path.display()));
+                self.doc.path = Some(path);
+                self.doc.dirty = false;
+                self.notice = None;
+            }
+            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
         }
     }
 
-    /// Escribe la memoria del proyecto o la hoja del cálculo rápido en PDF.
-    fn export_pdf(&mut self) {
-        let (pdf, name) = match self.view {
-            View::Project | View::Diagram => (
-                self.result
+    fn open_dialog(&mut self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("Proyecto de VoltForge", &["json"])
+            .pick_file()
+        {
+            self.load(path);
+        }
+    }
+
+    /// Escribe la memoria del proyecto, o la hoja si el cálculo rápido tiene el foco.
+    fn export_pdf(&mut self, quick: bool) {
+        let (pdf, name) = if quick {
+            (self.shared.quick.pdf(), "hoja-de-calculo.pdf")
+        } else {
+            (
+                self.doc
+                    .result
                     .as_ref()
                     .map_err(Clone::clone)
-                    .and_then(|r| voltforge_reports::project_pdf(&self.project, r)),
+                    .and_then(|r| voltforge_reports::project_pdf(&self.doc.project, r)),
                 "memoria-de-calculo.pdf",
-            ),
-            View::Quick => (self.quick.pdf(), "hoja-de-calculo.pdf"),
+            )
         };
         let pdf = match pdf {
             Ok(pdf) => pdf,
@@ -302,103 +208,201 @@ impl App {
         }
     }
 
-    fn open_dialog(&mut self) {
-        if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Proyecto de VoltForge", &["json"])
-            .pick_file()
-        {
-            self.load(path);
+    // ------------------------------------------------------------ paneles
+
+    fn set_workspace(&mut self, ws: Workspace) {
+        self.workspace = ws;
+        self.dock = ws.layout();
+    }
+
+    fn is_open(&self, tab: Tab) -> bool {
+        self.dock.find_tab(&tab).is_some()
+    }
+
+    /// Abre o cierra un panel. Los laterales vuelven a su lado.
+    fn toggle_tab(&mut self, tab: Tab) {
+        if let Some(path) = self.dock.find_tab(&tab) {
+            self.dock.remove_tab(path);
+            return;
         }
-    }
-
-    fn status_color(&self, status: Status) -> Color32 {
-        match status {
-            Status::Complies => self.palette.ok,
-            Status::Fails => self.palette.bad,
-            Status::NotEvaluated => self.palette.na,
-        }
-    }
-
-    fn status_text(&self, status: Status) -> RichText {
-        let mark = match status {
-            Status::Complies => "✔",
-            Status::Fails => "✖",
-            Status::NotEvaluated => "—",
-        };
-        RichText::new(format!("{mark} {}", status.label())).color(self.status_color(status))
-    }
-
-    fn caption(&self, text: &str) -> RichText {
-        RichText::new(text.to_uppercase())
-            .small()
-            .color(self.palette.ink2)
-    }
-
-    fn muted(&self, text: impl Into<String>) -> RichText {
-        RichText::new(text).color(self.palette.ink2)
-    }
-
-    fn strong(&self, text: impl Into<String>) -> RichText {
-        RichText::new(text).family(theme::semibold())
-    }
-
-    fn panel_result(&self) -> Option<PanelResult> {
-        let id = &self.project.panels.get(self.panel)?.id;
-        self.result
-            .as_ref()
-            .ok()?
-            .panels
-            .iter()
-            .find(|p| &p.id == id)
-            .cloned()
-    }
-
-    // ------------------------------------------------------------ barra superior
-
-    fn top_bar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("⚡").color(self.palette.accent).size(16.0));
-            ui.label(self.strong("VoltForge").size(15.0));
-            ui.add_space(8.0);
-            ui.selectable_value(&mut self.view, View::Project, "Proyecto");
-            ui.selectable_value(&mut self.view, View::Diagram, "Unifilar");
-            ui.selectable_value(&mut self.view, View::Quick, "Cálculo rápido");
-            ui.add_space(8.0);
-            ui.menu_button("Archivo", |ui| {
-                if ui.button("Nuevo").clicked() {
-                    self.view = View::Project;
-                    self.set_project(empty_project(), None);
-                    ui.close();
+        let tree = self.dock.main_surface_mut();
+        match tab {
+            Tab::Browser => {
+                tree.split_left(NodeIndex::root(), 0.16, vec![tab]);
+            }
+            Tab::Properties => {
+                tree.split_right(NodeIndex::root(), 0.76, vec![tab]);
+            }
+            Tab::Procedure => {
+                tree.split_below(NodeIndex::root(), 0.68, vec![tab]);
+            }
+            _ => {
+                // Los documentos van junto a los otros documentos, al centro.
+                let center = [Tab::Schedule, Tab::Diagram, Tab::Report, Tab::Quick]
+                    .iter()
+                    .find_map(|t| self.dock.find_tab(t));
+                match center {
+                    Some(path) => {
+                        self.dock.set_focused_node_and_surface(path.node_path());
+                        self.dock.push_to_focused_leaf(tab);
+                    }
+                    None => self.dock.push_to_first_leaf(tab),
                 }
-                if ui.button("Abrir…").clicked() {
+            }
+        }
+    }
+
+    fn focus_tab(&mut self, tab: Tab) {
+        if tab == Tab::Quick && !self.is_open(tab) {
+            // El cálculo rápido no es parte del proyecto: abre en su propia
+            // ventana flotante, que se puede acoplar arrastrando la pestaña.
+            let surface = self.dock.add_window(vec![tab]);
+            if let Some(window) = self.dock.get_window_state_mut(surface) {
+                window
+                    .set_position(egui::pos2(180.0, 70.0))
+                    .set_size(egui::vec2(1120.0, 720.0));
+            }
+            return;
+        }
+        if !self.is_open(tab) {
+            self.toggle_tab(tab);
+        }
+        if let Some(path) = self.dock.find_tab(&tab) {
+            let _ = self.dock.set_active_tab(path);
+        }
+    }
+
+    fn restyle(&mut self, ctx: &egui::Context) {
+        let palette = Palette::new(self.dark, ACCENTS[self.accent].1);
+        self.shared.palette = palette;
+        theme::apply(ctx, &palette);
+    }
+
+    // ------------------------------------------------------------ barras
+
+    fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        let p = self.shared.palette;
+        ui.horizontal(|ui| {
+            // Menús de texto sin marco, como en las aplicaciones de escritorio.
+            ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+            ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+            ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+            ui.label(RichText::new(icon::LIGHTNING).size(17.0).color(p.accent));
+            ui.label(strong("VoltForge").size(14.0));
+            ui.add_space(10.0);
+
+            ui.menu_button("Archivo", |ui| {
+                if ui
+                    .button(format!("{}  Nuevo proyecto", icon::FILE_PLUS))
+                    .clicked()
+                {
+                    ui.close();
+                    self.set_project(empty_project(), None);
+                }
+                if ui
+                    .add(
+                        egui::Button::new(format!("{}  Abrir…", icon::FOLDER_OPEN))
+                            .shortcut_text("Ctrl+O"),
+                    )
+                    .clicked()
+                {
                     ui.close();
                     self.open_dialog();
                 }
-                if ui.button("Guardar").clicked() {
+                if ui
+                    .add(
+                        egui::Button::new(format!("{}  Guardar", icon::FLOPPY_DISK))
+                            .shortcut_text("Ctrl+S"),
+                    )
+                    .clicked()
+                {
                     ui.close();
                     self.save(false);
                 }
-                if ui.button("Guardar como…").clicked() {
+                if ui
+                    .add(egui::Button::new("     Guardar como…").shortcut_text("Ctrl+Mayús+S"))
+                    .clicked()
+                {
                     ui.close();
                     self.save(true);
                 }
                 ui.separator();
-                let export = match self.view {
-                    View::Project | View::Diagram => "Exportar memoria en PDF…",
-                    View::Quick => "Exportar hoja en PDF…",
-                };
-                if ui.button(export).clicked() {
+                if ui
+                    .add(
+                        egui::Button::new(format!("{}  Exportar memoria en PDF…", icon::FILE_PDF))
+                            .shortcut_text("Ctrl+E"),
+                    )
+                    .clicked()
+                {
                     ui.close();
-                    self.export_pdf();
+                    self.export_pdf(false);
+                }
+                if ui
+                    .button("     Exportar hoja del cálculo rápido…")
+                    .clicked()
+                {
+                    ui.close();
+                    self.export_pdf(true);
                 }
                 ui.separator();
-                if ui.button("Cargar el ejemplo").clicked() {
-                    self.view = View::Project;
-                    self.set_project(example::house(), None);
-                    self.selection = Selection::Circuit(1);
+                if ui.button("     Abrir el proyecto de ejemplo").clicked() {
                     ui.close();
+                    self.set_project(example::house(), None);
                 }
             });
+
+            ui.menu_button("Edición", |ui| {
+                let panel = self.doc.panel_index();
+                if ui
+                    .add_enabled(
+                        panel.is_some(),
+                        egui::Button::new(format!("{}  Agregar circuito", icon::PLUS)),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    if let Some(p) = panel {
+                        self.doc.add_circuit(p);
+                    }
+                }
+                let on_circuit = matches!(self.doc.selection, Selection::Circuit(..));
+                if ui
+                    .add_enabled(
+                        on_circuit,
+                        egui::Button::new(format!("{}  Duplicar circuito", icon::COPY))
+                            .shortcut_text("Ctrl+D"),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.doc.duplicate_circuit();
+                }
+                if ui
+                    .button(format!("{}  Agregar tablero", icon::SQUARES_FOUR))
+                    .clicked()
+                {
+                    ui.close();
+                    self.doc.add_panel();
+                }
+                ui.separator();
+                let label = match self.doc.selection {
+                    Selection::Circuit(..) => "Eliminar circuito",
+                    Selection::Feeder(_) => "Eliminar tablero",
+                    Selection::Project => "Eliminar",
+                };
+                if ui
+                    .add_enabled(
+                        self.doc.selection != Selection::Project,
+                        egui::Button::new(format!("{}  {label}", icon::TRASH))
+                            .shortcut_text("Supr"),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.doc.remove_selected();
+                }
+            });
+
             ui.menu_button("Ver", |ui| {
                 let mut restyle = false;
                 restyle |= ui
@@ -408,743 +412,244 @@ impl App {
                     .radio_value(&mut self.dark, false, "Tema claro")
                     .changed();
                 ui.separator();
-                ui.label(self.muted("Color de acento"));
+                ui.label(muted(&p, "Color de acento"));
                 for (i, (name, _)) in ACCENTS.iter().enumerate() {
                     restyle |= ui.radio_value(&mut self.accent, i, *name).changed();
                 }
                 if restyle {
-                    self.palette = Palette::new(self.dark, ACCENTS[self.accent].1);
-                    theme::apply(ui.ctx(), &self.palette);
+                    self.restyle(ui.ctx());
                 }
             });
+
+            ui.menu_button("Herramientas", |ui| {
+                if ui
+                    .add(
+                        egui::Button::new(format!(
+                            "{}  Cálculo rápido de un circuito",
+                            icon::CALCULATOR
+                        ))
+                        .shortcut_text("F8"),
+                    )
+                    .on_hover_text("Fuera del proyecto: no cambia el proyecto abierto")
+                    .clicked()
+                {
+                    ui.close();
+                    self.focus_tab(Tab::Quick);
+                }
+            });
+
+            ui.menu_button("Ventana", |ui| {
+                for tab in Tab::ALL {
+                    let mut open = self.is_open(tab);
+                    if ui
+                        .add(egui::Checkbox::new(
+                            &mut open,
+                            format!("{}  {}", tab.icon(), tab.title()),
+                        ))
+                        .on_hover_text(tab.shortcut())
+                        .changed()
+                    {
+                        self.toggle_tab(tab);
+                    }
+                }
+                ui.separator();
+                ui.label(muted(&p, "Espacio de trabajo"));
+                for ws in Workspace::ALL {
+                    if ui.radio(self.workspace == ws, ws.title()).clicked() {
+                        ui.close();
+                        self.set_workspace(ws);
+                    }
+                }
+                if ui
+                    .button(format!("Restablecer «{}»", self.workspace.title()))
+                    .clicked()
+                {
+                    ui.close();
+                    self.dock = self.workspace.layout();
+                }
+            });
+
+            ui.menu_button("Ayuda", |ui| {
+                if ui.button("Acerca de VoltForge").clicked() {
+                    ui.close();
+                    self.about = true;
+                }
+            });
+
+            // Espacios de trabajo a la derecha, como en las aplicaciones de Adobe.
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                for ws in Workspace::ALL.iter().rev() {
+                    let selected = self.workspace == *ws;
+                    let text = if selected {
+                        RichText::new(ws.title()).color(p.ink)
+                    } else {
+                        RichText::new(ws.title()).color(p.ink2)
+                    };
+                    let response = ui.add(egui::Button::new(text).frame(false));
+                    if selected {
+                        let r = response.rect;
+                        ui.painter().hline(
+                            r.x_range(),
+                            r.bottom() + 3.0,
+                            egui::Stroke::new(2.0, p.accent),
+                        );
+                    }
+                    if response.clicked() && !selected {
+                        self.set_workspace(*ws);
+                    }
+                }
+                ui.label(muted(&p, icon::LAYOUT));
+                ui.add_space(16.0);
                 let file = self
+                    .doc
                     .path
                     .as_ref()
                     .and_then(|p| p.file_name())
                     .map_or("sin guardar".to_string(), |n| {
                         n.to_string_lossy().into_owned()
                     });
-                if self.view != View::Quick {
-                    ui.label(self.muted(file));
-                    ui.label(&self.project.name);
-                }
+                let dirty = if self.doc.dirty { " •" } else { "" };
+                ui.label(muted(&p, format!("{file}{dirty}")));
+                ui.label(strong(&self.doc.project.name));
             });
         });
     }
-
-    // ------------------------------------------------------------ barra inferior
 
     fn status_bar(&mut self, ui: &mut egui::Ui) {
-        if self.view == View::Quick {
-            ui.horizontal(|ui| {
-                ui.label(self.muted(self.quick.summary()));
-                if let Some(notice) = &self.notice {
-                    ui.label(RichText::new(notice).color(self.palette.bad));
-                }
-                if let Some(done) = &self.done {
-                    ui.label(RichText::new(done).color(self.palette.ok));
-                }
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if let Some(verdict) = self.quick.verdict() {
-                        verdict_chips(ui, &self.palette, &verdict);
-                    }
-                });
-            });
-            return;
-        }
+        let p = self.shared.palette;
         ui.horizontal(|ui| {
-            match &self.result {
-                Ok(r) => {
-                    ui.label(
-                        RichText::new(format!("{} cumplen", r.complies)).color(self.palette.ok),
-                    );
-                    ui.label(
-                        RichText::new(format!("{} no cumplen", r.fails)).color(self.palette.bad),
-                    );
-                    ui.label(
-                        RichText::new(format!("{} no evaluados", r.not_evaluated))
-                            .color(self.palette.na),
-                    );
+            let crumbs = self.doc.breadcrumb();
+            for (i, part) in crumbs.iter().enumerate() {
+                if i > 0 {
+                    ui.label(muted(&p, icon::CARET_RIGHT));
                 }
-                Err(e) => {
-                    ui.label(RichText::new(e).color(self.palette.bad));
-                }
+                ui.label(if i + 1 == crumbs.len() {
+                    RichText::new(part)
+                } else {
+                    muted(&p, part)
+                });
             }
             if let Some(notice) = &self.notice {
-                ui.label(RichText::new(notice).color(self.palette.bad));
-            }
-            if let Some(done) = &self.done {
-                ui.label(RichText::new(done).color(self.palette.ok));
+                ui.separator();
+                ui.label(RichText::new(format!("{} {notice}", icon::WARNING_CIRCLE)).color(p.bad));
+            } else if let Some(done) = &self.done {
+                ui.separator();
+                ui.label(RichText::new(format!("{} {done}", icon::CHECK)).color(p.ok));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(self.muted(if self.dirty {
-                    "Cambios sin guardar"
-                } else if self.path.is_none() {
-                    "Sin archivo"
-                } else {
-                    "Guardado"
-                }));
-                ui.label(self.muted("·"));
-                if let Ok(r) = &self.result {
-                    verdict_chips(ui, &self.palette, &r.verdict);
+                if let Ok(r) = &self.doc.result {
+                    verdict_chips(ui, &p, &r.verdict);
                 }
             });
         });
     }
 
-    // ------------------------------------------------------------ panel izquierdo
-
-    fn project_tree(&mut self, ui: &mut egui::Ui) -> bool {
-        let mut changed = false;
-        ui.label(self.caption("Proyecto"));
-        changed |= ui.text_edit_singleline(&mut self.project.name).changed();
-        ui.horizontal(|ui| {
-            ui.label(self.muted("Suministro"));
-            changed |= combo(ui, "sistema", &mut self.project.source.system, &SYSTEMS);
-        });
-        ui.add_space(4.0);
-        for (index, panel) in self.project.panels.iter().enumerate() {
-            let selected = self.panel == index && self.selection == Selection::Feeder;
-            if ui
-                .selectable_label(selected, self.strong(&panel.name))
-                .clicked()
+    fn shortcuts(&mut self, ctx: &egui::Context) {
+        use egui::{Key, KeyboardShortcut, Modifiers};
+        let pressed = |m: Modifiers, k: Key| {
+            ctx.input_mut(|i| i.consume_shortcut(&KeyboardShortcut::new(m, k)))
+        };
+        if pressed(Modifiers::COMMAND | Modifiers::SHIFT, Key::S) {
+            self.save(true);
+        } else if pressed(Modifiers::COMMAND, Key::S) {
+            self.save(false);
+        }
+        if pressed(Modifiers::COMMAND, Key::O) {
+            self.open_dialog();
+        }
+        if pressed(Modifiers::COMMAND, Key::E) {
+            self.export_pdf(false);
+        }
+        let typing = ctx.memory(|m| m.focused().is_some());
+        if !typing {
+            if pressed(Modifiers::COMMAND, Key::D) {
+                self.doc.duplicate_circuit();
+            }
+            if pressed(Modifiers::NONE, Key::Delete)
+                && matches!(self.doc.selection, Selection::Circuit(..))
             {
-                self.panel = index;
-                self.selection = Selection::Feeder;
-            }
-            if self.panel != index {
-                continue;
-            }
-            for (i, circuit) in panel.circuits.iter().enumerate() {
-                let text = format!("    {}  {}", circuit.id, circuit.name);
-                let selected = self.selection == Selection::Circuit(i);
-                if ui.selectable_label(selected, text).clicked() {
-                    self.selection = Selection::Circuit(i);
-                }
+                self.doc.remove_selected();
             }
         }
-
-        ui.add_space(12.0);
-        ui.label(self.caption("Criterios del proyecto"));
-        let muted = |t: &str| RichText::new(t).color(self.palette.ink2);
-        let s = &mut self.project.settings;
-        egui::Grid::new("criterios")
-            .num_columns(2)
-            .spacing([8.0, 6.0])
-            .show(ui, |ui| {
-                ui.label(muted("Perfil"));
-                ui.label("NOM-001-SEDE-2012");
-                ui.end_row();
-                ui.label(muted("Caída en derivado"));
-                changed |= number(ui, &mut s.branch_drop_limit_percent, 0.1, 0.5, 10.0, " %");
-                ui.end_row();
-                ui.label(muted("Caída en alimentador"));
-                changed |= number(ui, &mut s.feeder_drop_limit_percent, 0.1, 0.5, 10.0, " %");
-                ui.end_row();
-                ui.label(muted("Caída total"));
-                changed |= number(ui, &mut s.total_drop_limit_percent, 0.1, 0.5, 15.0, " %");
-                ui.end_row();
-                ui.label(muted("Temp. ambiente"));
-                changed |= number(ui, &mut s.ambient_c, 1.0, 0.0, 85.0, " °C");
-                ui.end_row();
-                ui.label(muted("Conductor"));
-                changed |= combo(ui, "material", &mut s.material, &MATERIALS);
-                ui.end_row();
-                ui.label(muted("Aislamiento"));
-                changed |= combo(ui, "aislamiento", &mut s.insulation, &INSULATIONS);
-                ui.end_row();
-                ui.label(muted("Canalización"));
-                changed |= combo(ui, "tubo", &mut s.conduit, &CONDUITS);
-                ui.end_row();
-            });
-        changed |= ui
-            .checkbox(&mut s.bare_grounding, "Tierra desnuda")
-            .changed();
-        changed |= ui.checkbox(&mut s.wet_location, "Lugar mojado").changed();
-        let mut adjust = s.resistance_temperature_c.is_some();
-        if ui
-            .checkbox(&mut adjust, "Ajustar resistencia por temperatura")
-            .changed()
-        {
-            s.resistance_temperature_c = adjust.then_some(60.0);
-            changed = true;
-        }
-        if let Some(t) = &mut s.resistance_temperature_c {
-            ui.horizontal(|ui| {
-                ui.label(muted("Temperatura del conductor"));
-                changed |= number(ui, t, 1.0, 20.0, 90.0, " °C");
-            });
-        }
-        changed
-    }
-
-    // ------------------------------------------------------------ cuadro de cargas
-
-    fn schedule(&mut self, ui: &mut egui::Ui) -> bool {
-        let mut changed = false;
-        let Some(result) = self.panel_result() else {
-            ui.label(self.muted("El proyecto no tiene tableros."));
-            return false;
-        };
-        ui.horizontal(|ui| {
-            ui.heading(&result.name);
-            ui.label(self.muted(format!(
-                "Cuadro de cargas · {} circuitos · {:.0} W conectados · fp {:.2}",
-                result.circuits.len(),
-                result.connected_w,
-                result.power_factor
-            )));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let removable = matches!(self.selection, Selection::Circuit(_));
-                if ui
-                    .add_enabled(removable, egui::Button::new("Eliminar"))
-                    .clicked()
-                {
-                    if let Selection::Circuit(i) = self.selection {
-                        self.project.panels[self.panel].circuits.remove(i);
-                        self.selection = Selection::Feeder;
-                        changed = true;
-                    }
-                }
-                if ui.button("Agregar circuito").clicked() {
-                    let circuits = &mut self.project.panels[self.panel].circuits;
-                    let next = (1..)
-                        .map(|n| format!("C-{n:02}"))
-                        .find(|id| circuits.iter().all(|c| &c.id != id));
-                    circuits.push(Circuit {
-                        id: next.unwrap_or_default(),
-                        name: "Circuito nuevo".to_string(),
-                        kind: CircuitKind::LineToNeutral,
-                        phases: vec![Phase::A],
-                        load: Load {
-                            power_w: 1000.0,
-                            power_factor: 0.9,
-                            continuous: false,
-                            kind: LoadKind::General,
-                        },
-                        length_m: 10.0,
-                        has_neutral: false,
-                        overrides: Overrides::default(),
-                    });
-                    self.selection = Selection::Circuit(circuits.len() - 1);
-                    changed = true;
-                }
-            });
-        });
-        let [a, b, c] = result.phase_va;
-        let balance = match result.imbalance_percent {
-            Some(i) => {
-                format!("Fases: A {a:.0} VA · B {b:.0} VA · C {c:.0} VA · desbalance {i:.1} %")
-            }
-            None => "Fases sin asignar en todos los circuitos".to_string(),
-        };
-        ui.label(self.muted(balance));
-        ui.add_space(6.0);
-
-        let rows: Vec<(Selection, &RunResult)> =
-            std::iter::once((Selection::Feeder, &result.feeder))
-                .chain(
-                    result
-                        .circuits
-                        .iter()
-                        .enumerate()
-                        .map(|(i, c)| (Selection::Circuit(i), c)),
-                )
-                .collect();
-        let mono = |t: String| RichText::new(t).monospace();
-        let mut clicked = None;
-        egui::Frame::new()
-            .fill(self.palette.panel)
-            .stroke(egui::Stroke::new(1.0, self.palette.line))
-            .corner_radius(8)
-            .inner_margin(8)
-            .show(ui, |ui| {
-                TableBuilder::new(ui)
-                    .striped(false)
-                    .sense(Sense::click())
-                    .cell_layout(Layout::left_to_right(Align::Center))
-                    .column(Column::auto().at_least(44.0))
-                    .column(
-                        Column::initial(150.0)
-                            .at_least(120.0)
-                            .resizable(true)
-                            .clip(true),
-                    )
-                    .columns(Column::auto().at_least(40.0), 9)
-                    .column(Column::auto().at_least(112.0))
-                    .auto_shrink([false, true])
-                    .header(24.0, |mut header| {
-                        for title in [
-                            "ID",
-                            "Descripción",
-                            "Carga W",
-                            "I A",
-                            "L m",
-                            "Calibre",
-                            "Tierra",
-                            "Tubo",
-                            "ITM",
-                            "e %",
-                            "Σe %",
-                            "Estado",
-                        ] {
-                            header.col(|ui| {
-                                ui.label(self.caption(title));
-                            });
-                        }
-                    })
-                    .body(|mut body| {
-                        for (selection, item) in &rows {
-                            body.row(28.0, |mut row| {
-                                row.set_selected(self.selection == *selection);
-                                let id = if *selection == Selection::Feeder {
-                                    "ALIM"
-                                } else {
-                                    &item.id
-                                };
-                                row.col(|ui| {
-                                    ui.label(self.muted(id));
-                                });
-                                row.col(|ui| {
-                                    ui.label(&item.name);
-                                });
-                                row.col(|ui| {
-                                    ui.label(mono(format!("{:.0}", item.load_w)));
-                                });
-                                let cells: [String; 8] = match &item.run {
-                                    Some(run) => [
-                                        format!("{:.2}", run.nominal_a),
-                                        format!("{:.0}", run.length_m),
-                                        if run.conductors_per_phase > 1 {
-                                            format!("{}×{}", run.conductors_per_phase, run.size.0)
-                                        } else {
-                                            run.size.0.clone()
-                                        },
-                                        run.grounding_size.0.clone(),
-                                        run.conduit.as_ref().map_or("—".to_string(), |c| {
-                                            format!("{} mm", c.metric_designator)
-                                        }),
-                                        format!("{}P-{:.0}", run.poles, run.breaker_a),
-                                        format!("{:.2}", run.drop_percent),
-                                        format!("{:.2}", run.cumulative_drop_percent),
-                                    ],
-                                    None => std::array::from_fn(|_| "—".to_string()),
-                                };
-                                for cell in cells {
-                                    row.col(|ui| {
-                                        ui.label(mono(cell));
-                                    });
-                                }
-                                row.col(|ui| {
-                                    ui.label(self.status_text(item.status));
-                                });
-                                if row.response().clicked() {
-                                    clicked = Some(*selection);
-                                }
-                            });
-                        }
-                    });
-            });
-        if let Some(selection) = clicked {
-            self.selection = selection;
-        }
-
-        ui.add_space(8.0);
-        for (_, item) in &rows {
-            for check in item.checks.iter().filter(|c| c.status != Status::Complies) {
-                ui.horizontal_wrapped(|ui| {
-                    let id = if item.id == result.id {
-                        "Alimentador"
-                    } else {
-                        &item.id
-                    };
-                    ui.label(
-                        self.strong(format!("{id} · {}", check.name))
-                            .color(self.status_color(check.status)),
-                    );
-                    ui.label(self.muted(&check.detail));
-                });
-            }
-        }
-        if let Ok(r) = &self.result {
-            for warning in &r.warnings {
-                ui.label(RichText::new(format!("Aviso · {warning}")).color(self.palette.na));
-            }
-        }
-
-        // Procedimiento del elemento seleccionado.
-        let selected = rows.iter().find(|(s, _)| *s == self.selection);
-        if let Some((selection, item)) = selected {
-            if let Some(run) = &item.run {
-                let title = match selection {
-                    Selection::Feeder => format!("Procedimiento · alimentador de {}", result.name),
-                    Selection::Circuit(_) => format!("Procedimiento · {} {}", item.id, item.name),
-                };
-                ui.add_space(16.0);
-                ui.label(caption(&self.palette, &title));
-                ui.add_space(2.0);
-                ui.scope(|ui| {
-                    ui.set_max_width(ui.clip_rect().width() - 4.0);
-                    steps_ui(ui, &self.palette, &run.steps);
-                });
-            }
-        }
-        changed
-    }
-
-    // ------------------------------------------------------------ panel derecho
-
-    fn results(&self, ui: &mut egui::Ui, item: &RunResult) {
-        ui.label(self.caption("Resultado"));
-        let Some(run) = &item.run else {
-            ui.label(self.status_text(item.status));
-            for check in &item.checks {
-                ui.label(self.muted(&check.detail));
-            }
-            return;
-        };
-        let conduit = run.conduit.as_ref().map_or("—".to_string(), |c| {
-            format!(
-                "{} de {} mm ({}\")",
-                c.conduit_type, c.metric_designator, c.trade_size
-            )
-        });
-        let size = if run.conductors_per_phase > 1 {
-            format!("{} × {} por fase", run.conductors_per_phase, run.size.0)
-        } else {
-            run.size.0.clone()
-        };
-        let rows = [
-            ("Corriente nominal", format!("{:.2} A", run.nominal_a)),
-            ("Corriente de diseño", format!("{:.2} A", run.design_a)),
-            ("Conductor", size),
-            (
-                "Ampacidad permitida",
-                format!("{:.2} A", run.allowable_ampacity_a),
-            ),
-            ("Puesta a tierra", run.grounding_size.0.clone()),
-            ("Tubería", conduit),
-            (
-                "Interruptor",
-                format!("{}P-{:.0} A", run.poles, run.breaker_a),
-            ),
-            (
-                "Caída de tensión",
-                format!("{:.2} V · {:.2} %", run.drop_v, run.drop_percent),
-            ),
-            (
-                "Caída acumulada",
-                format!("{:.2} %", run.cumulative_drop_percent),
-            ),
+        let keys = [
+            Key::F2,
+            Key::F3,
+            Key::F4,
+            Key::F5,
+            Key::F6,
+            Key::F7,
+            Key::F8,
         ];
-        egui::Grid::new("resultado")
-            .num_columns(2)
-            .spacing([12.0, 5.0])
-            .show(ui, |ui| {
-                for (name, value) in rows {
-                    ui.label(self.muted(name));
-                    ui.label(RichText::new(value).monospace());
-                    ui.end_row();
-                }
-            });
-        if let Some(governing) = &run.governing {
-            let text = if run.forced {
-                format!(
-                    "Calibre fijado por el usuario. El programa propondría el {} por {governing}.",
-                    run.recommended_size.as_ref().map_or("—", |s| s.0.as_str())
-                )
-            } else {
-                format!("Calibre determinado por {governing}.")
+        for (key, tab) in keys.into_iter().zip(Tab::ALL) {
+            if pressed(Modifiers::NONE, key) {
+                self.toggle_tab(tab);
+            }
+        }
+    }
+
+    fn dock_style(&self, ui: &egui::Ui) -> Style {
+        let p = &self.shared.palette;
+        let mut style = Style::from_egui(ui.style().as_ref());
+        style.dock_area_padding = None;
+        style.main_surface_border_stroke = egui::Stroke::NONE;
+        style.separator.width = 2.0;
+        style.separator.color_idle = p.bg;
+        style.separator.color_hovered = p.ink3;
+        style.separator.color_dragged = p.accent;
+        style.tab_bar.bg_fill = p.bg;
+        style.tab_bar.height = 28.0;
+        style.tab_bar.hline_color = p.bg;
+        style.tab_bar.corner_radius = egui::CornerRadius::ZERO;
+        style.tab.spacing = 2.0;
+        style.tab.hline_below_active_tab_name = true;
+        style.tab.tab_body.bg_fill = p.panel;
+        style.tab.tab_body.stroke = egui::Stroke::NONE;
+        style.tab.tab_body.inner_margin = egui::Margin::ZERO;
+        style.tab.tab_body.corner_radius = egui::CornerRadius::ZERO;
+        for (s, bg, text) in [
+            (&mut style.tab.active, p.panel, p.ink),
+            (&mut style.tab.focused, p.panel, p.ink),
+            (&mut style.tab.inactive, p.bg, p.ink2),
+            (&mut style.tab.hovered, p.raise, p.ink),
+        ] {
+            s.bg_fill = bg;
+            s.text_color = text;
+            s.outline_color = egui::Color32::TRANSPARENT;
+            s.corner_radius = egui::CornerRadius {
+                nw: 3,
+                ne: 3,
+                sw: 0,
+                se: 0,
             };
-            ui.add_space(4.0);
-            ui.label(self.muted(text));
         }
-        ui.add_space(8.0);
-        ui.label(self.caption("Verificaciones"));
-        for check in &item.checks {
-            ui.horizontal(|ui| {
-                ui.label(&check.name);
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(self.status_text(check.status));
-                });
+        style.buttons.close_tab_color = p.ink3;
+        style.buttons.close_tab_active_color = p.ink;
+        style.overlay.selection_color = p.accent.gamma_multiply(0.25);
+        style
+    }
+
+    fn about_window(&mut self, ctx: &egui::Context) {
+        let p = self.shared.palette;
+        egui::Window::new("Acerca de VoltForge")
+            .open(&mut self.about)
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label(strong(format!("VoltForge {}", env!("CARGO_PKG_VERSION"))));
+                ui.label("Cálculo de instalaciones eléctricas de baja tensión. Código abierto, MIT o Apache-2.0.");
+                ui.add_space(6.0);
+                ui.label(muted(&p, "Perfil normativo: NOM-001-SEDE-2012."));
+                ui.label(muted(&p, "VoltForge calcula y verifica; no otorga aprobación profesional. Los resultados debe revisarlos y firmarlos un profesional."));
             });
-            ui.label(self.muted(&check.detail).small());
-        }
     }
 
-    fn detail(&mut self, ui: &mut egui::Ui) -> bool {
-        let mut changed = false;
-        let Some(result) = self.panel_result() else {
-            return false;
-        };
-        let caption = self.caption("Elemento seleccionado");
-        let muted = |t: &str| RichText::new(t).color(self.palette.ink2);
-        ui.label(caption);
-        match self.selection {
-            Selection::Circuit(i) if i < self.project.panels[self.panel].circuits.len() => {
-                let item = result.circuits.get(i).cloned();
-                let mut apply = None;
-                {
-                    let circuit = &mut self.project.panels[self.panel].circuits[i];
-                    ui.horizontal(|ui| {
-                        changed |= ui
-                            .add(egui::TextEdit::singleline(&mut circuit.id).desired_width(60.0))
-                            .changed();
-                        changed |= ui.text_edit_singleline(&mut circuit.name).changed();
-                    });
-                    egui::Grid::new("circuito")
-                        .num_columns(2)
-                        .spacing([12.0, 6.0])
-                        .show(ui, |ui| {
-                            ui.label(muted("Conexión"));
-                            if combo(ui, "conexion", &mut circuit.kind, &KINDS) {
-                                circuit.phases.clear();
-                                changed = true;
-                            }
-                            ui.end_row();
-                            ui.label(muted("Fases"));
-                            ui.horizontal(|ui| {
-                                for (label, phase) in
-                                    [("A", Phase::A), ("B", Phase::B), ("C", Phase::C)]
-                                {
-                                    let mut on = circuit.phases.contains(&phase);
-                                    if ui.checkbox(&mut on, label).changed() {
-                                        if on {
-                                            circuit.phases.push(phase);
-                                        } else {
-                                            circuit.phases.retain(|p| *p != phase);
-                                        }
-                                        changed = true;
-                                    }
-                                }
-                            });
-                            ui.end_row();
-                            ui.label(muted("Carga"));
-                            changed |=
-                                number(ui, &mut circuit.load.power_w, 10.0, 0.0, 5.0e6, " W");
-                            ui.end_row();
-                            ui.label(muted("Factor de potencia"));
-                            changed |=
-                                number(ui, &mut circuit.load.power_factor, 0.01, 0.1, 1.0, "");
-                            ui.end_row();
-                            ui.label(muted("Longitud"));
-                            changed |= number(ui, &mut circuit.length_m, 0.5, 0.0, 5000.0, " m");
-                            ui.end_row();
-                            ui.label(muted("Tipo de carga"));
-                            changed |= combo(ui, "tipo-carga", &mut circuit.load.kind, &LOAD_KINDS);
-                            ui.end_row();
-                            changed |= self_overrides(ui, &mut circuit.overrides, &self.palette);
-                        });
-                    changed |= ui
-                        .checkbox(&mut circuit.load.continuous, "Carga continua")
-                        .changed();
-                    if circuit.kind != CircuitKind::LineToNeutral {
-                        changed |= ui
-                            .checkbox(&mut circuit.has_neutral, "Lleva neutro")
-                            .changed();
-                    }
-                    changed |= ui
-                        .checkbox(
-                            &mut circuit.overrides.nipple,
-                            "Tramo de 60 cm o menos (niple)",
-                        )
-                        .changed();
-                    if let Some(run) = item.as_ref().and_then(|i| i.run.as_ref()) {
-                        if let (true, Some(recommended)) = (run.forced, &run.recommended_size) {
-                            if recommended != &run.size
-                                && ui
-                                    .button(format!("Aplicar calibre {}", recommended.0))
-                                    .clicked()
-                            {
-                                apply = Some(recommended.clone());
-                            }
-                        }
-                    }
-                    if let Some(size) = apply {
-                        circuit.overrides.size = Some(size);
-                        changed = true;
-                    }
-                }
-                ui.add_space(10.0);
-                if let Some(item) = &item {
-                    self.results(ui, item);
-                }
-            }
-            _ => {
-                let panel = &mut self.project.panels[self.panel];
-                ui.horizontal(|ui| {
-                    changed |= ui
-                        .add(egui::TextEdit::singleline(&mut panel.id).desired_width(60.0))
-                        .changed();
-                    changed |= ui.text_edit_singleline(&mut panel.name).changed();
-                });
-                egui::Grid::new("alimentador")
-                    .num_columns(2)
-                    .spacing([12.0, 6.0])
-                    .show(ui, |ui| {
-                        ui.label(muted("Conexión"));
-                        changed |= combo(ui, "conexion-tablero", &mut panel.kind, &KINDS);
-                        ui.end_row();
-                        ui.label(muted("Longitud del alimentador"));
-                        changed |= number(ui, &mut panel.feeder.length_m, 0.5, 0.0, 5000.0, " m");
-                        ui.end_row();
-                        ui.label(muted("Factor de demanda"));
-                        changed |= number(ui, &mut panel.feeder.demand_factor, 0.01, 0.05, 1.0, "");
-                        ui.end_row();
-                        changed |= self_overrides(ui, &mut panel.feeder.overrides, &self.palette);
-                    });
-                changed |= ui
-                    .checkbox(&mut panel.feeder.has_neutral, "Lleva neutro")
-                    .changed();
-                ui.add_space(10.0);
-                self.results(ui, &result.feeder);
-            }
-        }
-        changed
-    }
-}
-
-/// Editor de calibre y conductores por fase, dentro de una rejilla de dos columnas.
-fn self_overrides(ui: &mut egui::Ui, ov: &mut Overrides, palette: &Palette) -> bool {
-    let mut changed = false;
-    let muted = |t: &str| RichText::new(t).color(palette.ink2);
-    ui.label(muted("Calibre"));
-    let current = ov
-        .size
-        .as_ref()
-        .map_or("Automático".to_string(), |s| s.0.clone());
-    egui::ComboBox::from_id_salt("calibre")
-        .selected_text(current)
-        .width(150.0)
-        .show_ui(ui, |ui| {
-            changed |= ui
-                .selectable_value(&mut ov.size, None, "Automático")
-                .changed();
-            for c in Profile::nom_001_sede_2012()
-                .sizes
-                .iter()
-                .skip_while(|c| c.size != "14")
-            {
-                let value = Some(Size::new(&c.size));
-                changed |= ui.selectable_value(&mut ov.size, value, &c.size).changed();
-            }
-        });
-    ui.end_row();
-    ui.label(muted("Conductores por fase"));
-    let mut n = ov.conductors_per_phase.unwrap_or(1);
-    if ui.add(egui::DragValue::new(&mut n).range(1..=12)).changed() {
-        ov.conductors_per_phase = (n > 1).then_some(n);
-        changed = true;
-    }
-    ui.end_row();
-    changed
-}
-
-/// Los tres niveles del veredicto, de derecha a izquierda, con su explicación
-/// al pasar el cursor.
-fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
-    let lines = verdict.lines("la norma");
-    let color = |s: Status| match s {
-        Status::Complies => p.ok,
-        Status::Fails => p.bad,
-        Status::NotEvaluated => p.na,
-    };
-    let short = [
-        match verdict.calculation {
-            Calculation::Complete => "Cálculo completo",
-            Calculation::Incomplete => "Cálculo incompleto",
-        },
-        match verdict.compliance {
-            Compliance::Conforms => "Conforme",
-            Compliance::DoesNotConform => "No conforme",
-            Compliance::Pending => "Verificación pendiente",
-        },
-        "Aprobación profesional pendiente",
-    ];
-    for (i, (level, status, detail)) in lines.iter().enumerate().rev() {
-        let text = RichText::new(short[i]).color(if i == 2 { p.ink2 } else { color(*status) });
-        ui.label(text).on_hover_text(format!("{level}: {detail}"));
-        if i > 0 {
-            ui.label(RichText::new("·").color(p.ink2));
-        }
-    }
-}
-
-impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let p = self.palette;
-        let bar = egui::Frame::new()
-            .fill(p.panel)
-            .inner_margin(egui::Margin::symmetric(14, 8));
-        let side = egui::Frame::new().fill(p.panel).inner_margin(14);
-
-        egui::Panel::top("barra")
-            .frame(bar)
-            .show(ui, |ui| self.top_bar(ui));
-        egui::Panel::bottom("estado")
-            .frame(bar)
-            .show(ui, |ui| self.status_bar(ui));
-
-        if self.view == View::Quick {
-            self.quick.ui(ui, &p);
-            self.handle_capture(ui.ctx());
-            return;
-        }
-        if self.view == View::Diagram {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::new().fill(p.bg).inner_margin(16))
-                .show(ui, |ui| match &self.result {
-                    Ok(result) => {
-                        let diagram = single_line(&self.project, result);
-                        diagram_view::show(ui, &p, &diagram, &mut self.zoom);
-                    }
-                    Err(e) => {
-                        ui.label(RichText::new(e).color(p.bad));
-                    }
-                });
-            self.handle_capture(ui.ctx());
-            return;
-        }
-
-        let mut changed = false;
-        egui::Panel::left("proyecto")
-            .frame(side)
-            .default_size(264.0)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| changed |= self.project_tree(ui));
-            });
-        egui::Panel::right("detalle")
-            .frame(side)
-            .default_size(330.0)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| changed |= self.detail(ui));
-            });
-        egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(p.bg).inner_margin(16))
-            .show(ui, |ui| {
-                egui::ScrollArea::both()
-                    .auto_shrink(false)
-                    .show(ui, |ui| changed |= self.schedule(ui));
-            });
-
-        if changed {
-            self.done = None;
-            self.dirty = true;
-            self.recalculate();
-        }
-        self.handle_capture(ui.ctx());
-    }
-}
-
-impl App {
     /// Guarda una imagen de la ventana y cierra, si se pidió con `--captura`.
     fn handle_capture(&mut self, ctx: &egui::Context) {
         let Some(capture) = &mut self.capture else {
             return;
         };
         capture.frames += 1;
-        if capture.frames == 5 {
+        if capture.frames == 8 {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         let image = ctx.input(|i| {
@@ -1155,18 +660,80 @@ impl App {
         });
         if let Some(image) = image {
             let [w, h] = image.size;
-            let saved = image::save_buffer(
+            if let Err(e) = image::save_buffer(
                 &capture.path,
                 image.as_raw(),
                 w as u32,
                 h as u32,
                 image::ColorType::Rgba8,
-            );
-            if let Err(e) = saved {
+            ) {
                 eprintln!("No se pudo guardar la captura: {e}");
             }
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         ctx.request_repaint();
+    }
+}
+
+impl eframe::App for App {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let p = self.shared.palette;
+        self.shortcuts(ui.ctx());
+
+        egui::Panel::top("menu")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg)
+                    .inner_margin(egui::Margin::symmetric(10, 5)),
+            )
+            .show(ui, |ui| self.menu_bar(ui));
+        egui::Panel::bottom("estado")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg)
+                    .inner_margin(egui::Margin::symmetric(10, 4)),
+            )
+            .show(ui, |ui| self.status_bar(ui));
+
+        let style = self.dock_style(ui);
+        let revision = self.doc.revision;
+        let mut viewer = Viewer {
+            doc: &mut self.doc,
+            shared: &mut self.shared,
+            export_report: false,
+        };
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(p.bg))
+            .show(ui, |ui| {
+                DockArea::new(&mut self.dock)
+                    .style(style)
+                    .show_add_buttons(false)
+                    .show_leaf_collapse_buttons(false)
+                    .show_leaf_close_all_buttons(false)
+                    .show_inside(ui, &mut viewer);
+            });
+        let export = viewer.export_report;
+        if self.doc.revision != revision {
+            self.done = None;
+        }
+        if export {
+            self.export_pdf(false);
+        }
+        self.about_window(ui.ctx());
+        self.handle_capture(ui.ctx());
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        let prefs = Prefs {
+            dark: self.dark,
+            accent: self.accent,
+            workspace: self.workspace,
+            dock: self.dock.clone(),
+            columns: self.shared.columns.clone(),
+            diagram_zoom: self.shared.diagram_zoom,
+        };
+        if let Ok(text) = serde_json::to_string(&prefs) {
+            storage.set_string(STORAGE_KEY, text);
+        }
     }
 }

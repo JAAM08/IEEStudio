@@ -1,0 +1,63 @@
+//! Procedimiento del elemento seleccionado, agrupado y contraíble.
+
+use eframe::egui::{self, RichText};
+use egui_phosphor::regular as icon;
+
+use super::Shared;
+use crate::state::{Doc, Selection};
+use crate::widgets::{empty_state, muted, steps_ui, strong};
+
+pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
+    let p = shared.palette;
+    let title = match doc.selection {
+        Selection::Project => None,
+        Selection::Feeder(i) => Some(format!("Alimentador de {}", doc.project.panels[i].id)),
+        Selection::Circuit(i, c) => {
+            let circuit = &doc.project.panels[i].circuits[c];
+            Some(format!("{} · {}", circuit.id, circuit.name))
+        }
+    };
+    let Some(title) = title else {
+        empty_state(
+            ui,
+            &p,
+            icon::LIST_BULLETS,
+            "Selecciona un alimentador o un circuito",
+            "Aquí aparece su procedimiento paso a paso.",
+        );
+        return;
+    };
+    let mut open = None;
+    ui.horizontal(|ui| {
+        ui.label(strong(title));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.button("Contraer todo").clicked() {
+                open = Some(false);
+            }
+            if ui.button("Expandir todo").clicked() {
+                open = Some(true);
+            }
+        });
+    });
+    ui.separator();
+    let Some(run) = doc.selected_run().and_then(|r| r.run.clone()) else {
+        ui.label(muted(
+            &p,
+            "Este tramo no se pudo calcular; revisa la pestaña Normativa de Propiedades.",
+        ));
+        return;
+    };
+    egui::ScrollArea::vertical()
+        .id_salt("procedimiento")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            steps_ui(ui, &p, ("proc", doc.selection_key()), &run.steps, open);
+            ui.label(
+                RichText::new(
+                    "Valores redondeados para presentar; el cálculo no redondea pasos intermedios.",
+                )
+                .size(11.0)
+                .color(p.ink3),
+            );
+        });
+}

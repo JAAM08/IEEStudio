@@ -9,23 +9,23 @@ fn color(p: &Palette, ink: Ink) -> Color32 {
     match ink {
         Ink::Text => p.ink,
         Ink::Muted => p.ink2,
-        Ink::Accent => p.accent,
+        Ink::Accent => p.accent_text,
         Ink::Complies => p.ok,
         Ink::Fails => p.bad,
-        Ink::NotEvaluated => p.na,
+        Ink::NotEvaluated => p.warn,
     }
 }
 
 /// Barra de zoom y el diagrama, desplazable en ambos sentidos.
-pub fn show(ui: &mut egui::Ui, p: &Palette, diagram: &Diagram, zoom: &mut f32) {
+pub fn show(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    diagram: &Diagram,
+    zoom: &mut f32,
+    selected: Option<(usize, Option<usize>)>,
+) -> Option<(usize, Option<usize>)> {
     let available = ui.available_width() - 16.0;
     ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("Diagrama unifilar")
-                .family(theme::semibold())
-                .size(18.0),
-        );
-        ui.add_space(12.0);
         if ui.button("−").clicked() {
             *zoom = (*zoom / 1.2).max(0.3);
         }
@@ -44,17 +44,46 @@ pub fn show(ui: &mut egui::Ui, p: &Palette, diagram: &Diagram, zoom: &mut f32) {
         );
     });
     ui.add_space(8.0);
-    egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-        paint(ui, p, diagram, *zoom);
-    });
+    egui::ScrollArea::both()
+        .auto_shrink(false)
+        .show(ui, |ui| paint(ui, p, diagram, *zoom, selected))
+        .inner
 }
 
-fn paint(ui: &mut egui::Ui, p: &Palette, diagram: &Diagram, zoom: f32) {
+fn paint(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    diagram: &Diagram,
+    zoom: f32,
+    selected: Option<(usize, Option<usize>)>,
+) -> Option<(usize, Option<usize>)> {
     let size = Vec2::new(diagram.width as f32, diagram.height as f32) * zoom;
-    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 8.0, p.panel);
     let map = |(x, y): (f64, f64)| rect.min + Vec2::new(x as f32, y as f32) * zoom;
+    let area = |h: &voltforge_diagrams::Hotspot| {
+        egui::Rect::from_min_size(
+            map(h.min),
+            Vec2::new(h.size.0 as f32, h.size.1 as f32) * zoom,
+        )
+    };
+    // Resalte del elemento seleccionado y del que está bajo el cursor.
+    let hover = response.hover_pos();
+    for h in &diagram.hotspots {
+        let r = area(h);
+        if Some((h.panel, h.circuit)) == selected {
+            painter.rect_filled(r, 4.0, p.selected);
+            painter.rect_stroke(r, 4.0, Stroke::new(1.0, p.accent), egui::StrokeKind::Inside);
+        } else if hover.is_some_and(|pos| r.contains(pos))
+            && !(h.circuit.is_none()
+                && diagram.hotspots.iter().any(|o| {
+                    o.panel == h.panel && o.circuit.is_some() && area(o).contains(hover.unwrap())
+                }))
+        {
+            painter.rect_filled(r, 4.0, p.raise.gamma_multiply(0.6));
+        }
+    }
     for element in &diagram.elements {
         match element {
             Element::Path { points, width, ink } => {
@@ -105,4 +134,17 @@ fn paint(ui: &mut egui::Ui, p: &Palette, diagram: &Diagram, zoom: f32) {
             }
         }
     }
+    // Clic: el circuito tiene prioridad sobre la zona del tablero que lo contiene.
+    let pos = response
+        .interact_pointer_pos()
+        .filter(|_| response.clicked())?;
+    let hit = |circuit: bool| {
+        diagram
+            .hotspots
+            .iter()
+            .find(|h| h.circuit.is_some() == circuit && area(h).contains(pos))
+    };
+    hit(true)
+        .or_else(|| hit(false))
+        .map(|h| (h.panel, h.circuit))
 }

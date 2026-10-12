@@ -77,6 +77,20 @@ pub struct Diagram {
     pub width: f64,
     pub height: f64,
     pub elements: Vec<Element>,
+    /// Zonas que corresponden a un tablero o a un circuito, para
+    /// seleccionarlos desde el diagrama.
+    pub hotspots: Vec<Hotspot>,
+}
+
+/// Zona rectangular del diagrama que representa un elemento del proyecto.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hotspot {
+    pub min: (f64, f64),
+    pub size: (f64, f64),
+    /// Índice del tablero en el proyecto.
+    pub panel: usize,
+    /// Índice del circuito, o `None` para el alimentador y la barra.
+    pub circuit: Option<usize>,
 }
 
 fn status_ink(status: Status) -> Ink {
@@ -98,6 +112,7 @@ fn shorten(text: &str, max: usize) -> String {
 
 struct Painter {
     elements: Vec<Element>,
+    hotspots: Vec<Hotspot>,
     bottom: f64,
 }
 
@@ -240,6 +255,12 @@ fn draw_panel(
     let bus_y = top + FEEDER_HEIGHT;
 
     // Alimentador.
+    painter.hotspots.push(Hotspot {
+        min: (x0, top),
+        size: (width, FEEDER_HEIGHT + 22.0),
+        panel: index,
+        circuit: None,
+    });
     painter.run(feed_x, top, bus_y);
     let feeder = &panel_result.feeder;
     let mut y = top + 18.0;
@@ -272,7 +293,13 @@ fn draw_panel(
 
     // Circuitos.
     let mut slot = x0;
-    for item in &panel_result.circuits {
+    for (k, item) in panel_result.circuits.iter().enumerate() {
+        painter.hotspots.push(Hotspot {
+            min: (slot, bus_y + 6.0),
+            size: (COLUMN, BRANCH_HEIGHT + 12.0 + 7.0 * LINE),
+            panel: index,
+            circuit: Some(k),
+        });
         let x = slot + COLUMN / 2.0;
         let end = bus_y + BRANCH_HEIGHT - 12.0;
         painter.run(x, bus_y, end);
@@ -331,6 +358,7 @@ fn draw_panel(
 pub fn single_line(project: &Project, result: &ProjectResult) -> Diagram {
     let mut painter = Painter {
         elements: Vec::new(),
+        hotspots: Vec::new(),
         bottom: 0.0,
     };
     let roots: Vec<usize> = project
@@ -413,6 +441,7 @@ pub fn single_line(project: &Project, result: &ProjectResult) -> Diagram {
         width: (MARGIN * 2.0 + total).max(MARGIN * 2.0 + 600.0),
         height: legend_y + MARGIN,
         elements: painter.elements,
+        hotspots: painter.hotspots,
     }
 }
 

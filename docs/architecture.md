@@ -75,6 +75,19 @@ más nueva que la suya. Ver `decisions/0003-archivo-json.md`.
 
 ## Interfaz
 
-`voltforge-app` usa egui. Tiene tres vistas: Proyecto (árbol, cuadro de
-cargas, detalle y procedimiento), Unifilar y Cálculo rápido. Se prueba sin
-pantalla con `xvfb-run` y la opción `--captura`.
+`voltforge-app` usa egui con paneles acoplables (egui_dock). Todos los
+paneles leen el mismo `Doc` (`state.rs`): el proyecto, su resultado y la
+selección; cambiar algo en un panel recalcula y los demás lo reflejan.
+
+```
+src/app.rs           menús, espacios de trabajo, barra de estado, preferencias guardadas
+src/state.rs         proyecto abierto, selección y acciones de edición
+src/workspace.rs     paneles y acomodos de cada espacio de trabajo
+src/panels/          un archivo por panel: browser, schedule, properties,
+                     procedure, diagram, report, quick
+src/widgets.rs       piezas compartidas: estados, propiedades, procedimiento
+src/theme.rs         paleta, tipografía e íconos
+```
+
+Se prueba sin pantalla con `xvfb-run` y `--captura imagen.png`; `--espacio`,
+`--panel` y `--propiedades` eligen qué capturar.

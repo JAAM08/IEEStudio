@@ -2,7 +2,7 @@
 
 use voltforge_project::quick::{quick_circuit, QuickInput};
 use voltforge_project::{calculate, example};
-use voltforge_reports::{project_pdf, project_source, quick_pdf};
+use voltforge_reports::{project_pages, project_pdf, project_source, quick_pdf};
 use voltforge_rules::Profile;
 
 #[test]
@@ -28,4 +28,15 @@ fn quick_sheet_renders() {
     if let Ok(path) = std::env::var("VOLTFORGE_PDF_OUT") {
         std::fs::write(format!("{path}/hoja.pdf"), &pdf).unwrap();
     }
+}
+
+#[test]
+fn project_pages_render_for_preview() {
+    let project = example::house();
+    let result = calculate(&project).unwrap();
+    let pages = project_pages(&project, &result, 1.0).unwrap();
+    assert!(pages.len() >= 5);
+    // Carta vertical: 612 × 792 puntos.
+    assert_eq!((pages[0].width, pages[0].height), (612, 792));
+    assert_eq!(pages[0].rgba.len(), 612 * 792 * 4);
 }

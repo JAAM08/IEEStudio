@@ -15,5 +15,6 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0007 | [Unifilar como trazos independientes del dibujo](0007-unifilar.md) | Aceptada |
 | 0008 | [Reglas y referencias normativas separadas](0008-referencias-normativas.md) | Aceptada |
 | 0009 | [Veredicto en tres niveles](0009-veredicto.md) | Aceptada |
+| 0010 | [Interfaz por paneles acoplables y espacios de trabajo](0010-interfaz-profesional.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

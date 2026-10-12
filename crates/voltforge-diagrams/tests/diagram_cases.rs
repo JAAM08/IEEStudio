@@ -80,6 +80,9 @@ fn single_line_diagram_covers_every_run() {
     assert!(t.iter().any(|s| s == "2-10, 1-10d"));
     // El alimentador trifásico con neutro lleva cuatro conductores.
     assert!(t.iter().any(|s| s == "4-10, 1-10d"));
+    // Una zona por circuito y una por tablero, para seleccionar desde el diagrama.
+    assert_eq!(diagram.hotspots.len(), 6);
+    assert!(diagram.hotspots.iter().any(|h| h.circuit == Some(4)));
     let svg = diagram.to_svg();
     assert!(svg.starts_with("<svg"));
 
