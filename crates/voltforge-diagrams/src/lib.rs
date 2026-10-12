@@ -8,7 +8,7 @@
 
 use std::fmt::Write as _;
 
-use crate::{Project, ProjectResult, RunResult, Status};
+use voltforge_project::{Project, ProjectResult, RunResult, Status};
 
 /// Ancho de la columna de cada circuito.
 const COLUMN: f64 = 116.0;

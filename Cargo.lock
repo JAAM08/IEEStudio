@@ -5331,8 +5331,10 @@ dependencies = [
  "image",
  "rfd",
  "voltforge-core",
+ "voltforge-diagrams",
  "voltforge-project",
- "voltforge-report",
+ "voltforge-reports",
+ "voltforge-rules",
 ]
 
 [[package]]
@@ -5342,7 +5344,8 @@ dependencies = [
  "serde_json",
  "voltforge-core",
  "voltforge-project",
- "voltforge-report",
+ "voltforge-reports",
+ "voltforge-rules",
 ]
 
 [[package]]
@@ -5353,23 +5356,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "voltforge-diagrams"
+version = "0.1.0"
+dependencies = [
+ "voltforge-core",
+ "voltforge-project",
+]
+
+[[package]]
+name = "voltforge-electrical"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "voltforge-core",
+ "voltforge-rules",
+]
+
+[[package]]
 name = "voltforge-project"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
  "voltforge-core",
+ "voltforge-electrical",
+ "voltforge-rules",
 ]
 
 [[package]]
-name = "voltforge-report"
+name = "voltforge-reports"
 version = "0.1.0"
 dependencies = [
  "chrono",
  "typst-as-lib",
  "typst-pdf",
  "voltforge-core",
+ "voltforge-diagrams",
  "voltforge-project",
+ "voltforge-rules",
+]
+
+[[package]]
+name = "voltforge-rules"
+version = "0.1.0"
+dependencies = [
+ "voltforge-core",
 ]
 
 [[package]]

@@ -72,7 +72,7 @@ fn report(path: &str, output: Option<&str>) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
     let project = Project::from_json(&text)?;
     let result = calculate(&project)?;
-    let pdf = voltforge_report::project_pdf(&project, &result)?;
+    let pdf = voltforge_reports::project_pdf(&project, &result)?;
     let output = match output {
         Some(output) => std::path::PathBuf::from(output),
         None => std::path::Path::new(path).with_extension("pdf"),

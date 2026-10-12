@@ -4,13 +4,13 @@
 //! hojas de cálculo del Ing. Juan Carlos Vega Mendoza. Los demás se
 //! calcularon a mano con las fórmulas y tablas de la norma.
 
-use voltforge_core::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
-use voltforge_core::current::{design_current, nominal_current};
-use voltforge_core::voltage_drop::{max_length_m, voltage_drop, VoltageDropInput};
 use voltforge_core::{
-    CircuitKind, ConduitType, Error, InsulationGroup, Material, Profile, RacewayMaterial, Size,
-    System,
+    CircuitKind, ConduitType, Error, InsulationGroup, Material, RacewayMaterial, Size, System,
 };
+use voltforge_electrical::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
+use voltforge_electrical::current::{design_current, nominal_current};
+use voltforge_electrical::voltage_drop::{max_length_m, voltage_drop, VoltageDropInput};
+use voltforge_rules::Profile;
 
 /// Tolerancia en la unidad mostrada (dos decimales).
 const TOL: f64 = 0.01;

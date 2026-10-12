@@ -1,7 +1,7 @@
 //! Vista del diagrama unifilar.
 
 use eframe::egui::{self, Align2, Color32, FontFamily, FontId, Sense, Shape, Stroke, Vec2};
-use voltforge_project::diagram::{Anchor, Diagram, Element, Font, Ink};
+use voltforge_diagrams::{Anchor, Diagram, Element, Font, Ink};
 
 use crate::theme::{self, Palette};
 

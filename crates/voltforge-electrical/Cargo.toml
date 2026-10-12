@@ -1,0 +1,17 @@
+[package]
+name = "voltforge-electrical"
+description = "Fórmulas de VoltForge: corriente, caída de tensión, conductor, protección y tubería"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# `serde` permite entregar los resultados en JSON.
+serde = ["dep:serde", "voltforge-core/serde"]
+
+[dependencies]
+voltforge-core = { path = "../voltforge-core" }
+voltforge-rules = { path = "../voltforge-rules" }
+serde = { version = "1", features = ["derive"], optional = true }

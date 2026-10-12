@@ -1,9 +1,9 @@
 //! La memoria se compone sin errores y contiene lo calculado.
 
-use voltforge_core::Profile;
 use voltforge_project::quick::{quick_circuit, QuickInput};
 use voltforge_project::{calculate, example};
-use voltforge_report::{project_pdf, project_source, quick_pdf};
+use voltforge_reports::{project_pdf, project_source, quick_pdf};
+use voltforge_rules::Profile;
 
 #[test]
 fn project_report_renders() {

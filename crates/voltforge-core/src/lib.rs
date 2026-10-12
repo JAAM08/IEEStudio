@@ -1,23 +1,19 @@
-//! Motor de cálculo de VoltForge.
+//! Base común de VoltForge: tipos del dominio eléctrico, unidades, errores y
+//! validación de datos de entrada.
 //!
-//! Calcula instalaciones eléctricas de baja tensión con las tablas de un
-//! perfil normativo. No depende de ninguna interfaz: la aplicación de
-//! escritorio, la línea de comandos y los agentes usan estas mismas funciones.
-//!
-//! El motor trabaja con precisión completa y no redondea resultados
-//! intermedios. El redondeo es asunto de quien presenta los valores.
+//! No tiene dependencias obligatorias ni conoce tablas normativas, fórmulas o
+//! interfaces. Las reglas (`voltforge-rules`), las fórmulas
+//! (`voltforge-electrical`) y el proyecto (`voltforge-project`) se construyen
+//! sobre estos tipos.
 
-pub mod conduit;
-mod csv;
-pub mod current;
 mod error;
-pub mod sizing;
 pub mod system;
-pub mod tables;
-pub mod voltage_drop;
+pub mod types;
+pub mod units;
+pub mod validation;
 
 pub use error::{Error, Result};
 pub use system::{CircuitKind, System};
-pub use tables::{
-    ConduitType, InsulationGroup, Material, Profile, RacewayMaterial, Size, TempRating,
+pub use types::{
+    ConduitType, Insulation, InsulationGroup, Material, RacewayMaterial, Size, TempRating,
 };

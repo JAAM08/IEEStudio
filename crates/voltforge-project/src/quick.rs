@@ -5,22 +5,24 @@
 //! sustituidos y, cuando no cumple, alternativas ya calculadas.
 
 use serde::{Deserialize, Serialize};
-use voltforge_core::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
-use voltforge_core::current::{design_current, nominal_current};
-use voltforge_core::sizing::{
-    check_conductor, equipment_grounding, select_conductor, standard_rating_at_least, Insulation,
-    SizingInput, VoltageDropLimit, SMALLEST_PARALLEL_SIZE,
+use voltforge_core::{CircuitKind, ConduitType, Material, Size, System};
+use voltforge_electrical::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
+use voltforge_electrical::current::{design_current, nominal_current};
+use voltforge_electrical::sizing::{
+    check_conductor, equipment_grounding, select_conductor, standard_rating_at_least, SizingInput,
+    VoltageDropLimit, SMALLEST_PARALLEL_SIZE,
 };
-use voltforge_core::voltage_drop::{
+use voltforge_electrical::voltage_drop::{
     max_length_m, voltage_drop, VoltageDropInput, VoltageDropResult,
 };
-use voltforge_core::{CircuitKind, ConduitType, Material, Profile, Size, System};
 
 use crate::calc::{is_wye, poles};
 use crate::procedure::{
     conductor_steps, conduit_step, current_step, drop_steps, plain, size_label, ConductorData, Step,
 };
 use crate::Status;
+use voltforge_core::Insulation;
+use voltforge_rules::Profile;
 
 /// Mayor número de conductores por fase que se propone en una recomendación.
 const MAX_SUGGESTED_PARALLEL: u32 = 6;

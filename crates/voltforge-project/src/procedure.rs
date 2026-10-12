@@ -4,13 +4,14 @@
 //! Lo comparten el cálculo rápido y cada circuito o alimentador del proyecto.
 
 use serde::Serialize;
-use voltforge_core::conduit::ConduitResult;
-use voltforge_core::current::CONTINUOUS_LOAD_FACTOR;
-use voltforge_core::sizing::{ConductorCheck, Insulation};
-use voltforge_core::voltage_drop::{
+use voltforge_core::Insulation;
+use voltforge_core::{CircuitKind, ConduitType, Material, RacewayMaterial, Size};
+use voltforge_electrical::conduit::ConduitResult;
+use voltforge_electrical::current::CONTINUOUS_LOAD_FACTOR;
+use voltforge_electrical::sizing::ConductorCheck;
+use voltforge_electrical::voltage_drop::{
     temperature_coefficient, VoltageDropInput, VoltageDropResult, TABLE_9_TEMPERATURE_C,
 };
-use voltforge_core::{CircuitKind, ConduitType, Material, RacewayMaterial, Size};
 
 /// Un paso del procedimiento.
 #[derive(Debug, Clone, PartialEq, Serialize)]

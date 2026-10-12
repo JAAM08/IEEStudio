@@ -4,9 +4,9 @@ use std::path::PathBuf;
 
 use eframe::egui::{self, Align, Color32, Layout, RichText, Sense};
 use egui_extras::{Column, TableBuilder};
-use voltforge_core::sizing::Insulation;
-use voltforge_core::{CircuitKind, ConduitType, Material, Profile, Size, System};
-use voltforge_project::diagram::single_line;
+use voltforge_core::Insulation;
+use voltforge_core::{CircuitKind, ConduitType, Material, Size, System};
+use voltforge_diagrams::single_line;
 use voltforge_project::{
     calculate, example, Circuit, Feeder, Load, LoadKind, Overrides, Panel, PanelResult, Phase,
     Project, ProjectResult, RunResult, Settings, Source, Status, FORMAT_VERSION,
@@ -15,6 +15,7 @@ use voltforge_project::{
 use crate::diagram_view;
 use crate::quick_view::{caption, steps_ui, QuickView};
 use crate::theme::{self, Palette, ACCENTS};
+use voltforge_rules::Profile;
 
 pub(crate) const SYSTEMS: [(&str, System); 6] = [
     ("1F-2H 127 V", System::SINGLE_127),
@@ -272,7 +273,7 @@ impl App {
                 self.result
                     .as_ref()
                     .map_err(Clone::clone)
-                    .and_then(|r| voltforge_report::project_pdf(&self.project, r)),
+                    .and_then(|r| voltforge_reports::project_pdf(&self.project, r)),
                 "memoria-de-calculo.pdf",
             ),
             View::Quick => (self.quick.pdf(), "hoja-de-calculo.pdf"),

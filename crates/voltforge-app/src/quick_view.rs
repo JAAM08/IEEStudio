@@ -2,12 +2,13 @@
 //! caída de tensión, con su procedimiento y alternativas cuando no cumple.
 
 use eframe::egui::{self, Align, Layout, RichText};
-use voltforge_core::{Profile, Size};
+use voltforge_core::Size;
 use voltforge_project::quick::{quick_circuit, QuickInput, QuickResult};
 use voltforge_project::{size_label, Status, Step};
 
 use crate::app::{combo, number, CONDUITS, INSULATIONS, KINDS, MATERIALS, SYSTEMS};
 use crate::theme::{self, Palette};
+use voltforge_rules::Profile;
 
 pub struct QuickView {
     input: QuickInput,
@@ -68,7 +69,7 @@ impl QuickView {
     /// Hoja del cálculo en PDF.
     pub fn pdf(&self) -> Result<Vec<u8>, String> {
         let result = self.result.as_ref().map_err(Clone::clone)?;
-        voltforge_report::quick_pdf(&self.input, result)
+        voltforge_reports::quick_pdf(&self.input, result)
     }
 
     /// Texto de la barra inferior.

@@ -82,7 +82,7 @@ impl CircuitKind {
     /// 2 (ida y vuelta) en los demás.
     pub fn drop_factor(self) -> f64 {
         match self {
-            CircuitKind::ThreePhase => 3f64.sqrt(),
+            CircuitKind::ThreePhase => crate::units::SQRT_3,
             CircuitKind::LineToNeutral | CircuitKind::LineToLine => 2.0,
         }
     }

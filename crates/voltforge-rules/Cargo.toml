@@ -1,0 +1,11 @@
+[package]
+name = "voltforge-rules"
+description = "Perfiles normativos de VoltForge: tablas y referencias"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+voltforge-core = { path = "../voltforge-core" }

@@ -3,14 +3,14 @@
 //! Los resultados esperados se calcularon a mano con las tablas
 //! 310-15(b)(16), 310-15(b)(2)(a), 310-15(b)(3)(a) y 250-122.
 
-use voltforge_core::sizing::{
-    check_conductor, select_conductor, standard_rating_at_least, Governing, Insulation,
-    SizingInput, VoltageDropLimit,
+use voltforge_core::Insulation;
+use voltforge_core::{CircuitKind, Error, Material, RacewayMaterial, Size, System, TempRating};
+use voltforge_electrical::sizing::{
+    check_conductor, select_conductor, standard_rating_at_least, Governing, SizingInput,
+    VoltageDropLimit,
 };
-use voltforge_core::voltage_drop::VoltageDropInput;
-use voltforge_core::{
-    CircuitKind, Error, Material, Profile, RacewayMaterial, Size, System, TempRating,
-};
+use voltforge_electrical::voltage_drop::VoltageDropInput;
+use voltforge_rules::Profile;
 
 fn nom() -> &'static Profile {
     Profile::nom_001_sede_2012()

@@ -4,19 +4,20 @@
 use std::collections::HashMap;
 
 use serde::Serialize;
-use voltforge_core::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
-use voltforge_core::current::{design_current, nominal_current};
-use voltforge_core::sizing::{
+use voltforge_core::{CircuitKind, Error, Size, System};
+use voltforge_electrical::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
+use voltforge_electrical::current::{design_current, nominal_current};
+use voltforge_electrical::sizing::{
     check_conductor, equipment_grounding, select_conductor, standard_rating_at_least, Governing,
     SizingInput, VoltageDropLimit,
 };
-use voltforge_core::voltage_drop::{voltage_drop, VoltageDropInput};
-use voltforge_core::{CircuitKind, Error, Profile, Size, System};
+use voltforge_electrical::voltage_drop::{voltage_drop, VoltageDropInput};
 
 use crate::model::{LoadKind, Overrides, Panel, Phase, Project, Settings};
 use crate::procedure::{
     conductor_steps, conduit_step, cumulative_step, current_step, drop_steps, ConductorData, Step,
 };
+use voltforge_rules::Profile;
 
 /// Resultado de una comprobación o de un elemento completo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

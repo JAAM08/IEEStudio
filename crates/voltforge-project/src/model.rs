@@ -5,7 +5,7 @@
 //! guardan.
 
 use serde::{Deserialize, Serialize};
-use voltforge_core::sizing::Insulation;
+use voltforge_core::Insulation;
 use voltforge_core::{CircuitKind, ConduitType, Material, Size, System};
 
 /// Versión del formato de archivo.

@@ -1,6 +1,6 @@
 [package]
 name = "voltforge-core"
-description = "Motor de cálculo de VoltForge: instalaciones eléctricas de baja tensión"
+description = "Base común de VoltForge: tipos, unidades, errores y validación"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

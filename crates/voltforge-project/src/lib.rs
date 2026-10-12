@@ -4,7 +4,6 @@
 //! [`calculate`] deriva cada circuito, cada alimentador y el cuadro de cargas.
 
 mod calc;
-pub mod diagram;
 pub mod example;
 mod model;
 mod procedure;

@@ -1,7 +1,9 @@
 //! Dimensionamiento de tubo conduit (capítulo 10, Tablas 1, 4, 5 y 8).
 
-use crate::error::{Error, Result};
-use crate::tables::{ConduitRow, ConduitType, InsulationGroup, Profile, Size};
+use voltforge_core::units::percent;
+use voltforge_core::{ConduitType, Error, InsulationGroup, Result, Size};
+use voltforge_rules::tables::ConduitRow;
+use voltforge_rules::Profile;
 
 /// Límites de la relación diámetro interior del tubo entre diámetro del
 /// conductor en los que tres conductores pueden atascarse (Tabla 1, nota 2).
@@ -155,7 +157,7 @@ pub fn size_conduit(profile: &Profile, input: &ConduitInput) -> Result<ConduitRe
         conductor_area_mm2,
         allowed_fill_fraction,
         allowed_area_mm2: allowed_area(chosen, allowed_fill_fraction),
-        fill_percent: conductor_area_mm2 / chosen.area_100_mm2 * 100.0,
+        fill_percent: percent(conductor_area_mm2, chosen.area_100_mm2),
         jam_ratio: jam_ratio_of(chosen),
         upsized_for_jamming: chosen != first,
         conduit: chosen.clone(),

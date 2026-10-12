@@ -6,107 +6,11 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
+use voltforge_core::{
+    ConduitType, Error, InsulationGroup, Material, RacewayMaterial, Result, Size, TempRating,
+};
+
 use crate::csv;
-use crate::error::{Error, Result};
-
-/// Material del conductor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Material {
-    Copper,
-    Aluminum,
-}
-
-/// Material de la canalización, que determina la columna de la Tabla 9.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum RacewayMaterial {
-    Pvc,
-    Aluminum,
-    Steel,
-}
-
-/// Tipo de tubo conduit de la Tabla 4.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ConduitType {
-    Emt,
-    Imc,
-    Rmc,
-    Pvc40,
-    Pvc80,
-}
-
-impl ConduitType {
-    pub const ALL: [ConduitType; 5] = [Self::Emt, Self::Imc, Self::Rmc, Self::Pvc40, Self::Pvc80];
-
-    fn code(self) -> &'static str {
-        match self {
-            Self::Emt => "EMT",
-            Self::Imc => "IMC",
-            Self::Rmc => "RMC",
-            Self::Pvc40 => "PVC40",
-            Self::Pvc80 => "PVC80",
-        }
-    }
-
-    /// Material de la canalización para la Tabla 9.
-    pub fn raceway_material(self) -> RacewayMaterial {
-        match self {
-            Self::Emt | Self::Imc | Self::Rmc => RacewayMaterial::Steel,
-            Self::Pvc40 | Self::Pvc80 => RacewayMaterial::Pvc,
-        }
-    }
-}
-
-impl std::fmt::Display for ConduitType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.code())
-    }
-}
-
-/// Grupo de aislamientos con las mismas dimensiones en la Tabla 5.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum InsulationGroup {
-    /// TW, THW, THHW, THW-2
-    TwThwThhw,
-    /// RHH, RHW, RHW-2 (con cubierta)
-    RhhRhw,
-    /// THHN, THWN, THWN-2
-    ThhnThwn,
-    /// XHHW, XHHW-2, XHH
-    Xhhw,
-}
-
-impl InsulationGroup {
-    fn code(self) -> &'static str {
-        match self {
-            Self::TwThwThhw => "TW_THW_THHW_THW2",
-            Self::RhhRhw => "RHH_RHW_RHW2",
-            Self::ThhnThwn => "THHN_THWN_THWN2",
-            Self::Xhhw => "XHHW_XHHW2_XHH",
-        }
-    }
-}
-
-/// Calibre del conductor tal como lo nombra la norma: `"14"`, `"1/0"`, `"250"`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
-pub struct Size(pub String);
-
-impl Size {
-    pub fn new(s: &str) -> Self {
-        Size(s.trim().to_string())
-    }
-}
-
-impl std::fmt::Display for Size {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
 
 /// Fila de la Tabla 8 (cableado clase B).
 #[derive(Debug, Clone)]
@@ -217,25 +121,6 @@ pub struct SmallConductorLimit {
     pub material: Material,
     pub size: String,
     pub max_overcurrent_a: f64,
-}
-
-/// Columna de temperatura de la tabla de ampacidades.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum TempRating {
-    C60,
-    C75,
-    C90,
-}
-
-impl TempRating {
-    pub fn celsius(self) -> f64 {
-        match self {
-            TempRating::C60 => 60.0,
-            TempRating::C75 => 75.0,
-            TempRating::C90 => 90.0,
-        }
-    }
 }
 
 /// Perfil normativo: el conjunto de tablas con el que se calcula.

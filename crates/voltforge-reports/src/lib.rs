@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 
 use typst_as_lib::TypstEngine;
 use voltforge_core::{CircuitKind, System};
-use voltforge_project::diagram::single_line;
+use voltforge_diagrams::single_line;
 use voltforge_project::quick::{QuickInput, QuickResult};
 use voltforge_project::{
     insulation_name, material_name, size_label, PanelResult, Project, ProjectResult, RunResult,

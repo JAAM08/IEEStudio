@@ -1,9 +1,9 @@
 //! Caída de tensión por impedancia (Tabla 9).
 
-use crate::current::check_power_factor;
-use crate::error::{Error, Result};
-use crate::system::{CircuitKind, System};
-use crate::tables::{Material, Profile, RacewayMaterial, Size};
+use voltforge_core::units::{m_to_km, percent, SQRT_3};
+use voltforge_core::validation;
+use voltforge_core::{CircuitKind, Error, Material, RacewayMaterial, Result, Size, System};
+use voltforge_rules::Profile;
 
 /// Temperatura a la que la Tabla 9 da la resistencia, en °C.
 pub const TABLE_9_TEMPERATURE_C: f64 = 75.0;
@@ -66,17 +66,9 @@ pub struct VoltageDropResult {
 /// `ΔV = k · I · L · (R·cos θ + X·sen θ) / n`, con `k = √3` en circuitos
 /// trifásicos y `2` en los demás, `L` en kilómetros y `n` conductores por fase.
 pub fn voltage_drop(profile: &Profile, input: &VoltageDropInput) -> Result<VoltageDropResult> {
-    check_power_factor(input.power_factor)?;
-    if !(input.current_a.is_finite() && input.current_a >= 0.0) {
-        return Err(Error::InvalidInput(
-            "la corriente debe ser un número no negativo".into(),
-        ));
-    }
-    if !(input.length_m.is_finite() && input.length_m >= 0.0) {
-        return Err(Error::InvalidInput(
-            "la longitud debe ser un número no negativo".into(),
-        ));
-    }
+    validation::power_factor(input.power_factor)?;
+    validation::non_negative("la corriente", input.current_a)?;
+    validation::non_negative("la longitud", input.length_m)?;
     if input.conductors_per_phase == 0 {
         return Err(Error::InvalidInput(
             "debe haber al menos un conductor por fase".into(),
@@ -94,7 +86,7 @@ pub fn voltage_drop(profile: &Profile, input: &VoltageDropInput) -> Result<Volta
     let cos = input.power_factor;
     let sin = (1.0 - cos * cos).sqrt();
     let n = f64::from(input.conductors_per_phase);
-    let length_km = input.length_m / 1000.0;
+    let length_km = m_to_km(input.length_m);
     let k = input.kind.drop_factor();
     let z_eff = r * cos + x * sin;
     let drop_v = k * input.current_a * length_km * z_eff / n;
@@ -103,7 +95,7 @@ pub fn voltage_drop(profile: &Profile, input: &VoltageDropInput) -> Result<Volta
     // impedancia de un conductor) y se pasa a tensión entre fases; en los
     // demás circuitos la corriente recorre dos conductores.
     let (v_load, loop_factor, scale) = match input.kind {
-        CircuitKind::ThreePhase => (v_ref / 3f64.sqrt(), 1.0, 3f64.sqrt()),
+        CircuitKind::ThreePhase => (v_ref / SQRT_3, 1.0, SQRT_3),
         CircuitKind::LineToNeutral | CircuitKind::LineToLine => (v_ref, 2.0, 1.0),
     };
     let ir = loop_factor * input.current_a * r * length_km / n;
@@ -119,9 +111,9 @@ pub fn voltage_drop(profile: &Profile, input: &VoltageDropInput) -> Result<Volta
         reactance_ohm_km: x,
         effective_impedance_ohm_km: z_eff,
         drop_v,
-        drop_percent: drop_v / v_ref * 100.0,
+        drop_percent: percent(drop_v, v_ref),
         exact_drop_v,
-        exact_drop_percent: exact_drop_v / v_ref * 100.0,
+        exact_drop_percent: percent(exact_drop_v, v_ref),
     })
 }
 

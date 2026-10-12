@@ -20,9 +20,9 @@
 //!    incremento proporcional cuando los conductores de fase se sobredimensionan.
 
 use crate::current::design_current;
-use crate::error::{Error, Result};
-use crate::tables::{InsulationGroup, Material, Profile, Size, TempRating};
 use crate::voltage_drop::{voltage_drop, VoltageDropInput};
+use voltforge_core::{Error, Insulation, Material, Result, Size, TempRating};
+use voltforge_rules::Profile;
 
 /// Capacidad hasta la que 240-4(b) permite el valor inmediato superior.
 pub const NEXT_SIZE_UP_LIMIT_A: f64 = 800.0;
@@ -32,53 +32,6 @@ pub const TERMINAL_60C_LIMIT_A: f64 = 100.0;
 pub const SMALLEST_CIRCUIT_SIZE: &str = "14";
 /// Calibre menor permitido en paralelo.
 pub const SMALLEST_PARALLEL_SIZE: &str = "1/0";
-
-/// Tipo de aislamiento del conductor (Tabla 310-104(a)).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Insulation {
-    Tw,
-    Thw,
-    Thhw,
-    Thw2,
-    Thhn,
-    Thwn,
-    Thwn2,
-    Xhhw,
-    Xhhw2,
-    Rhh,
-    Rhw,
-    Rhw2,
-}
-
-impl Insulation {
-    /// Temperatura nominal en lugar seco o mojado. `None` si el aislamiento
-    /// no se permite en esa condición.
-    pub fn rating(self, wet_location: bool) -> Option<TempRating> {
-        use Insulation::*;
-        use TempRating::*;
-        match (self, wet_location) {
-            (Tw, _) => Some(C60),
-            (Thw | Thwn | Rhw, _) => Some(C75),
-            (Thw2 | Thwn2 | Xhhw2 | Rhw2, _) => Some(C90),
-            (Thhw | Xhhw, false) => Some(C90),
-            (Thhw | Xhhw, true) => Some(C75),
-            (Thhn | Rhh, false) => Some(C90),
-            (Thhn | Rhh, true) => None,
-        }
-    }
-
-    /// Grupo de dimensiones de la Tabla 5.
-    pub fn dimension_group(self) -> InsulationGroup {
-        use Insulation::*;
-        match self {
-            Tw | Thw | Thhw | Thw2 => InsulationGroup::TwThwThhw,
-            Thhn | Thwn | Thwn2 => InsulationGroup::ThhnThwn,
-            Xhhw | Xhhw2 => InsulationGroup::Xhhw,
-            Rhh | Rhw | Rhw2 => InsulationGroup::RhhRhw,
-        }
-    }
-}
 
 /// Límite de caída de tensión que el conductor también debe cumplir.
 #[derive(Debug, Clone, PartialEq)]

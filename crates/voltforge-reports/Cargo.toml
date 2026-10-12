@@ -1,5 +1,5 @@
 [package]
-name = "voltforge-report"
+name = "voltforge-reports"
 description = "Memoria de cálculo de VoltForge en PDF."
 version.workspace = true
 edition.workspace = true
@@ -8,7 +8,9 @@ rust-version = "1.95"
 
 [dependencies]
 voltforge-core = { path = "../voltforge-core" }
+voltforge-rules = { path = "../voltforge-rules" }
 voltforge-project = { path = "../voltforge-project" }
+voltforge-diagrams = { path = "../voltforge-diagrams" }
 typst-as-lib = "0.17"
 typst-pdf = "0.15"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

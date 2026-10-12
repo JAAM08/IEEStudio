@@ -2,12 +2,13 @@
 //!
 //! Ejecutar con: `cargo run --example procedimiento`
 
-use voltforge_core::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
-use voltforge_core::current::nominal_current;
-use voltforge_core::voltage_drop::{voltage_drop, VoltageDropInput};
 use voltforge_core::{
-    CircuitKind, ConduitType, InsulationGroup, Material, Profile, RacewayMaterial, Size, System,
+    CircuitKind, ConduitType, InsulationGroup, Material, RacewayMaterial, Size, System,
 };
+use voltforge_electrical::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
+use voltforge_electrical::current::nominal_current;
+use voltforge_electrical::voltage_drop::{voltage_drop, VoltageDropInput};
+use voltforge_rules::Profile;
 
 fn main() -> Result<(), voltforge_core::Error> {
     let profile = Profile::nom_001_sede_2012();

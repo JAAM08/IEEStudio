@@ -1,8 +1,9 @@
 //! Casos del cálculo rápido de un circuito, con resultados calculados a mano.
 
-use voltforge_core::{CircuitKind, Profile, Size, System};
+use voltforge_core::{CircuitKind, Size, System};
 use voltforge_project::quick::{quick_circuit, QuickInput};
 use voltforge_project::Status;
+use voltforge_rules::Profile;
 
 fn close(actual: f64, expected: f64, tolerance: f64) {
     assert!(
