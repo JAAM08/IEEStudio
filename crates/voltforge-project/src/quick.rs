@@ -212,6 +212,7 @@ fn sizing_input(
             input: d.clone(),
             limit_percent: input.limit_percent,
         }),
+        motor: None,
     }
 }
 

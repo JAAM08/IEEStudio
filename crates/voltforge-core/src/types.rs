@@ -166,3 +166,29 @@ impl Insulation {
         }
     }
 }
+
+/// Tipo de motor de corriente alterna, para la Tabla 430-52. Los motores de
+/// una fase no se distinguen: los decide el tipo de circuito.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MotorType {
+    /// Inducción de jaula de ardilla, distinto del diseño B de alta eficiencia.
+    #[default]
+    SquirrelCage,
+    /// Diseño B energéticamente eficiente.
+    DesignBEnergyEfficient,
+    WoundRotor,
+    Synchronous,
+}
+
+impl MotorType {
+    /// Clave de la fila en la tabla de protección del perfil.
+    pub fn code(self) -> &'static str {
+        match self {
+            MotorType::SquirrelCage => "squirrel_cage",
+            MotorType::DesignBEnergyEfficient => "design_b_energy_efficient",
+            MotorType::WoundRotor => "wound_rotor",
+            MotorType::Synchronous => "synchronous",
+        }
+    }
+}

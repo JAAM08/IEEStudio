@@ -85,10 +85,22 @@ pub enum Rule {
     Jamming,
     BranchDrop,
     FeederDrop,
+    MotorFullLoadCurrent,
+    MotorBranchConductor,
+    MotorFeederConductor,
+    MotorBranchProtection,
+    MotorStarting,
+    MotorFeederProtection,
+    MotorOverload,
+    MotorConductorProtection,
+    CompressorRating,
+    CompressorConductor,
+    CompressorProtection,
+    EquipmentNameplate,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 22] = [
+    pub const ALL: [Rule; 34] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -111,6 +123,18 @@ impl Rule {
         Rule::Jamming,
         Rule::BranchDrop,
         Rule::FeederDrop,
+        Rule::MotorFullLoadCurrent,
+        Rule::MotorBranchConductor,
+        Rule::MotorFeederConductor,
+        Rule::MotorBranchProtection,
+        Rule::MotorStarting,
+        Rule::MotorFeederProtection,
+        Rule::MotorOverload,
+        Rule::MotorConductorProtection,
+        Rule::CompressorRating,
+        Rule::CompressorConductor,
+        Rule::CompressorProtection,
+        Rule::EquipmentNameplate,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -138,6 +162,18 @@ impl Rule {
             Rule::Jamming => "jamming",
             Rule::BranchDrop => "branch_drop",
             Rule::FeederDrop => "feeder_drop",
+            Rule::MotorFullLoadCurrent => "motor_full_load_current",
+            Rule::MotorBranchConductor => "motor_branch_conductor",
+            Rule::MotorFeederConductor => "motor_feeder_conductor",
+            Rule::MotorBranchProtection => "motor_branch_protection",
+            Rule::MotorStarting => "motor_starting",
+            Rule::MotorFeederProtection => "motor_feeder_protection",
+            Rule::MotorOverload => "motor_overload",
+            Rule::MotorConductorProtection => "motor_conductor_protection",
+            Rule::CompressorRating => "compressor_rating",
+            Rule::CompressorConductor => "compressor_conductor",
+            Rule::CompressorProtection => "compressor_protection",
+            Rule::EquipmentNameplate => "equipment_nameplate",
         }
     }
 }
@@ -161,6 +197,27 @@ pub struct Parameters {
     pub jam_ratio_max: f64,
     /// Ocupación permitida en niples de 60 cm o menos.
     pub nipple_fill_fraction: f64,
+    /// Conductores de un solo motor, sobre su corriente a plena carga (430-22).
+    pub motor_conductor_factor: f64,
+    /// Motor mayor de un grupo, en el alimentador (430-24(1)).
+    pub motor_largest_factor: f64,
+    /// Relevador de sobrecarga con factor de servicio de 1.15 o más, o
+    /// elevación de temperatura de 40 °C o menos (430-32(a)(1)).
+    pub motor_overload_factor_marked: f64,
+    /// Relevador de sobrecarga de los demás motores (430-32(a)(1)).
+    pub motor_overload_factor_other: f64,
+    /// Corriente del motor hasta la que aplica el factor «small» de arranque
+    /// del interruptor de tiempo inverso (430-52(c)(1), excepción 2(3)).
+    pub motor_starting_limit_a: f64,
+    pub motor_starting_factor_small: f64,
+    pub motor_starting_factor_large: f64,
+    /// Conductores de un motocompresor (440-32).
+    pub compressor_conductor_factor: f64,
+    /// Protección de un motocompresor y su máximo si no arranca (440-22(a)).
+    pub compressor_protection_factor: f64,
+    pub compressor_protection_max_factor: f64,
+    /// No se exige una protección menor que esta (440-22(a), excepción).
+    pub compressor_minimum_protection_a: f64,
 }
 
 /// Datos de la norma de un perfil.

@@ -9,4 +9,4 @@ pub mod references;
 pub mod tables;
 
 pub use references::{cite_all, Parameters, Rule, RuleReference};
-pub use tables::Profile;
+pub use tables::{MotorCurrentRow, Profile};

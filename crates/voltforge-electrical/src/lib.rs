@@ -9,5 +9,6 @@
 
 pub mod conduit;
 pub mod current;
+pub mod motor;
 pub mod sizing;
 pub mod voltage_drop;

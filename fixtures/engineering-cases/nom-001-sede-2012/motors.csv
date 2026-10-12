@@ -1,0 +1,8 @@
+id,description,kind,phases,hp,system_v,motor_type,rated_load_a,minimum_circuit_a,maximum_protection_a,current_carrying,expected_full_load_a,expected_conductor_a,expected_breaker_a,expected_size,expected_grounding,source,reviewed_by
+M-01,"Motor de 10 hp, tres fases, 220 V",motor,3,10,220,squirrel_cage,,,,3,28,35,70,8,8,"Cálculo a mano: Tabla 430-250 columna de 230 V; 430-22; Tabla 430-52 al 250 %",
+M-02,"Motor de 15 hp, tres fases, 220 V",motor,3,15,220,squirrel_cage,,,,3,42,52.5,110,6,6,"Cálculo a mano: 105 A no es normalizado, se toma 110 A (430-52(c)(1) excepción 1)",
+M-03,"Motor de 1 hp, una fase, 127 V",motor,1,1,127,,,,,2,14,17.5,35,12,12,"Cálculo a mano: Tabla 430-248 columna de 127 V; la tierra de tabla (10 AWG) se limita al calibre de fase (250-122(a))",
+M-04,"Motor de 50 hp, tres fases, 480 V",motor,3,50,480,squirrel_cage,,,,3,65,81.25,175,3,6,"Cálculo a mano: columna de 460 V",
+M-05,"Motor de 40 hp de rotor devanado, tres fases, 220 V",motor,3,40,220,wound_rotor,,,,3,104,130,175,1,6,"Cálculo a mano: Tabla 430-52 al 150 %; terminales de 75 °C por pasar de 100 A",
+M-06,"Motocompresor de 16.7 A, 220 V",compressor,1,,220,,16.7,,,2,16.7,20.875,25,10,10,"Cálculo a mano: 440-32 al 125 %; 440-22(a) al 175 % redondeado hacia abajo",
+M-07,"Minisplit con placa de 18 A mínimos y 30 A máximos",compressor,1,,220,,,18,30,2,14.4,18,30,12,12,"Cálculo a mano: 440-35 y 440-22(c); la tierra de tabla (10 AWG) se limita al calibre de fase",

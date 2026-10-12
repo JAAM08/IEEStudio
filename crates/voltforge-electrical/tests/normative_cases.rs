@@ -42,6 +42,7 @@ fn base(continuous_a: f64, noncontinuous_a: f64) -> SizingInput {
         include_iec_ratings: false,
         minimum_size: None,
         voltage_drop: None,
+        motor: None,
     }
 }
 
@@ -272,4 +273,104 @@ fn conditions_the_tables_do_not_cover_are_reported() {
         select_conductor(nom(), &hot),
         Err(Error::NotInTable { .. })
     ));
+}
+
+/// 430-6(a)(1): la columna de la tabla depende de la tensión del sistema y
+/// un caso fuera de la tabla no se supone.
+#[test]
+fn motor_current_comes_from_the_right_column() {
+    use voltforge_electrical::motor::full_load_current;
+    let p = nom();
+    let at =
+        |hp: &str, three: bool, v: f64| full_load_current(p, hp, three, v).map(|m| m.full_load_a);
+    assert_eq!(at("10", true, 220.0), Ok(28.0)); // columna de 230 V
+    assert_eq!(at("10", true, 240.0), Ok(28.0));
+    assert_eq!(at("10", true, 208.0), Ok(30.8));
+    assert_eq!(at("10", true, 440.0), Ok(14.0)); // columna de 460 V
+    assert_eq!(at("10", true, 480.0), Ok(14.0));
+    assert_eq!(at("1", false, 127.0), Ok(14.0)); // columna de 127 V, propia de la NOM
+    assert_eq!(at("1", false, 120.0), Ok(16.0)); // columna de 115 V
+    assert!(matches!(
+        at("10", true, 380.0),
+        Err(Error::NotInTable { .. })
+    ));
+    assert!(matches!(
+        at("3", true, 115.0),
+        Err(Error::NotInTable { .. })
+    ));
+    assert!(matches!(
+        at("15", false, 220.0),
+        Err(Error::NotInTable { .. })
+    ));
+    assert!(matches!(
+        at("13", true, 220.0),
+        Err(Error::NotInTable { .. })
+    ));
+}
+
+/// Tabla 430-52 y su excepción 1: el valor normalizado inmediato superior.
+#[test]
+fn motor_breaker_may_round_up_to_the_next_standard() {
+    use voltforge_core::MotorType;
+    use voltforge_electrical::motor::motor_branch;
+    let p = nom();
+    let b = motor_branch(p, 42.0, Some(MotorType::SquirrelCage), false).unwrap();
+    assert_eq!(b.protection_percent, 250.0);
+    assert_eq!(b.breaker_max_a, 110.0); // 105 A no es normalizado
+    let w = motor_branch(p, 28.0, Some(MotorType::WoundRotor), false).unwrap();
+    assert_eq!(w.protection_percent, 150.0);
+    assert_eq!(w.breaker_max_a, 45.0); // 42 A → 45 A
+    let one = motor_branch(p, 14.0, None, false).unwrap();
+    assert_eq!(one.breaker_max_a, 35.0);
+}
+
+/// 440-22(a): el motocompresor no redondea hacia arriba y no se exige
+/// menos de 15 A; la placa del equipo manda si la trae (440-22(c), 440-35).
+#[test]
+fn compressor_protection_rounds_down_with_a_floor() {
+    use voltforge_electrical::motor::{compressor_branch, CompressorNameplate};
+    let p = nom();
+    let rla = |a: f64| CompressorNameplate {
+        rated_load_a: Some(a),
+        ..Default::default()
+    };
+    assert_eq!(
+        compressor_branch(p, &rla(16.7), false)
+            .unwrap()
+            .breaker_max_a,
+        25.0
+    );
+    assert_eq!(
+        compressor_branch(p, &rla(5.0), false)
+            .unwrap()
+            .breaker_max_a,
+        15.0
+    );
+    let plate = CompressorNameplate {
+        minimum_circuit_a: Some(18.0),
+        maximum_protection_a: Some(30.0),
+        ..Default::default()
+    };
+    let c = compressor_branch(p, &plate, false).unwrap();
+    assert_eq!((c.conductor_a, c.breaker_max_a), (18.0, 30.0));
+    assert!(c.from_equipment_nameplate);
+    assert!(compressor_branch(p, &CompressorNameplate::default(), false).is_err());
+}
+
+/// 250-122(a): la puesta a tierra no se exige mayor que los conductores de
+/// fase, aunque el interruptor del motor la pediría más grande.
+#[test]
+fn grounding_never_exceeds_the_phase_conductor() {
+    use voltforge_electrical::sizing::equipment_grounding;
+    let g = equipment_grounding(
+        nom(),
+        35.0,
+        Material::Copper,
+        true,
+        &Size::new("12"),
+        &Size::new("12"),
+    )
+    .unwrap();
+    assert_eq!(g.table_size, Size::new("10"));
+    assert_eq!(g.size, Size::new("12"));
 }

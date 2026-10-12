@@ -11,3 +11,14 @@ smallest_parallel_size,1/0
 jam_ratio_min,2.8
 jam_ratio_max,3.2
 nipple_fill_fraction,0.60
+motor_conductor_factor,1.25
+motor_largest_factor,1.25
+motor_overload_factor_marked,1.25
+motor_overload_factor_other,1.15
+motor_starting_limit_a,100
+motor_starting_factor_small,4.00
+motor_starting_factor_large,3.00
+compressor_conductor_factor,1.25
+compressor_protection_factor,1.75
+compressor_protection_max_factor,2.25
+compressor_minimum_protection_a,15

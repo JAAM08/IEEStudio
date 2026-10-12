@@ -18,7 +18,11 @@ de cálculo.
 | `table_250_122_equipment_grounding.csv` | Tabla 250-122 |
 | `section_240_6_standard_ratings.csv` | Sección 240-6(a). La columna `series` separa los valores de uso común en México de los de la serie IEC (16, 32 y 63 A) |
 | `section_240_4_d_small_conductors.csv` | Sección 240-4(d), calibres 14 a 10 AWG |
-| `profile.csv` | Datos de la norma (código, título, edición, URL) y parámetros: 125 % de carga continua (210-19(a)(1)), terminales de 60 °C hasta 100 A (110-14(c)), valor inmediato superior hasta 800 A (240-4(b)), calibres mínimos, atascamiento (Tabla 1, nota 2) y niples (notas de las tablas, nota 4) |
+| `table_430_248_single_phase_motors.csv` | Tabla 430-248, corriente a plena carga de motores monofásicos (115, 127, 208 y 230 V) |
+| `table_430_250_three_phase_motors.csv` | Tabla 430-250, motores trifásicos de inducción de jaula de ardilla y de rotor devanado (115 a 575 V). No incluye la columna de 2300 V (media tensión) ni la de motores síncronos de factor de potencia unitario |
+| `motor_voltage_columns.csv` | Qué columna de las tablas 430-248 y 430-250 corresponde a cada tensión del sistema, según el texto de cada tabla («de 110 a 120 volts, 220 a 240 volts…»). La columna de 127 V es propia de la NOM |
+| `table_430_52_motor_protection.csv` | Tabla 430-52, ajuste máximo de la protección contra cortocircuito del circuito del motor, en porciento de su corriente a plena carga |
+| `profile.csv` | Datos de la norma (código, título, edición, URL) y parámetros: 125 % de carga continua (210-19(a)(1)), terminales de 60 °C hasta 100 A (110-14(c)), valor inmediato superior hasta 800 A (240-4(b)), calibres mínimos, atascamiento (Tabla 1, nota 2) y niples (notas de las tablas, nota 4), y los factores de motores (430-22, 430-24, 430-32, 430-52) y de motocompresores (440-22, 440-32) |
 | `references.csv` | Cláusula de cada regla del motor, con una descripción propia (no es texto de la norma) |
 
 ## Cómo se capturaron
@@ -42,6 +46,11 @@ están corregidos y anotados:
   55.68 mm². Con su diámetro de 4.470 mm el área es 15.69 mm², y la tabla de
   origen (NEC) indica 15.68 mm². Se usa 15.68.
 - **Tabla 310-15(b)(2)(a):** el intervalo de temperatura «91-75» es 71-75 °C.
+- **Tabla 430-250, 10 hp a 575 V:** el DOF imprime 44 A. La secuencia de la
+  columna (6.1, 9, ?, 17) y la tabla de origen (NEC) indican 11 A. Se usa 11.
+- **Tabla 430-250, 10 hp a 200 V:** el DOF imprime 32.3 A y la tabla de
+  origen (NEC 2011) 32.2 A. No es una errata evidente; se respeta el 32.3 de
+  la NOM.
 - **Tabla 4:** el encabezado del artículo 358 dice «no metálico (EMT)»; el
   tubo EMT es metálico de pared delgada. No afecta a los valores.
 

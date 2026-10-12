@@ -17,7 +17,11 @@
 //!    los límites de 240-4(d) para conductores pequeños.
 //! 6. Paralelo (310-10(h)): solo desde 1/0 AWG.
 //! 7. Puesta a tierra (250-122): por la capacidad del interruptor, con el
-//!    incremento proporcional cuando los conductores de fase se sobredimensionan.
+//!    incremento proporcional cuando los conductores de fase se sobredimensionan,
+//!    y sin exigir que sea mayor que los de fase.
+//! 8. Motores (430-22, 430-52, Tabla 240-4(g)): la corriente de diseño y el
+//!    interruptor vienen de `motor`, la ampacidad corregida también cubre la
+//!    corriente de diseño y el conductor no se protege según 240-4.
 
 use crate::current::design_current;
 use crate::voltage_drop::{voltage_drop, VoltageDropInput};
@@ -58,6 +62,21 @@ pub struct SizingInput {
     /// Calibre mínimo impuesto por el usuario.
     pub minimum_size: Option<Size>,
     pub voltage_drop: Option<VoltageDropLimit>,
+    /// Circuito de motor o motocompresor: la corriente de diseño y la
+    /// protección vienen de los artículos 430 y 440, y el conductor no se
+    /// protege según 240-4 (Tabla 240-4(g)).
+    pub motor: Option<MotorSizing>,
+}
+
+/// Datos de un circuito de motor para dimensionar el conductor.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MotorSizing {
+    /// Corriente que deben cubrir los conductores, ya con sus factores
+    /// (430-22, 430-24, 440-32 o la ampacidad mínima de la placa). La cubren
+    /// tanto la ampacidad de terminales como la corregida.
+    pub design_a: f64,
+    /// Interruptor del circuito.
+    pub breaker_a: f64,
 }
 
 /// Verificaciones de un calibre para el circuito.
@@ -152,6 +171,26 @@ pub fn standard_rating_at_least(
         })
 }
 
+/// Capacidad normalizada igual o inmediata inferior a una corriente, para los
+/// límites que no admiten redondear hacia arriba.
+pub fn standard_rating_at_most(
+    profile: &Profile,
+    current_a: f64,
+    include_iec: bool,
+) -> Result<f64> {
+    profile
+        .standard_ratings
+        .iter()
+        .filter(|r| r.common || include_iec)
+        .map(|r| r.rating_a)
+        .take_while(|&r| r <= current_a + 1e-9)
+        .last()
+        .ok_or(Error::NotInTable {
+            table: profile.clause(Rule::StandardRatings),
+            what: format!("una capacidad de a lo más {current_a:.2} A"),
+        })
+}
+
 fn validate(input: &SizingInput) -> Result<TempRating> {
     for (name, v) in [
         ("continua", input.continuous_a),
@@ -184,18 +223,19 @@ pub fn check_conductor(
     breaker_a: f64,
 ) -> Result<ConductorCheck> {
     let insulation_rating = validate(input)?;
-    let load_a = input.continuous_a + input.noncontinuous_a;
-    let design_a = design_current(profile, input.continuous_a, input.noncontinuous_a);
+    let (load_a, design_a) = loads(profile, input);
     let n = f64::from(input.conductors_per_phase);
 
-    let terminal_rule =
-        input
-            .terminal_rating
-            .unwrap_or(if breaker_a <= profile.parameters.terminal_60c_limit_a {
-                TempRating::C60
-            } else {
-                TempRating::C75
-            });
+    // En un motor el interruptor puede ser hasta 2.5 veces su corriente: las
+    // terminales se deciden por la corriente de diseño, que es lo conservador.
+    let terminal_basis_a = input.motor.map_or(breaker_a, |m| m.design_a);
+    let terminal_rule = input.terminal_rating.unwrap_or(
+        if terminal_basis_a <= profile.parameters.terminal_60c_limit_a {
+            TempRating::C60
+        } else {
+            TempRating::C75
+        },
+    );
     let terminal_rating = terminal_rule.min(insulation_rating);
 
     let table_ampacity_a = profile.ampacity(size, input.material, insulation_rating)?;
@@ -256,7 +296,8 @@ pub fn check_conductor(
         allowable_ampacity_a,
         meets_design_current: terminal_ampacity_a >= design_a - 1e-9,
         meets_load: corrected_ampacity_a >= load_a - 1e-9,
-        protected: protected_by_rating && within_small_limit,
+        // Los conductores de motores se protegen según el artículo 430.
+        protected: input.motor.is_some() || (protected_by_rating && within_small_limit),
         small_conductor_limit_a,
         parallel_allowed,
         voltage_drop_percent,
@@ -294,8 +335,16 @@ pub fn equipment_grounding(
     let phase = profile.conductor(phase_size)?;
     let base = profile.conductor(ampacity_size)?;
     if phase.area_mm2 <= base.area_mm2 {
+        // 250-122(a): no se exige mayor que los conductores del circuito. Pasa
+        // en motores, cuyo interruptor puede exceder la ampacidad del conductor.
+        let table = profile.conductor(&table_size)?;
+        let size = if same_material_as_phase && table.area_mm2 > phase.area_mm2 {
+            phase_size.clone()
+        } else {
+            table_size.clone()
+        };
         return Ok(Grounding {
-            size: table_size.clone(),
+            size,
             table_size,
             increased: false,
         });
@@ -320,12 +369,26 @@ pub fn equipment_grounding(
     })
 }
 
+/// Corriente de la carga y corriente de diseño. En un motor la ampacidad
+/// corregida también debe cubrir la de diseño (430-22).
+fn loads(profile: &Profile, input: &SizingInput) -> (f64, f64) {
+    match input.motor {
+        Some(m) => (m.design_a, m.design_a),
+        None => (
+            input.continuous_a + input.noncontinuous_a,
+            design_current(profile, input.continuous_a, input.noncontinuous_a),
+        ),
+    }
+}
+
 /// Selecciona el interruptor, el menor conductor que cumple y su puesta a tierra.
 pub fn select_conductor(profile: &Profile, input: &SizingInput) -> Result<SizingResult> {
     validate(input)?;
-    let load_a = input.continuous_a + input.noncontinuous_a;
-    let design_a = design_current(profile, input.continuous_a, input.noncontinuous_a);
-    let breaker_a = standard_rating_at_least(profile, design_a, input.include_iec_ratings)?;
+    let (load_a, design_a) = loads(profile, input);
+    let breaker_a = match input.motor {
+        Some(m) => m.breaker_a,
+        None => standard_rating_at_least(profile, design_a, input.include_iec_ratings)?,
+    };
 
     let start = profile.size_rank(&profile.parameters.smallest_circuit_size)?;
     let user_min = match &input.minimum_size {

@@ -266,6 +266,7 @@ fn size_run(
             input: drop_input.clone(),
             limit_percent: spec.drop_limit_percent,
         }),
+        motor: None,
     };
 
     let breaker_a = standard_rating_at_least(profile, design_a, settings.include_iec_ratings)?;

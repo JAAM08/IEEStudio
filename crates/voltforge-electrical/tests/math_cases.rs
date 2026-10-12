@@ -196,3 +196,40 @@ fn missing_table_values_are_reported_not_guessed() {
         Err(Error::UnknownSize(_))
     ));
 }
+
+/// Motores: los límites son productos simples de la corriente por los
+/// factores del perfil, sin redondear.
+#[test]
+fn motor_limits_are_plain_products() {
+    use voltforge_core::MotorType;
+    use voltforge_electrical::motor::{
+        compressor_branch, motor_branch, overload_limit, CompressorNameplate,
+    };
+    let p = Profile::nom_001_sede_2012();
+    let b = motor_branch(p, 42.0, Some(MotorType::SquirrelCage), false).unwrap();
+    assert!((b.conductor_a - 52.5).abs() < 1e-9); // 1.25 × 42
+    assert!((b.protection_limit_a - 105.0).abs() < 1e-9); // 2.5 × 42
+    assert!((b.starting_limit_a - 168.0).abs() < 1e-9); // 4 × 42
+    let big = motor_branch(p, 124.0, Some(MotorType::SquirrelCage), false).unwrap();
+    assert!((big.starting_limit_a - 372.0).abs() < 1e-9); // 3 × 124, más de 100 A
+    let (factor, limit) = overload_limit(p, 26.0, true);
+    assert_eq!(factor, 1.25);
+    assert!((limit - 32.5).abs() < 1e-9);
+    let (factor, limit) = overload_limit(p, 26.0, false);
+    assert_eq!(factor, 1.15);
+    assert!((limit - 29.9).abs() < 1e-9);
+    let c = compressor_branch(
+        p,
+        &CompressorNameplate {
+            rated_load_a: Some(10.0),
+            branch_selection_a: Some(12.0),
+            ..Default::default()
+        },
+        false,
+    )
+    .unwrap();
+    assert_eq!(c.basis_a, 12.0); // la mayor de las dos corrientes
+    assert!((c.conductor_a - 15.0).abs() < 1e-9);
+    assert!((c.protection_limit_a - 21.0).abs() < 1e-9);
+    assert_eq!(c.starting_limit_a, Some(27.0));
+}

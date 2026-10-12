@@ -15,5 +15,6 @@ pub mod validation;
 pub use error::{Error, Result};
 pub use system::{CircuitKind, System};
 pub use types::{
-    ConduitType, Insulation, InsulationGroup, Material, RacewayMaterial, Size, TempRating,
+    ConduitType, Insulation, InsulationGroup, Material, MotorType, RacewayMaterial, Size,
+    TempRating,
 };

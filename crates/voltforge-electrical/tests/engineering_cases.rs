@@ -159,6 +159,7 @@ fn conductor_sizing_cases() {
                 include_iec_ratings: false,
                 minimum_size: None,
                 voltage_drop: None,
+                motor: None,
             };
             (
                 r.text("id"),
@@ -287,6 +288,113 @@ fn conduit_cases() {
                     r.conduit.metric_designator
                 ));
             }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn motor_cases() {
+    use voltforge_core::MotorType;
+    use voltforge_electrical::motor::{
+        compressor_branch, full_load_current, motor_branch, CompressorNameplate,
+    };
+    use voltforge_electrical::sizing::MotorSizing;
+
+    let mut failures = Vec::new();
+    let rows = parse("motors.csv", &fixture("motors.csv"), |r| {
+        (
+            r.text("id"),
+            r.text("kind"),
+            r.get::<u32>("phases"),
+            r.text("hp"),
+            r.get::<f64>("system_v"),
+            r.text("motor_type"),
+            CompressorNameplate {
+                rated_load_a: r.opt("rated_load_a"),
+                branch_selection_a: None,
+                minimum_circuit_a: r.opt("minimum_circuit_a"),
+                maximum_protection_a: r.opt("maximum_protection_a"),
+            },
+            r.get::<u32>("current_carrying"),
+            r.get::<f64>("expected_full_load_a"),
+            r.get::<f64>("expected_conductor_a"),
+            r.get::<f64>("expected_breaker_a"),
+            r.text("expected_size"),
+            r.text("expected_grounding"),
+        )
+    });
+    assert!(!rows.is_empty());
+    for (id, kind, phases, hp, volts, motor_type, plate, ccc, flc, cond, brk, size, gnd) in rows {
+        let (full_load_a, design_a, breaker_a) = if kind == "motor" {
+            let motor_type = match motor_type.as_str() {
+                "" => None,
+                "squirrel_cage" => Some(MotorType::SquirrelCage),
+                "design_b_energy_efficient" => Some(MotorType::DesignBEnergyEfficient),
+                "wound_rotor" => Some(MotorType::WoundRotor),
+                "synchronous" => Some(MotorType::Synchronous),
+                other => panic!("tipo de motor desconocido: {other}"),
+            };
+            let current = full_load_current(nom(), &hp, phases == 3, volts).unwrap();
+            let branch = motor_branch(nom(), current.full_load_a, motor_type, false).unwrap();
+            (
+                current.full_load_a,
+                branch.conductor_a,
+                branch.breaker_max_a,
+            )
+        } else {
+            let branch = compressor_branch(nom(), &plate, false).unwrap();
+            (branch.basis_a, branch.conductor_a, branch.breaker_max_a)
+        };
+        compare(
+            &mut failures,
+            &id,
+            "corriente",
+            Some(flc),
+            full_load_a,
+            0.01,
+        );
+        compare(
+            &mut failures,
+            &id,
+            "corriente de diseño",
+            Some(cond),
+            design_a,
+            0.01,
+        );
+        compare(&mut failures, &id, "interruptor", Some(brk), breaker_a, 0.0);
+        let input = SizingInput {
+            continuous_a: 0.0,
+            noncontinuous_a: full_load_a,
+            material: Material::Copper,
+            grounding_material: Material::Copper,
+            insulation: Insulation::Thw,
+            wet_location: false,
+            ambient_c: 30.0,
+            current_carrying_conductors: ccc,
+            nipple: false,
+            conductors_per_phase: 1,
+            terminal_rating: None,
+            include_iec_ratings: false,
+            minimum_size: None,
+            voltage_drop: None,
+            motor: Some(MotorSizing {
+                design_a,
+                breaker_a,
+            }),
+        };
+        let r = select_conductor(nom(), &input).unwrap();
+        if r.conductor.size != Size::new(&size) {
+            failures.push(format!(
+                "{id}: calibre esperado {size}, calculado {}",
+                r.conductor.size
+            ));
+        }
+        if r.grounding.size != Size::new(&gnd) {
+            failures.push(format!(
+                "{id}: tierra esperada {gnd}, calculada {}",
+                r.grounding.size
+            ));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

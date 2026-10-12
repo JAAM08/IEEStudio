@@ -1,0 +1,8 @@
+motor_type,nontime_fuse,dual_element_fuse,instantaneous_breaker,inverse_time_breaker
+single_phase,300,175,800,250
+polyphase_ac,300,175,800,250
+squirrel_cage,300,175,800,250
+design_b_energy_efficient,300,175,1100,250
+synchronous,300,175,800,250
+wound_rotor,150,150,800,150
+dc_constant_voltage,150,150,250,150

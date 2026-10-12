@@ -124,6 +124,37 @@ pub struct SmallConductorLimit {
     pub max_overcurrent_a: f64,
 }
 
+/// Fila de las tablas 430-248 (una fase) o 430-250 (tres fases): corriente a
+/// plena carga por tensión nominal del motor.
+#[derive(Debug, Clone)]
+pub struct MotorCurrentRow {
+    /// Potencia en caballos de fuerza, como la escribe la tabla: `7-1/2`.
+    pub hp: String,
+    pub kw: f64,
+    /// Corriente por columna de tensión (`v115`, `v230`…); vacía si la tabla no la da.
+    pub currents: Vec<(String, Option<f64>)>,
+}
+
+/// Columna de una tabla de motores que corresponde a un intervalo de
+/// tensiones del sistema.
+#[derive(Debug, Clone)]
+pub struct MotorVoltageColumn {
+    pub table: String,
+    pub column: String,
+    pub system_min_v: f64,
+    pub system_max_v: f64,
+}
+
+/// Fila de la Tabla 430-52, en porciento de la corriente a plena carga.
+#[derive(Debug, Clone)]
+pub struct MotorProtectionRow {
+    pub motor_type: String,
+    pub nontime_fuse: f64,
+    pub dual_element_fuse: f64,
+    pub instantaneous_breaker: f64,
+    pub inverse_time_breaker: f64,
+}
+
 /// Perfil normativo: el conjunto de tablas con el que se calcula.
 #[derive(Debug)]
 pub struct Profile {
@@ -142,6 +173,13 @@ pub struct Profile {
     pub grounding: Vec<GroundingRow>,
     pub standard_ratings: Vec<StandardRating>,
     pub small_conductor_limits: Vec<SmallConductorLimit>,
+    /// Tabla 430-248.
+    pub single_phase_motors: Vec<MotorCurrentRow>,
+    /// Tabla 430-250.
+    pub three_phase_motors: Vec<MotorCurrentRow>,
+    pub motor_voltage_columns: Vec<MotorVoltageColumn>,
+    /// Tabla 430-52.
+    pub motor_protection: Vec<MotorProtectionRow>,
     /// Norma de la que salen las tablas.
     pub document: NormativeDocument,
     /// Factores, límites y calibres mínimos del perfil.
@@ -235,6 +273,24 @@ impl Profile {
                 jam_ratio_min: number("jam_ratio_min"),
                 jam_ratio_max: number("jam_ratio_max"),
                 nipple_fill_fraction: number("nipple_fill_fraction"),
+                motor_conductor_factor: number("motor_conductor_factor"),
+                motor_largest_factor: number("motor_largest_factor"),
+                motor_overload_factor_marked: number("motor_overload_factor_marked"),
+                motor_overload_factor_other: number("motor_overload_factor_other"),
+                motor_starting_limit_a: number("motor_starting_limit_a"),
+                motor_starting_factor_small: number("motor_starting_factor_small"),
+                motor_starting_factor_large: number("motor_starting_factor_large"),
+                compressor_conductor_factor: number("compressor_conductor_factor"),
+                compressor_protection_factor: number("compressor_protection_factor"),
+                compressor_protection_max_factor: number("compressor_protection_max_factor"),
+                compressor_minimum_protection_a: number("compressor_minimum_protection_a"),
+            };
+            let motor_row = |columns: &'static [&'static str]| {
+                move |r: &csv::Row| MotorCurrentRow {
+                    hp: r.text("hp"),
+                    kw: r.get("kw"),
+                    currents: columns.iter().map(|c| (c.to_string(), r.opt(c))).collect(),
+                }
             };
             let document = NormativeDocument {
                 code: field("code"),
@@ -332,6 +388,37 @@ impl Profile {
                     |r| StandardRating {
                         rating_a: r.get("rating_a"),
                         common: r.text("series") == "common",
+                    }
+                ),
+                single_phase_motors: table!(
+                    "nom-001-sede-2012",
+                    "table_430_248_single_phase_motors.csv",
+                    motor_row(&["v115", "v127", "v208", "v230"])
+                ),
+                three_phase_motors: table!(
+                    "nom-001-sede-2012",
+                    "table_430_250_three_phase_motors.csv",
+                    motor_row(&["v115", "v200", "v208", "v230", "v460", "v575"])
+                ),
+                motor_voltage_columns: table!(
+                    "nom-001-sede-2012",
+                    "motor_voltage_columns.csv",
+                    |r| MotorVoltageColumn {
+                        table: r.text("table"),
+                        column: r.text("column"),
+                        system_min_v: r.get("system_min_v"),
+                        system_max_v: r.get("system_max_v"),
+                    }
+                ),
+                motor_protection: table!(
+                    "nom-001-sede-2012",
+                    "table_430_52_motor_protection.csv",
+                    |r| MotorProtectionRow {
+                        motor_type: r.text("motor_type"),
+                        nontime_fuse: r.get("nontime_fuse"),
+                        dual_element_fuse: r.get("dual_element_fuse"),
+                        instantaneous_breaker: r.get("instantaneous_breaker"),
+                        inverse_time_breaker: r.get("inverse_time_breaker"),
                     }
                 ),
                 small_conductor_limits: table!(
@@ -526,6 +613,57 @@ mod tests {
         assert_eq!(p.smallest_parallel_size, Size::new("1/0")); // 310-10(h)
         assert_eq!(p.nipple_fill_fraction, 0.60); // Capítulo 10, notas, (4)
         assert_eq!((p.jam_ratio_min, p.jam_ratio_max), (2.8, 3.2)); // Tabla 1, nota 2
+    }
+
+    /// Pruebas normativas de las tablas de motores: valores conocidos de la
+    /// NOM-001-SEDE-2012 en cada tabla y en sus extremos.
+    #[test]
+    fn motor_tables_match_the_2012_edition() {
+        let profile = Profile::nom_001_sede_2012();
+        let current = |rows: &[MotorCurrentRow], hp: &str, column: &str| {
+            rows.iter()
+                .find(|r| r.hp == hp)
+                .and_then(|r| r.currents.iter().find(|(c, _)| c == column))
+                .and_then(|(_, a)| *a)
+        };
+        let one = &profile.single_phase_motors;
+        let three = &profile.three_phase_motors;
+        assert_eq!(current(one, "1/6", "v115"), Some(4.4)); // Tabla 430-248
+        assert_eq!(current(one, "1", "v127"), Some(14.0));
+        assert_eq!(current(one, "10", "v230"), Some(50.0));
+        assert_eq!(current(three, "1/2", "v230"), Some(2.2)); // Tabla 430-250
+        assert_eq!(current(three, "10", "v575"), Some(11.0)); // errata del DOF: 44
+        assert_eq!(current(three, "50", "v460"), Some(65.0));
+        assert_eq!(current(three, "500", "v460"), Some(590.0));
+        assert_eq!(current(three, "250", "v230"), None);
+        assert_eq!(current(three, "3", "v115"), None);
+        let inverse = |t: &str| {
+            profile
+                .motor_protection
+                .iter()
+                .find(|r| r.motor_type == t)
+                .map(|r| r.inverse_time_breaker)
+        };
+        assert_eq!(inverse("squirrel_cage"), Some(250.0)); // Tabla 430-52
+        assert_eq!(inverse("wound_rotor"), Some(150.0));
+        let p = &profile.parameters;
+        assert_eq!(p.motor_conductor_factor, 1.25); // 430-22
+        assert_eq!(p.motor_largest_factor, 1.25); // 430-24(1)
+        assert_eq!(
+            (
+                p.motor_overload_factor_marked,
+                p.motor_overload_factor_other
+            ),
+            (1.25, 1.15)
+        ); // 430-32(a)(1)
+        assert_eq!(
+            (
+                p.compressor_protection_factor,
+                p.compressor_protection_max_factor
+            ),
+            (1.75, 2.25)
+        ); // 440-22(a)
+        assert_eq!(p.compressor_minimum_protection_a, 15.0);
     }
 
     #[test]
