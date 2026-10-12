@@ -20,9 +20,9 @@
 
 ## Pendiente, en orden
 
-1. Deshacer y rehacer. Exportar el unifilar a DXF para AutoCAD. Agregar y quitar tableros desde la
-   interfaz, guardar el tema elegido, pasar un cálculo rápido a un proyecto y
-   alternativas (paralelo, longitud máxima) también dentro del proyecto.
+1. Deshacer y rehacer. Exportar el unifilar a DXF para AutoCAD. Pasar un
+   cálculo rápido a un proyecto y alternativas (paralelo, longitud máxima)
+   también dentro del proyecto. Abrir al arrancar el último proyecto usado.
 2. Instalador de Windows, con la reducción del tamaño del ejecutable.
 3. Servidor MCP para agentes.
 4. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).

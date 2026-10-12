@@ -104,6 +104,14 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) -> bool {
         return export;
     }
     let zoom = preview.zoom;
+    // Mesa de trabajo más oscura que la hoja, como en Acrobat, en los dos temas.
+    let canvas = if p.dark {
+        p.bg
+    } else {
+        Color32::from_rgb(0xc4, 0xc9, 0xcf)
+    };
+    let rect = ui.available_rect_before_wrap();
+    ui.painter().rect_filled(rect, 0.0, canvas);
     egui::ScrollArea::both()
         .id_salt("memoria")
         .auto_shrink([false, false])

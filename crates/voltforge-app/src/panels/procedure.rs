@@ -41,10 +41,21 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     });
     ui.separator();
     let Some(run) = doc.selected_run().and_then(|r| r.run.clone()) else {
-        ui.label(muted(
-            &p,
-            "Este tramo no se pudo calcular; revisa la pestaña Normativa de Propiedades.",
-        ));
+        // Sin procedimiento: decir por qué, no solo que falta.
+        let reasons: Vec<String> = match (doc.calc_error(), doc.selected_run()) {
+            (Some(e), _) => vec![e],
+            (None, Some(item)) => item
+                .checks
+                .iter()
+                .filter(|c| c.status != voltforge_project::Status::Complies)
+                .map(|c| format!("{}: {}", c.name, c.detail))
+                .collect(),
+            (None, None) => vec![],
+        };
+        ui.label(strong("Este tramo no se pudo calcular").color(p.warn));
+        for r in reasons {
+            ui.label(muted(&p, r));
+        }
         return;
     };
     egui::ScrollArea::vertical()

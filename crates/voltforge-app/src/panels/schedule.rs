@@ -231,7 +231,16 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         return;
     };
     let Some(result) = doc.panel_result(panel_index).cloned() else {
-        ui.label(muted(&p, "No se pudo calcular el proyecto."));
+        // Sin cálculo no hay tabla, pero el motivo debe quedar a la vista y
+        // los datos siguen editables en Propiedades.
+        let reason = doc.calc_error().unwrap_or_default();
+        crate::widgets::empty_state(
+            ui,
+            &p,
+            icon::WARNING_CIRCLE,
+            "No se pudo calcular el proyecto",
+            &format!("{reason}\nCorrige el dato en Propiedades y el cálculo se repite solo."),
+        );
         return;
     };
     let panel = &doc.project.panels[panel_index];
@@ -275,7 +284,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         ui.add_space(6.0);
         if ui
             .button(format!("{} Circuito", icon::PLUS))
-            .on_hover_text("Agregar un circuito a este tablero (Ctrl+N)")
+            .on_hover_text("Agregar un circuito a este tablero")
             .clicked()
         {
             action = Some(Action::Add);
@@ -412,7 +421,10 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         .filter(|c| **c != Col::Name)
         .map(|c| c.width() + GAP)
         .sum();
-    let name_width = (ui.available_width() - fixed - GAP - 30.0).max(130.0);
+    // Margen a la izquierda de la primera columna, para que el texto no
+    // quede pegado al borde ni a la barra de selección.
+    const INDENT: f32 = 8.0;
+    let name_width = (ui.available_width() - fixed - GAP - INDENT - 30.0).max(130.0);
     egui::ScrollArea::horizontal()
         .id_salt("cuadro-h")
         .show(ui, |ui| {
@@ -425,17 +437,21 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                 .resizable(false)
                 .auto_shrink([false, false])
                 .min_scrolled_height(0.0);
-            for col in &cols {
+            for (k, col) in cols.iter().enumerate() {
+                let indent = if k == 0 { INDENT } else { 0.0 };
                 table = table.column(if *col == Col::Name {
-                    Column::exact(name_width).clip(true)
+                    Column::exact(name_width + indent).clip(true)
                 } else {
-                    Column::exact(col.width())
+                    Column::exact(col.width() + indent)
                 });
             }
             table
                 .header(26.0, |mut header| {
-                    for col in &cols {
+                    for (k, col) in cols.iter().enumerate() {
                         header.col(|ui| {
+                            if k == 0 {
+                                ui.add_space(INDENT);
+                            }
                             let text = RichText::new(col.header()).size(11.0).color(p.ink3);
                             if col.numeric() {
                                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -462,6 +478,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                                         0.0,
                                         p.accent,
                                     );
+                                }
+                                if k == 0 {
+                                    ui.add_space(INDENT);
                                 }
                                 if *col == Col::Status {
                                     ui.label(status_text(&p, row.item.status));

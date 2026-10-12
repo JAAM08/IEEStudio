@@ -1,7 +1,7 @@
 //! VoltForge: aplicación de escritorio.
 //!
 //! Uso: `voltforge-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
-//! [--panel rapido|unifilar|memoria] [--captura imagen.png]`
+//! [--panel rapido|unifilar|memoria|ninguno] [--captura imagen.png]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -23,6 +23,7 @@ fn main() -> eframe::Result {
         light: false,
         workspace: None,
         focus: None,
+        no_panels: false,
         properties: None,
     };
     let mut args = std::env::args().skip(1);
@@ -43,6 +44,10 @@ fn main() -> eframe::Result {
                     Some("rapido") => Some(Tab::Quick),
                     Some("unifilar") => Some(Tab::Diagram),
                     Some("memoria") => Some(Tab::Report),
+                    Some("ninguno") => {
+                        options.no_panels = true;
+                        None
+                    }
                     _ => None,
                 }
             }

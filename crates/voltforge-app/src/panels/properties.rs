@@ -67,6 +67,19 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         .id_salt("propiedades")
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            // Sin cálculo, Resultados y Normativa dicen por qué en vez de
+            // quedarse en blanco; Datos sigue editable para corregirlo.
+            if shared.props_tab != PropsTab::Inputs {
+                if let Some(e) = doc.calc_error() {
+                    ui.label(
+                        RichText::new(format!("{} No se pudo calcular", icon::WARNING_CIRCLE))
+                            .color(p.bad),
+                    );
+                    ui.label(e);
+                    ui.label(muted(&p, "Corrige el dato en la pestaña Datos."));
+                    return;
+                }
+            }
             let changed = match (shared.props_tab, doc.selection) {
                 (PropsTab::Inputs, Selection::Project) => project_inputs(ui, doc, &p),
                 (PropsTab::Inputs, Selection::Feeder(i)) => feeder_inputs(ui, doc, &p, i),
@@ -164,23 +177,26 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
 
 fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> bool {
     let mut changed = false;
-    let others: Vec<(String, String)> = doc
-        .project
-        .panels
-        .iter()
-        .enumerate()
-        .filter(|(k, _)| *k != i)
-        .map(|(_, pn)| (pn.id.clone(), pn.name.clone()))
-        .collect();
+    let others = doc.feeder_candidates(i);
     let source_name = doc.project.source.name.clone();
     let settings = doc.project.settings.clone();
-    let panel = &mut doc.project.panels[i];
+    let id_problem = doc.panel_id_problem(i);
+    let old_id = doc.project.panels[i].id.clone();
+    let mut renamed = false;
     section(ui, p, "Tablero");
     property(ui, p, "ID", |ui| {
-        changed |= ui
-            .add(egui::TextEdit::singleline(&mut panel.id).desired_width(80.0))
+        renamed = ui
+            .add(egui::TextEdit::singleline(&mut doc.project.panels[i].id).desired_width(80.0))
             .changed();
     });
+    if renamed {
+        doc.panel_renamed(i, &old_id);
+        changed = true;
+    }
+    if let Some(problem) = id_problem {
+        ui.label(RichText::new(format!("{} {problem}", icon::WARNING)).color(p.bad));
+    }
+    let panel = &mut doc.project.panels[i];
     property(ui, p, "Nombre", |ui| {
         changed |= ui.text_edit_singleline(&mut panel.name).changed();
     });
@@ -223,6 +239,7 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
 fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: usize) -> bool {
     let mut changed = false;
     let settings = doc.project.settings.clone();
+    let id_problem = doc.circuit_id_problem(i, c);
     let circuit = &mut doc.project.panels[i].circuits[c];
     section(ui, p, "Circuito");
     property(ui, p, "ID", |ui| {
@@ -230,6 +247,9 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
             .add(egui::TextEdit::singleline(&mut circuit.id).desired_width(80.0))
             .changed();
     });
+    if let Some(problem) = id_problem {
+        ui.label(RichText::new(format!("{} {problem}", icon::WARNING)).color(p.warn));
+    }
     property(ui, p, "Descripción", |ui| {
         changed |= ui.text_edit_singleline(&mut circuit.name).changed();
     });

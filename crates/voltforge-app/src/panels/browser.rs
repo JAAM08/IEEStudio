@@ -82,8 +82,26 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         .filter(|(_, pn)| pn.parent.is_none())
         .map(|(i, _)| i)
         .collect();
+    let mut shown = vec![false; doc.project.panels.len()];
     for root in roots {
-        panel_tree(ui, doc, &p, root, 1, &mut select);
+        panel_tree(ui, doc, &p, root, 1, &mut select, &mut shown);
+    }
+    // Tableros que no cuelgan de nada que exista (o que forman un ciclo): se
+    // muestran aparte para que el usuario pueda corregirlos.
+    let lost: Vec<usize> = (0..shown.len()).filter(|&i| !shown[i]).collect();
+    if !lost.is_empty() {
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(format!("{} Sin alimentación válida", icon::WARNING))
+                .size(11.0)
+                .color(p.warn),
+        )
+        .on_hover_text("Revisa «Se alimenta de» en Propiedades.");
+        for i in lost {
+            if !shown[i] {
+                panel_tree(ui, doc, &p, i, 1, &mut select, &mut shown);
+            }
+        }
     }
 
     if let Some(sel) = select {
@@ -100,6 +118,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn panel_tree(
     ui: &mut egui::Ui,
     doc: &Doc,
@@ -107,14 +126,20 @@ fn panel_tree(
     index: usize,
     depth: usize,
     select: &mut Option<Selection>,
+    shown: &mut [bool],
 ) {
+    // Cada tablero se dibuja una sola vez, aunque el archivo traiga un ciclo.
+    if shown[index] {
+        return;
+    }
+    shown[index] = true;
     let panel = &doc.project.panels[index];
     let result = doc.panel_result(index);
     let status = result.map(|r| {
         worst(std::iter::once(r.feeder.status).chain(r.circuits.iter().map(|c| c.status)))
     });
     let selected = doc.selection == Selection::Feeder(index);
-    let id = ui.make_persistent_id(("tablero", &panel.id));
+    let id = ui.make_persistent_id(("tablero", index));
     let mut state =
         egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
     let open = state.is_open();
@@ -176,7 +201,7 @@ fn panel_tree(
         .map(|(i, _)| i)
         .collect();
     for child in children {
-        panel_tree(ui, doc, p, child, depth + 1, select);
+        panel_tree(ui, doc, p, child, depth + 1, select, shown);
     }
 }
 

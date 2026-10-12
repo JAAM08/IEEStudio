@@ -787,7 +787,10 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
     let verdict = Verdict::new(
         runs.len(),
         runs.iter().filter(|r| r.run.is_none()).count(),
-        runs.iter().flat_map(|r| r.checks.iter().map(|c| c.status)),
+        // Las verificaciones de un tramo sin calcular ya cuentan como «sin calcular».
+        runs.iter()
+            .filter(|r| r.run.is_some())
+            .flat_map(|r| r.checks.iter().map(|c| c.status)),
     );
     Ok(ProjectResult {
         project: project.name.clone(),

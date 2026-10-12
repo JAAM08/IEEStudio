@@ -97,9 +97,13 @@ impl TabViewer for Viewer<'_> {
                         };
                     }
                 }
-                Err(e) => {
-                    ui.label(RichText::new(e).color(p.bad));
-                }
+                Err(_) => crate::widgets::empty_state(
+                    ui,
+                    &p,
+                    egui_phosphor::regular::WARNING_CIRCLE,
+                    "No se pudo calcular el proyecto",
+                    &self.doc.calc_error().unwrap_or_default(),
+                ),
             }),
             Tab::Report => padded(ui, |ui| {
                 self.export_report |= report::show(ui, self.doc, self.shared);

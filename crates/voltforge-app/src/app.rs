@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use eframe::egui::{self, Align, Layout, RichText};
-use egui_dock::{DockArea, DockState, NodeIndex, Style};
+use egui_dock::{DockArea, DockState, Style};
 use egui_phosphor::regular as icon;
 use serde::{Deserialize, Serialize};
 use voltforge_project::{example, Project};
@@ -13,7 +13,7 @@ use crate::panels::{schedule, Shared, Viewer};
 use crate::state::{empty_project, Doc, Selection};
 use crate::theme::{self, Palette, ACCENTS};
 use crate::widgets::{muted, strong, verdict_chips};
-use crate::workspace::{Tab, Workspace};
+use crate::workspace::{self, Tab, Workspace};
 
 const STORAGE_KEY: &str = "voltforge-interfaz-1";
 
@@ -26,6 +26,16 @@ struct Prefs {
     dock: DockState<Tab>,
     columns: schedule::Columns,
     diagram_zoom: f32,
+}
+
+/// Acción que espera a que el usuario decida qué hacer con los cambios sin
+/// guardar.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Pending {
+    New,
+    Open,
+    Example,
+    Quit,
 }
 
 /// Captura de pantalla pedida por línea de comandos, para pruebas visuales.
@@ -45,6 +55,12 @@ pub struct App {
     done: Option<String>,
     about: bool,
     capture: Option<Capture>,
+    /// Acción detenida por cambios sin guardar.
+    pending: Option<Pending>,
+    /// El usuario ya decidió cerrar; no se vuelve a preguntar.
+    allow_close: bool,
+    /// Cerrar la ventana al terminar este cuadro.
+    quit: bool,
 }
 
 pub struct Options {
@@ -53,6 +69,8 @@ pub struct Options {
     pub light: bool,
     pub workspace: Option<Workspace>,
     pub focus: Option<Tab>,
+    /// Empieza sin paneles, para revisar esa pantalla.
+    pub no_panels: bool,
     /// Pestaña inicial de Propiedades: `datos`, `resultados` o `normativa`.
     pub properties: Option<String>,
 }
@@ -73,7 +91,8 @@ impl App {
                 p.dark,
                 p.accent.min(ACCENTS.len() - 1),
                 p.workspace,
-                p.dock,
+                // Un acomodo guardado sin paneles se repone.
+                workspace::sanitize(p.dock, p.workspace),
                 p.columns,
                 p.diagram_zoom,
             ),
@@ -105,6 +124,9 @@ impl App {
             done: None,
             about: false,
             capture: options.capture.map(|path| Capture { path, frames: 0 }),
+            pending: None,
+            allow_close: false,
+            quit: false,
         };
         app.doc.selection = Selection::Circuit(0, 1);
         if let Some(path) = options.open {
@@ -116,7 +138,12 @@ impl App {
             _ => crate::panels::properties::PropsTab::Inputs,
         };
         if let Some(tab) = options.focus {
-            app.focus_tab(tab);
+            workspace::open(&mut app.dock, tab);
+        }
+        if options.no_panels {
+            for tab in Tab::ALL {
+                workspace::close(&mut app.dock, tab);
+            }
         }
         app
     }
@@ -215,60 +242,42 @@ impl App {
         self.dock = ws.layout();
     }
 
-    fn is_open(&self, tab: Tab) -> bool {
-        self.dock.find_tab(&tab).is_some()
+    /// Pide hacer algo que reemplaza el proyecto o cierra el programa. Si hay
+    /// cambios sin guardar, primero pregunta.
+    fn request(&mut self, action: Pending) {
+        if self.doc.dirty {
+            self.pending = Some(action);
+        } else {
+            self.perform(action);
+        }
     }
 
-    /// Abre o cierra un panel. Los laterales vuelven a su lado.
-    fn toggle_tab(&mut self, tab: Tab) {
-        if let Some(path) = self.dock.find_tab(&tab) {
-            self.dock.remove_tab(path);
-            return;
-        }
-        let tree = self.dock.main_surface_mut();
-        match tab {
-            Tab::Browser => {
-                tree.split_left(NodeIndex::root(), 0.16, vec![tab]);
-            }
-            Tab::Properties => {
-                tree.split_right(NodeIndex::root(), 0.76, vec![tab]);
-            }
-            Tab::Procedure => {
-                tree.split_below(NodeIndex::root(), 0.68, vec![tab]);
-            }
-            _ => {
-                // Los documentos van junto a los otros documentos, al centro.
-                let center = [Tab::Schedule, Tab::Diagram, Tab::Report, Tab::Quick]
-                    .iter()
-                    .find_map(|t| self.dock.find_tab(t));
-                match center {
-                    Some(path) => {
-                        self.dock.set_focused_node_and_surface(path.node_path());
-                        self.dock.push_to_focused_leaf(tab);
-                    }
-                    None => self.dock.push_to_first_leaf(tab),
-                }
+    fn perform(&mut self, action: Pending) {
+        match action {
+            Pending::New => self.set_project(empty_project(), None),
+            Pending::Open => self.open_dialog(),
+            Pending::Example => self.set_project(example::house(), None),
+            Pending::Quit => {
+                self.allow_close = true;
+                self.quit = true;
             }
         }
     }
 
-    fn focus_tab(&mut self, tab: Tab) {
-        if tab == Tab::Quick && !self.is_open(tab) {
-            // El cálculo rápido no es parte del proyecto: abre en su propia
-            // ventana flotante, que se puede acoplar arrastrando la pestaña.
-            let surface = self.dock.add_window(vec![tab]);
-            if let Some(window) = self.dock.get_window_state_mut(surface) {
-                window
-                    .set_position(egui::pos2(180.0, 70.0))
-                    .set_size(egui::vec2(1120.0, 720.0));
+    /// Casillas para abrir y cerrar cada panel, con su tecla.
+    fn panel_checkboxes(&mut self, ui: &mut egui::Ui) {
+        for tab in Tab::ALL {
+            let mut open = workspace::is_open(&self.dock, tab);
+            if ui
+                .add(egui::Checkbox::new(
+                    &mut open,
+                    format!("{}  {}", tab.icon(), tab.title()),
+                ))
+                .on_hover_text(tab.shortcut())
+                .changed()
+            {
+                workspace::toggle(&mut self.dock, tab);
             }
-            return;
-        }
-        if !self.is_open(tab) {
-            self.toggle_tab(tab);
-        }
-        if let Some(path) = self.dock.find_tab(&tab) {
-            let _ = self.dock.set_active_tab(path);
         }
     }
 
@@ -293,11 +302,14 @@ impl App {
 
             ui.menu_button("Archivo", |ui| {
                 if ui
-                    .button(format!("{}  Nuevo proyecto", icon::FILE_PLUS))
+                    .add(
+                        egui::Button::new(format!("{}  Nuevo proyecto", icon::FILE_PLUS))
+                            .shortcut_text("Ctrl+N"),
+                    )
                     .clicked()
                 {
                     ui.close();
-                    self.set_project(empty_project(), None);
+                    self.request(Pending::New);
                 }
                 if ui
                     .add(
@@ -307,7 +319,7 @@ impl App {
                     .clicked()
                 {
                     ui.close();
-                    self.open_dialog();
+                    self.request(Pending::Open);
                 }
                 if ui
                     .add(
@@ -347,7 +359,15 @@ impl App {
                 ui.separator();
                 if ui.button("     Abrir el proyecto de ejemplo").clicked() {
                     ui.close();
-                    self.set_project(example::house(), None);
+                    self.request(Pending::Example);
+                }
+                ui.separator();
+                if ui
+                    .add(egui::Button::new("     Salir").shortcut_text("Alt+F4"))
+                    .clicked()
+                {
+                    ui.close();
+                    self.request(Pending::Quit);
                 }
             });
 
@@ -419,6 +439,16 @@ impl App {
                 if restyle {
                     self.restyle(ui.ctx());
                 }
+                ui.separator();
+                ui.menu_button("Paneles", |ui| self.panel_checkboxes(ui));
+                if ui
+                    .button(format!("Restablecer «{}»", self.workspace.title()))
+                    .on_hover_text("Vuelve a acomodar los paneles como al principio")
+                    .clicked()
+                {
+                    ui.close();
+                    self.dock = self.workspace.layout();
+                }
             });
 
             ui.menu_button("Herramientas", |ui| {
@@ -434,24 +464,12 @@ impl App {
                     .clicked()
                 {
                     ui.close();
-                    self.focus_tab(Tab::Quick);
+                    workspace::open(&mut self.dock, Tab::Quick);
                 }
             });
 
             ui.menu_button("Ventana", |ui| {
-                for tab in Tab::ALL {
-                    let mut open = self.is_open(tab);
-                    if ui
-                        .add(egui::Checkbox::new(
-                            &mut open,
-                            format!("{}  {}", tab.icon(), tab.title()),
-                        ))
-                        .on_hover_text(tab.shortcut())
-                        .changed()
-                    {
-                        self.toggle_tab(tab);
-                    }
-                }
+                self.panel_checkboxes(ui);
                 ui.separator();
                 ui.label(muted(&p, "Espacio de trabajo"));
                 for ws in Workspace::ALL {
@@ -478,6 +496,21 @@ impl App {
 
             // Espacios de trabajo a la derecha, como en las aplicaciones de Adobe.
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                // Tema claro u oscuro a un clic, como en las aplicaciones de Adobe.
+                let (glyph, tip) = if self.dark {
+                    (icon::SUN, "Cambiar a tema claro")
+                } else {
+                    (icon::MOON, "Cambiar a tema oscuro")
+                };
+                if ui
+                    .add(egui::Button::new(RichText::new(glyph).size(15.0)).frame(false))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    self.dark = !self.dark;
+                    self.restyle(ui.ctx());
+                }
+                ui.add_space(10.0);
                 for ws in Workspace::ALL.iter().rev() {
                     let selected = self.workspace == *ws;
                     let text = if selected {
@@ -537,8 +570,17 @@ impl App {
                 ui.label(RichText::new(format!("{} {done}", icon::CHECK)).color(p.ok));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if let Ok(r) = &self.doc.result {
-                    verdict_chips(ui, &p, &r.verdict);
+                match &self.doc.result {
+                    Ok(r) => verdict_chips(ui, &p, &r.verdict),
+                    Err(e) => {
+                        ui.label(
+                            RichText::new(format!(
+                                "{} No se pudo calcular: {e}",
+                                icon::WARNING_CIRCLE
+                            ))
+                            .color(p.bad),
+                        );
+                    }
                 }
             });
         });
@@ -555,7 +597,10 @@ impl App {
             self.save(false);
         }
         if pressed(Modifiers::COMMAND, Key::O) {
-            self.open_dialog();
+            self.request(Pending::Open);
+        }
+        if pressed(Modifiers::COMMAND, Key::N) {
+            self.request(Pending::New);
         }
         if pressed(Modifiers::COMMAND, Key::E) {
             self.export_pdf(false);
@@ -582,7 +627,7 @@ impl App {
         ];
         for (key, tab) in keys.into_iter().zip(Tab::ALL) {
             if pressed(Modifiers::NONE, key) {
-                self.toggle_tab(tab);
+                workspace::toggle(&mut self.dock, tab);
             }
         }
     }
@@ -643,6 +688,72 @@ impl App {
             });
     }
 
+    /// Pregunta qué hacer con los cambios sin guardar antes de seguir.
+    fn confirm_window(&mut self, ctx: &egui::Context) {
+        let Some(action) = self.pending else {
+            return;
+        };
+        let p = self.shared.palette;
+        #[derive(PartialEq)]
+        enum Choice {
+            Save,
+            Discard,
+            Cancel,
+        }
+        let mut choice = None;
+        let continue_label = match action {
+            Pending::Quit => "Salir sin guardar",
+            _ => "No guardar",
+        };
+        let modal = egui::Modal::new(egui::Id::new("cambios-sin-guardar")).show(ctx, |ui| {
+            ui.set_width(400.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::WARNING).size(20.0).color(p.warn));
+                ui.label(strong("¿Guardar los cambios?").size(15.0));
+            });
+            ui.add_space(4.0);
+            ui.label(format!(
+                "«{}» tiene cambios sin guardar. Si continúas sin guardar, se pierden.",
+                self.doc.project.name
+            ));
+            ui.add_space(10.0);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let save = egui::Button::new(
+                    RichText::new(format!("{}  Guardar", icon::FLOPPY_DISK)).color(p.on_accent),
+                )
+                .fill(p.accent);
+                if ui.add(save).clicked() {
+                    choice = Some(Choice::Save);
+                }
+                if ui.button(continue_label).clicked() {
+                    choice = Some(Choice::Discard);
+                }
+                if ui.button("Cancelar").clicked() {
+                    choice = Some(Choice::Cancel);
+                }
+            });
+        });
+        if modal.should_close() && choice.is_none() {
+            choice = Some(Choice::Cancel);
+        }
+        match choice {
+            Some(Choice::Save) => {
+                self.pending = None;
+                self.save(false);
+                // Si el usuario canceló el cuadro de guardar, no se pierde nada.
+                if !self.doc.dirty {
+                    self.perform(action);
+                }
+            }
+            Some(Choice::Discard) => {
+                self.pending = None;
+                self.perform(action);
+            }
+            Some(Choice::Cancel) => self.pending = None,
+            None => {}
+        }
+    }
+
     /// Guarda una imagen de la ventana y cierra, si se pidió con `--captura`.
     fn handle_capture(&mut self, ctx: &egui::Context) {
         let Some(capture) = &mut self.capture else {
@@ -678,7 +789,19 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let p = self.shared.palette;
-        self.shortcuts(ui.ctx());
+        let ctx = ui.ctx().clone();
+        // Cerrar la ventana con cambios sin guardar pregunta antes.
+        if ctx.input(|i| i.viewport().close_requested())
+            && !self.allow_close
+            && self.capture.is_none()
+            && self.doc.dirty
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.pending = Some(Pending::Quit);
+        }
+        if self.pending.is_none() {
+            self.shortcuts(&ctx);
+        }
 
         egui::Panel::top("menu")
             .frame(
@@ -702,16 +825,28 @@ impl eframe::App for App {
             shared: &mut self.shared,
             export_report: false,
         };
+        let empty = workspace::main_is_empty(&self.dock);
+        let mut restore = None;
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(p.bg))
             .show(ui, |ui| {
+                let rect = ui.max_rect();
                 DockArea::new(&mut self.dock)
                     .style(style)
                     .show_add_buttons(false)
                     .show_leaf_collapse_buttons(false)
                     .show_leaf_close_all_buttons(false)
                     .show_inside(ui, &mut viewer);
+                if empty {
+                    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+                    restore = no_panels(&mut child, &p, self.workspace);
+                }
             });
+        match restore {
+            Some(Restore::Workspace) => self.dock = self.workspace.layout(),
+            Some(Restore::Panel(tab)) => workspace::open(&mut self.dock, tab),
+            None => {}
+        }
         let export = viewer.export_report;
         if self.doc.revision != revision {
             self.done = None;
@@ -719,8 +854,13 @@ impl eframe::App for App {
         if export {
             self.export_pdf(false);
         }
-        self.about_window(ui.ctx());
-        self.handle_capture(ui.ctx());
+        self.about_window(&ctx);
+        self.confirm_window(&ctx);
+        if self.quit {
+            self.quit = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        self.handle_capture(&ctx);
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -736,4 +876,64 @@ impl eframe::App for App {
             storage.set_string(STORAGE_KEY, text);
         }
     }
+}
+
+/// Qué volver a abrir desde la pantalla sin paneles.
+enum Restore {
+    Workspace,
+    Panel(Tab),
+}
+
+/// Pantalla para cuando el usuario cerró todos los paneles: explica cómo
+/// volver y ofrece hacerlo con un clic.
+fn no_panels(ui: &mut egui::Ui, p: &Palette, ws: Workspace) -> Option<Restore> {
+    let mut chosen = None;
+    ui.with_layout(Layout::top_down(Align::Center), |ui| {
+        ui.add_space(ui.available_height() * 0.28);
+        ui.label(RichText::new(icon::SQUARES_FOUR).size(34.0).color(p.ink3));
+        ui.add_space(4.0);
+        ui.label(strong("No hay paneles abiertos").size(16.0));
+        ui.label(muted(
+            p,
+            "Los paneles se abren desde el menú Ventana o con las teclas F2 a F8.",
+        ));
+        ui.add_space(12.0);
+        let button = egui::Button::new(
+            RichText::new(format!(
+                "{}  Restablecer el espacio «{}»",
+                icon::ARROW_COUNTER_CLOCKWISE,
+                ws.title()
+            ))
+            .color(p.on_accent),
+        )
+        .fill(p.accent);
+        if ui.add(button).clicked() {
+            chosen = Some(Restore::Workspace);
+        }
+        ui.add_space(10.0);
+        ui.label(muted(p, "o abre solo un panel:"));
+        ui.add_space(2.0);
+        // Centra la fila de botones midiendo primero su ancho.
+        let id = ui.id().with("ancho-botones");
+        let width: f32 = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(600.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, 26.0),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                let start = ui.cursor().left();
+                for tab in Tab::ALL {
+                    if ui
+                        .button(format!("{} {}", tab.icon(), tab.title()))
+                        .on_hover_text(tab.shortcut())
+                        .clicked()
+                    {
+                        chosen = Some(Restore::Panel(tab));
+                    }
+                }
+                let used = ui.cursor().left() - start;
+                ui.ctx().data_mut(|d| d.insert_temp(id, used));
+            },
+        );
+    });
+    chosen
 }

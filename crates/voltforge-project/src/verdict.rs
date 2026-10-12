@@ -73,7 +73,7 @@ impl Verdict {
             professionally_approved: false,
             uncalculated,
             failed_checks: failed,
-            pending_checks: pending + uncalculated,
+            pending_checks: pending,
         }
     }
 
@@ -91,8 +91,8 @@ impl Verdict {
             Calculation::Incomplete => (
                 Status::NotEvaluated,
                 format!(
-                    "Incompleto: {} tramo(s) sin calcular por falta de datos o de tablas.",
-                    self.uncalculated
+                    "Incompleto: {} sin calcular por falta de datos o de tablas.",
+                    count(self.uncalculated, "tramo", "tramos")
                 ),
             ),
         };
@@ -104,17 +104,41 @@ impl Verdict {
             Compliance::DoesNotConform => (
                 Status::Fails,
                 format!(
-                    "No conforme: {} verificación(es) no cumplen.",
-                    self.failed_checks
+                    "No conforme: {} no {}.",
+                    count(self.failed_checks, "verificación", "verificaciones"),
+                    if self.failed_checks == 1 {
+                        "cumple"
+                    } else {
+                        "cumplen"
+                    }
                 ),
             ),
-            Compliance::Pending => (
+            Compliance::Pending if self.pending_checks == 0 && self.uncalculated == 0 => (
                 Status::NotEvaluated,
-                format!(
-                    "Pendiente: {} verificación(es) sin evaluar; no se puede declarar conforme.",
-                    self.pending_checks
-                ),
+                "Pendiente: no hay nada calculado que verificar.".to_string(),
             ),
+            Compliance::Pending => {
+                let mut parts = Vec::new();
+                if self.uncalculated > 0 {
+                    parts.push(format!(
+                        "{} sin calcular",
+                        count(self.uncalculated, "tramo", "tramos")
+                    ));
+                }
+                if self.pending_checks > 0 {
+                    parts.push(format!(
+                        "{} sin evaluar",
+                        count(self.pending_checks, "verificación", "verificaciones")
+                    ));
+                }
+                (
+                    Status::NotEvaluated,
+                    format!(
+                        "Pendiente: {}; no se puede declarar conforme.",
+                        parts.join(" y ")
+                    ),
+                )
+            }
         };
         [
             ("Cálculo matemático", calculation.0, calculation.1),
@@ -127,4 +151,9 @@ impl Verdict {
             ),
         ]
     }
+}
+
+/// `1 tramo`, `3 tramos`.
+fn count(n: usize, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
 }

@@ -42,6 +42,9 @@ pub struct Palette {
     pub accent: Color32,
     /// Acento legible como texto sobre el fondo del tema.
     pub accent_text: Color32,
+    /// Texto sobre un botón relleno de acento. Los tres acentos son claros,
+    /// así que va oscuro en los dos temas.
+    pub on_accent: Color32,
 }
 
 impl Palette {
@@ -63,6 +66,7 @@ impl Palette {
                 warn: rgb(0xec, 0x96, 0x3e),
                 accent,
                 accent_text: accent,
+                on_accent: rgb(0x13, 0x15, 0x18),
             }
         } else {
             Palette {
@@ -80,6 +84,7 @@ impl Palette {
                 warn: rgb(0xb4, 0x53, 0x09),
                 accent,
                 accent_text: darken(accent),
+                on_accent: rgb(0x13, 0x15, 0x18),
             }
         }
     }

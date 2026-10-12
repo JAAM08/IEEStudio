@@ -252,4 +252,143 @@ impl Doc {
             Selection::Circuit(p, next as usize - 1)
         };
     }
+
+    /// Motivo por el que no se pudo calcular el proyecto, como oración.
+    pub fn calc_error(&self) -> Option<String> {
+        let e = self.result.as_ref().err()?;
+        let mut chars = e.chars();
+        Some(match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => "No se pudo calcular el proyecto.".to_string(),
+        })
+    }
+
+    /// Después de cambiar el ID de un tablero, sus subtableros lo siguen.
+    /// No se propaga si el ID anterior estaba repetido: no se sabría de cuál
+    /// de los dos colgaban.
+    pub fn panel_renamed(&mut self, index: usize, old: &str) {
+        let new = self.project.panels[index].id.clone();
+        let others_with_old = self
+            .project
+            .panels
+            .iter()
+            .enumerate()
+            .any(|(k, p)| k != index && p.id == old);
+        if new == old || others_with_old {
+            return;
+        }
+        for panel in &mut self.project.panels {
+            if panel.parent.as_deref() == Some(old) {
+                panel.parent = Some(new.clone());
+            }
+        }
+    }
+
+    /// Tableros de los que puede alimentarse el tablero `index`: todos menos
+    /// él mismo y los que cuelgan de él, para que no se formen ciclos.
+    pub fn feeder_candidates(&self, index: usize) -> Vec<(String, String)> {
+        let panels = &self.project.panels;
+        let mut excluded = vec![panels[index].id.clone()];
+        // Recorre hacia abajo hasta que no aparezcan descendientes nuevos.
+        loop {
+            let before = excluded.len();
+            for p in panels {
+                if let Some(parent) = &p.parent {
+                    if excluded.contains(parent) && !excluded.contains(&p.id) {
+                        excluded.push(p.id.clone());
+                    }
+                }
+            }
+            if excluded.len() == before {
+                break;
+            }
+        }
+        panels
+            .iter()
+            .filter(|p| !excluded.contains(&p.id))
+            .map(|p| (p.id.clone(), p.name.clone()))
+            .collect()
+    }
+
+    /// Aviso si el ID del tablero `index` está vacío o repetido.
+    pub fn panel_id_problem(&self, index: usize) -> Option<&'static str> {
+        let id = self.project.panels[index].id.trim();
+        if id.is_empty() {
+            return Some("El tablero necesita un ID.");
+        }
+        let repeated = self
+            .project
+            .panels
+            .iter()
+            .enumerate()
+            .any(|(k, p)| k != index && p.id.trim() == id);
+        repeated.then_some("Ya hay otro tablero con este ID.")
+    }
+
+    /// Aviso si el ID del circuito está vacío o repetido en su tablero.
+    pub fn circuit_id_problem(&self, panel: usize, index: usize) -> Option<&'static str> {
+        let circuits = &self.project.panels[panel].circuits;
+        let id = circuits[index].id.trim();
+        if id.is_empty() {
+            return Some("El circuito necesita un ID.");
+        }
+        let repeated = circuits
+            .iter()
+            .enumerate()
+            .any(|(k, c)| k != index && c.id.trim() == id);
+        repeated.then_some("Ya hay otro circuito con este ID en el tablero.")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn three_levels() -> Doc {
+        // TG ← T-1 ← T-2
+        let mut doc = Doc::new(empty_project(), None);
+        doc.selection = Selection::Feeder(0);
+        doc.add_panel();
+        doc.add_panel();
+        doc
+    }
+
+    #[test]
+    fn subpanels_follow_a_renamed_panel() {
+        let mut doc = three_levels();
+        let old = doc.project.panels[1].id.clone();
+        doc.project.panels[1].id = "TS-A".to_string();
+        doc.panel_renamed(1, &old);
+        assert_eq!(doc.project.panels[2].parent.as_deref(), Some("TS-A"));
+        doc.recalculate();
+        assert!(doc.result.is_ok(), "{:?}", doc.result.err());
+    }
+
+    #[test]
+    fn a_panel_cannot_be_fed_from_itself_or_below() {
+        let doc = three_levels();
+        let ids = |i: usize| -> Vec<String> {
+            doc.feeder_candidates(i)
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect()
+        };
+        let top = doc.project.panels[0].id.clone();
+        assert!(
+            ids(0).is_empty(),
+            "el principal no puede colgar de sus subtableros"
+        );
+        assert_eq!(ids(1), vec![top.clone()]);
+        assert_eq!(ids(2), vec![top, doc.project.panels[1].id.clone()]);
+    }
+
+    #[test]
+    fn repeated_ids_are_reported() {
+        let mut doc = three_levels();
+        assert_eq!(doc.panel_id_problem(1), None);
+        doc.project.panels[1].id = doc.project.panels[0].id.clone();
+        assert!(doc.panel_id_problem(1).is_some());
+        doc.project.panels[1].id = "  ".to_string();
+        assert!(doc.panel_id_problem(1).is_some());
+    }
 }
