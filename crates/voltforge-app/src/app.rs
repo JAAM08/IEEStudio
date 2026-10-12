@@ -139,6 +139,8 @@ pub struct App {
     accent: usize,
     palette: Palette,
     notice: Option<String>,
+    /// Aviso de una acción terminada, por ejemplo un PDF guardado.
+    done: Option<String>,
     capture: Option<Capture>,
 }
 
@@ -193,6 +195,7 @@ impl App {
             accent: 0,
             palette,
             notice: None,
+            done: None,
             capture: capture.map(|path| Capture { path, frames: 0 }),
         };
         if let Some(path) = open {
@@ -249,6 +252,41 @@ impl App {
         };
         if let Some(path) = target {
             self.save_to(path);
+        }
+    }
+
+    /// Escribe la memoria del proyecto o la hoja del cálculo rápido en PDF.
+    fn export_pdf(&mut self) {
+        let (pdf, name) = match self.view {
+            View::Project => (
+                self.result
+                    .as_ref()
+                    .map_err(Clone::clone)
+                    .and_then(|r| voltforge_report::project_pdf(&self.project, r)),
+                "memoria-de-calculo.pdf",
+            ),
+            View::Quick => (self.quick.pdf(), "hoja-de-calculo.pdf"),
+        };
+        let pdf = match pdf {
+            Ok(pdf) => pdf,
+            Err(e) => {
+                self.notice = Some(format!("No se pudo generar el PDF: {e}"));
+                return;
+            }
+        };
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("PDF", &["pdf"])
+            .set_file_name(name)
+            .save_file()
+        else {
+            return;
+        };
+        match std::fs::write(&path, pdf) {
+            Ok(()) => {
+                self.notice = None;
+                self.done = Some(format!("PDF guardado en {}", path.display()));
+            }
+            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
         }
     }
 
@@ -332,6 +370,15 @@ impl App {
                     self.save(true);
                 }
                 ui.separator();
+                let export = match self.view {
+                    View::Project => "Exportar memoria en PDF…",
+                    View::Quick => "Exportar hoja en PDF…",
+                };
+                if ui.button(export).clicked() {
+                    ui.close();
+                    self.export_pdf();
+                }
+                ui.separator();
                 if ui.button("Cargar el ejemplo").clicked() {
                     self.view = View::Project;
                     self.set_project(example::house(), None);
@@ -379,6 +426,12 @@ impl App {
         if self.view == View::Quick {
             ui.horizontal(|ui| {
                 ui.label(self.muted(self.quick.summary()));
+                if let Some(notice) = &self.notice {
+                    ui.label(RichText::new(notice).color(self.palette.bad));
+                }
+                if let Some(done) = &self.done {
+                    ui.label(RichText::new(done).color(self.palette.ok));
+                }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.label(self.muted("Sin aprobación profesional"));
                 });
@@ -405,6 +458,9 @@ impl App {
             }
             if let Some(notice) = &self.notice {
                 ui.label(RichText::new(notice).color(self.palette.bad));
+            }
+            if let Some(done) = &self.done {
+                ui.label(RichText::new(done).color(self.palette.ok));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.label(self.muted(if self.dirty {
@@ -1010,6 +1066,7 @@ impl eframe::App for App {
             });
 
         if changed {
+            self.done = None;
             self.dirty = true;
             self.recalculate();
         }

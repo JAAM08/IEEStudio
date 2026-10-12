@@ -65,6 +65,12 @@ fn card(p: &Palette) -> egui::Frame {
 }
 
 impl QuickView {
+    /// Hoja del cálculo en PDF.
+    pub fn pdf(&self) -> Result<Vec<u8>, String> {
+        let result = self.result.as_ref().map_err(Clone::clone)?;
+        voltforge_report::quick_pdf(&self.input, result)
+    }
+
     /// Texto de la barra inferior.
     pub fn summary(&self) -> String {
         let adjust = match self.input.resistance_temperature_c {

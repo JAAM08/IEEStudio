@@ -50,7 +50,7 @@ fn reference_feeder_fails_and_gets_alternatives() {
     close(p.allowable_ampacity_a, 200.0, 0.001);
     assert_eq!(p.status, Status::Complies);
     assert_eq!(p.grounding_size, Some(Size::new("6")));
-    // Tubería: 3 × 3/0 THW de 201.1 mm² + 6 AWG desnudo de 13.3 mm² = 616.6 mm²;
+    // Tubería: 3 × 3/0 THW de 201.10 mm² + 6 AWG desnudo de 17.09 mm² = 620.39 mm²;
     // al 40 %, el EMT de 53 mm admite 866 mm² y el de 41 mm solo 526 mm².
     assert_eq!(p.conduit.as_deref(), Some("EMT de 53 mm (2\")"));
 }

@@ -16,4 +16,4 @@ pub use model::{
     Circuit, Feeder, Load, LoadKind, Overrides, Panel, Phase, Project, Settings, Source,
     FORMAT_VERSION,
 };
-pub use procedure::{size_label, Step};
+pub use procedure::{insulation_name, material_name, size_label, Step};

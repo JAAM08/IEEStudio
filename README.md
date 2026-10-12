@@ -27,6 +27,7 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
 | Interfaz gráfica | Pantalla principal: árbol del proyecto, criterios, cuadro de cargas y detalle editable del elemento seleccionado; recalcula con cada cambio. Tema oscuro o claro y color de acento a elegir |
 | Procedimiento | Cada circuito y alimentador del proyecto muestra su procedimiento paso a paso: fórmula, valores sustituidos y la tabla o artículo de la norma |
+| Memoria de cálculo | PDF con datos y criterios, cuadro de cargas, observaciones, el procedimiento de cada tramo y espacio para firmas; también la hoja de un cálculo rápido. Desde el menú Archivo o con `voltforge memoria` |
 | Cálculo rápido | Un solo circuito, sin proyecto: corriente nominal y de diseño, interruptor, verificación del conductor, puesta a tierra, tubería y caída de tensión; fórmula y procedimiento con los valores sustituidos, comprobación exacta y, si no cumple, alternativas ya calculadas (calibre mayor, conductores en paralelo, longitud máxima) que se aplican con un clic |
 
 ![Pantalla principal de VoltForge](docs/pantalla-principal.png)
@@ -37,17 +38,18 @@ Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. Los
 motores y equipos de aire acondicionado se calculan como carga general y
 quedan sin evaluar, porque sus reglas propias aún no están implementadas.
 
-Lo siguiente en el plan: memoria de cálculo en PDF y diagrama unifilar.
+Lo siguiente en el plan: diagrama unifilar e instalador de Windows.
 
 ## Probarlo
 
 Requiere [Rust](https://rustup.rs) 1.95 o posterior (1.80 basta para el
-motor y la línea de comandos).
+motor de cálculo).
 
 ```
 cargo test                                     # ejecuta los casos de referencia
 cargo run -p voltforge-cli -- ejemplo casa.json   # escribe un proyecto de ejemplo
 cargo run -p voltforge-cli -- calcular casa.json  # muestra su cuadro de cargas
+cargo run -p voltforge-cli -- memoria casa.json   # escribe casa.pdf, la memoria de cálculo
 cargo run -p voltforge-app -- casa.json           # abre la interfaz gráfica
 ```
 
@@ -61,7 +63,9 @@ ejecución más reciente, en la sección *Artifacts*.
 crates/voltforge-core/     motor de cálculo, sin dependencias obligatorias
 crates/voltforge-project/  modelo del proyecto y cuadro de cargas
 crates/voltforge-cli/      línea de comandos
+crates/voltforge-report/   memoria de cálculo en PDF (Typst)
 crates/voltforge-app/      interfaz gráfica de escritorio (egui)
+assets/fonts/              tipografía IBM Plex de la interfaz y de la memoria
 data/nom-001-sede-2012/    tablas de la norma en CSV, revisables en una hoja de cálculo
 tools/                     extracción y validación de las tablas desde el texto de la norma
 ```

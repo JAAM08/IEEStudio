@@ -1,0 +1,31 @@
+//! La memoria se compone sin errores y contiene lo calculado.
+
+use voltforge_core::Profile;
+use voltforge_project::quick::{quick_circuit, QuickInput};
+use voltforge_project::{calculate, example};
+use voltforge_report::{project_pdf, project_source, quick_pdf};
+
+#[test]
+fn project_report_renders() {
+    let project = example::house();
+    let result = calculate(&project).unwrap();
+    let source = project_source(&project, &result);
+    // El procedimiento de C-02 viaja tal cual a la memoria.
+    assert!(source.contains("I = 1,800 / (127 · 0.90) = 15.75 A"));
+    let pdf = project_pdf(&project, &result).unwrap();
+    assert!(pdf.starts_with(b"%PDF"));
+    if let Ok(path) = std::env::var("VOLTFORGE_PDF_OUT") {
+        std::fs::write(format!("{path}/memoria.pdf"), &pdf).unwrap();
+    }
+}
+
+#[test]
+fn quick_sheet_renders() {
+    let input = QuickInput::default();
+    let result = quick_circuit(Profile::nom_001_sede_2012(), &input).unwrap();
+    let pdf = quick_pdf(&input, &result).unwrap();
+    assert!(pdf.starts_with(b"%PDF"));
+    if let Ok(path) = std::env::var("VOLTFORGE_PDF_OUT") {
+        std::fs::write(format!("{path}/hoja.pdf"), &pdf).unwrap();
+    }
+}

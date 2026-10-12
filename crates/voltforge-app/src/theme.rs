@@ -81,15 +81,15 @@ pub fn install_fonts(ctx: &egui::Context) {
     };
     add(
         "plex-sans",
-        include_bytes!("../assets/IBMPlexSans-Regular.ttf"),
+        include_bytes!("../../../assets/fonts/IBMPlexSans-Regular.ttf"),
     );
     add(
         "plex-sans-semibold",
-        include_bytes!("../assets/IBMPlexSans-SemiBold.ttf"),
+        include_bytes!("../../../assets/fonts/IBMPlexSans-SemiBold.ttf"),
     );
     add(
         "plex-mono",
-        include_bytes!("../assets/IBMPlexMono-Regular.ttf"),
+        include_bytes!("../../../assets/fonts/IBMPlexMono-Regular.ttf"),
     );
 
     let fallback = fonts

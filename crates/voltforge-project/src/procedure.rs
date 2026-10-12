@@ -31,14 +31,14 @@ pub fn size_label(size: &Size) -> String {
     }
 }
 
-pub(crate) fn material_name(material: Material) -> &'static str {
+pub fn material_name(material: Material) -> &'static str {
     match material {
         Material::Copper => "cobre",
         Material::Aluminum => "aluminio",
     }
 }
 
-pub(crate) fn insulation_name(insulation: Insulation) -> &'static str {
+pub fn insulation_name(insulation: Insulation) -> &'static str {
     use Insulation::*;
     match insulation {
         Tw => "TW",

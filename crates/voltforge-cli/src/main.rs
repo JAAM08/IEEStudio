@@ -11,6 +11,8 @@ Uso:
   voltforge ejemplo [archivo.json]     escribe un proyecto de ejemplo
   voltforge calcular <archivo.json>    calcula un proyecto y muestra el cuadro de cargas
   voltforge calcular <archivo> --json  entrega el resultado completo en JSON
+  voltforge memoria <archivo.json> [salida.pdf]
+                                       escribe la memoria de cálculo en PDF
   voltforge ayuda                      muestra esta ayuda
 ";
 
@@ -20,6 +22,10 @@ fn main() -> ExitCode {
         Some("ejemplo") => write_example(args.get(1).map(String::as_str)),
         Some("calcular") => match args.get(1) {
             Some(path) => compute(path, args.iter().any(|a| a == "--json")),
+            None => Err("falta el archivo del proyecto".to_string()),
+        },
+        Some("memoria") => match args.get(1) {
+            Some(path) => report(path, args.get(2).map(String::as_str)),
             None => Err("falta el archivo del proyecto".to_string()),
         },
         Some("ayuda" | "--help" | "-h") | None => {
@@ -59,6 +65,21 @@ fn compute(path: &str, as_json: bool) -> Result<(), String> {
     } else {
         print_report(&result);
     }
+    Ok(())
+}
+
+fn report(path: &str, output: Option<&str>) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
+    let project = Project::from_json(&text)?;
+    let result = calculate(&project)?;
+    let pdf = voltforge_report::project_pdf(&project, &result)?;
+    let output = match output {
+        Some(output) => std::path::PathBuf::from(output),
+        None => std::path::Path::new(path).with_extension("pdf"),
+    };
+    std::fs::write(&output, pdf)
+        .map_err(|e| format!("no se pudo escribir {}: {e}", output.display()))?;
+    println!("Memoria de cálculo escrita en {}", output.display());
     Ok(())
 }
 

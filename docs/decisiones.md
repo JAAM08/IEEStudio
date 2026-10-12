@@ -74,17 +74,19 @@ Hecho:
   con recomendaciones. Supone lugar seco, carga lineal, tierra desnuda y todos
   los conductores en la misma tubería. Una alternativa solo se propone si cumple
   ampacidad, protección y caída.
+- Memoria de cálculo en PDF (`voltforge-report`): el documento se escribe como
+  texto Typst desde el resultado ya calculado y Typst lo compone, embebido en
+  el programa; no calcula nada. Tamaño carta. Comando `memoria` y menú Archivo.
 - Integración continua en Windows y Linux, que publica los ejecutables.
 
 Pendiente, en orden:
 
-1. Memoria de cálculo en PDF (Typst), a partir de `Run.steps`.
-2. Agregar y quitar tableros desde la interfaz, guardar el tema elegido, pasar
+1. Agregar y quitar tableros desde la interfaz, guardar el tema elegido, pasar
    un cálculo rápido a un proyecto y alternativas (paralelo, longitud máxima)
    también dentro del proyecto.
-3. Diagrama unifilar automático para instalaciones radiales.
-4. Instalador de Windows.
-5. Servidor MCP para agentes.
+2. Diagrama unifilar automático para instalaciones radiales.
+3. Instalador de Windows.
+4. Servidor MCP para agentes.
 
 Fuera del alcance de la versión 0.1: reglas de motores y de climatización,
 cortocircuito y capacidad interruptiva, coordinación, transformador y media
