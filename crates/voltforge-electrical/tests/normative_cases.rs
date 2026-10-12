@@ -1,4 +1,6 @@
-//! Selección de conductor, interruptor y puesta a tierra.
+//! Pruebas normativas: que la selección de conductor, interruptor y puesta
+//! a tierra, y las advertencias, correspondan a las reglas del perfil
+//! NOM-001-SEDE-2012.
 //!
 //! Los resultados esperados se calcularon a mano con las tablas
 //! 310-15(b)(16), 310-15(b)(2)(a), 310-15(b)(3)(a) y 250-122.

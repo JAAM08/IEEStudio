@@ -1,14 +1,15 @@
-//! Casos de referencia con resultado conocido.
+//! Pruebas de referencia: resultados conocidos calculados fuera del programa.
 //!
 //! Los casos marcados «hoja de referencia» reproducen los ejemplos de las
 //! hojas de cálculo del Ing. Juan Carlos Vega Mendoza. Los demás se
-//! calcularon a mano con las fórmulas y tablas de la norma.
+//! calcularon a mano con las fórmulas y tablas de la norma. Los casos en
+//! `fixtures/engineering-cases/` se ejecutan en `engineering_cases.rs`.
 
 use voltforge_core::{
     CircuitKind, ConduitType, Error, InsulationGroup, Material, RacewayMaterial, Size, System,
 };
 use voltforge_electrical::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
-use voltforge_electrical::current::{design_current, nominal_current};
+use voltforge_electrical::current::nominal_current;
 use voltforge_electrical::voltage_drop::{max_length_m, voltage_drop, VoltageDropInput};
 use voltforge_rules::Profile;
 
@@ -67,13 +68,6 @@ fn nominal_current_by_circuit_kind() {
         nominal_current(61_700.0, 0.9, CircuitKind::ThreePhase, &System::WYE_220_127).unwrap(),
         179.91,
     );
-}
-
-#[test]
-fn design_current_only_raises_the_continuous_part() {
-    close(design_current(nom(), 10.0, 0.0), 12.5);
-    close(design_current(nom(), 0.0, 10.0), 10.0);
-    close(design_current(nom(), 8.0, 6.0), 16.0);
 }
 
 #[test]
@@ -168,62 +162,6 @@ fn three_phase_feeder_and_its_alternatives() {
     // Longitud máxima del 3/0 para 3 %.
     let max = max_length_m(nom(), &feeder("3/0", 1), 3.0).unwrap();
     assert!((max - 68.8).abs() < 0.1, "longitud máxima {max}");
-}
-
-#[test]
-fn exact_formula_agrees_with_the_table_9_formula() {
-    for input in [reference_branch(), feeder("3/0", 1), feeder("1/0", 2)] {
-        let r = voltage_drop(nom(), &input).unwrap();
-        assert!(
-            (r.exact_drop_v - r.drop_v).abs() < 0.02,
-            "exacta {} contra aproximada {}",
-            r.exact_drop_v,
-            r.drop_v
-        );
-    }
-}
-
-#[test]
-fn voltage_drop_scales_with_length_and_parallel_conductors() {
-    let base = voltage_drop(nom(), &feeder("3/0", 1)).unwrap().drop_v;
-    let double = VoltageDropInput {
-        length_m: 190.0,
-        ..feeder("3/0", 1)
-    };
-    close(voltage_drop(nom(), &double).unwrap().drop_v, 2.0 * base);
-    close(
-        voltage_drop(nom(), &feeder("3/0", 2)).unwrap().drop_v,
-        base / 2.0,
-    );
-}
-
-#[test]
-fn missing_table_values_are_reported_not_guessed() {
-    // La Tabla 9 no tiene aluminio menor a 6 AWG ni calibres de 700 kcmil.
-    let al = VoltageDropInput {
-        material: Material::Aluminum,
-        ..reference_branch()
-    };
-    assert!(matches!(
-        voltage_drop(nom(), &al),
-        Err(Error::NotInTable { .. })
-    ));
-    let big = VoltageDropInput {
-        size: Size::new("700"),
-        ..reference_branch()
-    };
-    assert!(matches!(
-        voltage_drop(nom(), &big),
-        Err(Error::NotInTable { .. })
-    ));
-    let unknown = VoltageDropInput {
-        size: Size::new("13"),
-        ..reference_branch()
-    };
-    assert!(matches!(
-        voltage_drop(nom(), &unknown),
-        Err(Error::UnknownSize(_))
-    ));
 }
 
 // -------------------------------------------------------------------- tubería

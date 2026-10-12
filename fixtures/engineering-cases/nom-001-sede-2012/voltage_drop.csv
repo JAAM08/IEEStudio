@@ -1,0 +1,9 @@
+id,description,kind,line_to_line_v,line_to_neutral_v,current_a,power_w,length_m,power_factor,size,material,raceway,conductors_per_phase,conductor_temperature_c,expected_drop_v,expected_drop_percent,tolerance,source,reviewed_by
+VD-01,"Circuito de una fase, hoja de referencia, sin ajuste de resistencia",line_to_neutral,240,120,9.8,,50,0.8,10,copper,steel,1,,3.18,2.65,0.01,"Hoja de caída de tensión de J. C. Vega Mendoza; recalculado a mano",
+VD-02,"El mismo circuito con la resistencia ajustada a 60 °C",line_to_neutral,240,120,9.8,,50,0.8,10,copper,steel,1,60,3.03,2.53,0.01,"Hoja de caída de tensión de J. C. Vega Mendoza",
+VD-03,"Alimentador trifásico de 61.7 kW con 3/0 AWG",three_phase,220,127,,61700,95,0.9,3/0,copper,steel,1,,9.11,4.14,0.01,"Cálculo a mano",
+VD-04,"El mismo alimentador con 4/0 AWG",three_phase,220,127,,61700,95,0.9,4/0,copper,steel,1,,,3.49,0.01,"Cálculo a mano",
+VD-05,"El mismo alimentador con 250 kcmil",three_phase,220,127,,61700,95,0.9,250,copper,steel,1,,,3.15,0.01,"Cálculo a mano",
+VD-06,"El mismo alimentador con 300 kcmil",three_phase,220,127,,61700,95,0.9,300,copper,steel,1,,6.10,2.77,0.01,"Cálculo a mano",
+VD-07,"El mismo alimentador con dos 1/0 AWG por fase",three_phase,220,127,,61700,95,0.9,1/0,copper,steel,2,,6.36,2.89,0.01,"Cálculo a mano",
+VD-08,"Circuito de una fase de 15 A a 127 V con 12 AWG y fp 1",line_to_neutral,220,127,15,,20,1,12,copper,steel,1,,3.96,3.12,0.01,"Cálculo a mano",

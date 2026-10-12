@@ -1,0 +1,10 @@
+id,description,continuous_a,noncontinuous_a,material,insulation,ambient_c,current_carrying,conductors_per_phase,nipple,expected_design_a,expected_breaker_a,expected_size,expected_allowable_a,expected_grounding,source,reviewed_by
+CS-01,"Alumbrado continuo de 10.5 A",10.5,0,copper,THW,30,2,1,no,13.125,15,14,15,14,"Cálculo a mano",
+CS-02,"Contactos de 15.75 A, carga no continua",0,15.75,copper,THW,30,2,1,no,15.75,20,12,20,12,"Cálculo a mano",
+CS-03,"Alimentador trifásico de 179.91 A",0,179.91,copper,THW,30,3,1,no,179.91,200,3/0,200,6,"Cálculo a mano",
+CS-04,"40 A continuos en THHN a 38 °C con 6 portadores",40,0,copper,THHN,38,6,1,no,50,50,6,54.6,10,"Cálculo a mano",
+CS-05,"30 A con 12 portadores: gobierna el agrupamiento",0,30,copper,THW,30,12,1,no,30,30,6,32.5,10,"Cálculo a mano",
+CS-06,"Los mismos 30 A en un niple: sin factor de agrupamiento",0,30,copper,THW,30,12,1,yes,30,30,10,30,10,"Cálculo a mano",
+CS-07,"52 A: el interruptor inmediato superior protege al 6 AWG",0,52,copper,THW,30,2,1,no,52,60,6,55,10,"Cálculo a mano",
+CS-08,"400 A con dos conductores por fase. La Tabla 250-122 de la NOM da 2 AWG para 400 A (el NEC 2011 da 3 AWG)",0,400,copper,THW,30,3,2,no,400,400,3/0,400,2,"Cálculo a mano; tierra verificada contra el texto de la NOM",
+CS-09,"100 A en aluminio XHHW-2",0,100,aluminum,XHHW-2,30,2,1,no,100,100,1/0,100,8,"Cálculo a mano",

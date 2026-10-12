@@ -1,0 +1,7 @@
+id,description,conductors,conduit,nipple,expected_area_mm2,expected_fill_percent_allowed,expected_designator_mm,source,reviewed_by
+CD-01,"Hoja de referencia: cinco conductores",3x12 THW; 1x250 THW; 1x6 desnudo,EMT,no,348.63,40,35,"Hoja de tubería de J. C. Vega Mendoza",
+CD-02,"Un conductor de 500 kcmil al 53 %",1x500 THW,EMT,no,509.7,53,35,"Cálculo a mano",
+CD-03,"Dos conductores de 2 AWG al 31 %",2x2 THW,EMT,no,172.0,31,27,"Cálculo a mano",
+CD-04,"Cuatro conductores de 8 AWG al 40 %",4x8 THW,EMT,no,112.76,40,21,"Cálculo a mano",
+CD-05,"Doce conductores de 10 AWG",12x10 THW,EMT,no,188.16,40,27,"Cálculo a mano",
+CD-06,"Los mismos doce conductores en un niple",12x10 THW,EMT,yes,188.16,60,21,"Cálculo a mano",

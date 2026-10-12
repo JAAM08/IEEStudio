@@ -4,7 +4,7 @@
 //! NOM-001-SEDE-2012. Los valores no están en el código: se leen de los
 //! archivos CSV de `data/<perfil>/`, que se incrustan al compilar.
 
-mod csv;
+pub mod csv;
 pub mod references;
 pub mod tables;
 
