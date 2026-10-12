@@ -36,9 +36,9 @@ fn reference_feeder_fails_and_gets_alternatives() {
     assert_eq!(parallel.apply, Some((Size::new("1/0"), 2)));
     assert_eq!(parallel.value, "2.89 %");
     assert_eq!(r.recommendations.len(), 3);
-    // Nueve pasos: corriente, diseño, interruptor, ampacidad, verificación,
-    // tierra, R y X, caída, porcentaje y comprobación exacta.
-    assert_eq!(r.steps.len(), 10);
+    // Once pasos: corriente, diseño, interruptor, ampacidad, verificación,
+    // tierra, tubería, R y X, caída, porcentaje y comprobación exacta.
+    assert_eq!(r.steps.len(), 11);
 
     // Protección: carga no continua, Id = 179.91 A; 240-6 da 200 A.
     // 3/0 AWG THW a 75 °C: 200 A, factores 1.00 (30 °C, 3 portadores).
@@ -50,6 +50,9 @@ fn reference_feeder_fails_and_gets_alternatives() {
     close(p.allowable_ampacity_a, 200.0, 0.001);
     assert_eq!(p.status, Status::Complies);
     assert_eq!(p.grounding_size, Some(Size::new("6")));
+    // Tubería: 3 × 3/0 THW de 201.1 mm² + 6 AWG desnudo de 13.3 mm² = 616.6 mm²;
+    // al 40 %, el EMT de 53 mm admite 866 mm² y el de 41 mm solo 526 mm².
+    assert_eq!(p.conduit.as_deref(), Some("EMT de 53 mm (2\")"));
 }
 
 /// Circuito de una fase con la corriente capturada: 15 A, 127 V, 20 m, 12 AWG

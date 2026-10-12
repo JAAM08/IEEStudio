@@ -5,18 +5,21 @@
 //! sustituidos y, cuando no cumple, alternativas ya calculadas.
 
 use serde::{Deserialize, Serialize};
-use voltforge_core::current::{design_current, nominal_current, CONTINUOUS_LOAD_FACTOR};
+use voltforge_core::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
+use voltforge_core::current::{design_current, nominal_current};
 use voltforge_core::sizing::{
     check_conductor, equipment_grounding, select_conductor, standard_rating_at_least, Insulation,
     SizingInput, VoltageDropLimit, SMALLEST_PARALLEL_SIZE,
 };
 use voltforge_core::voltage_drop::{
-    max_length_m, temperature_coefficient, voltage_drop, VoltageDropInput, VoltageDropResult,
-    TABLE_9_TEMPERATURE_C,
+    max_length_m, voltage_drop, VoltageDropInput, VoltageDropResult,
 };
-use voltforge_core::{CircuitKind, ConduitType, Material, Profile, RacewayMaterial, Size, System};
+use voltforge_core::{CircuitKind, ConduitType, Material, Profile, Size, System};
 
 use crate::calc::{is_wye, poles};
+use crate::procedure::{
+    conductor_steps, conduit_step, current_step, drop_steps, plain, size_label, ConductorData, Step,
+};
 use crate::Status;
 
 /// Mayor número de conductores por fase que se propone en una recomendación.
@@ -75,17 +78,6 @@ impl Default for QuickInput {
     }
 }
 
-/// Un paso del procedimiento.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct Step {
-    pub title: String,
-    /// Fórmula general, si el paso tiene una.
-    pub formula: Option<String>,
-    /// La fórmula con los valores sustituidos y su resultado.
-    pub substitution: String,
-    pub note: Option<String>,
-}
-
 /// Alternativa ya calculada. Nunca se aplica sola.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Recommendation {
@@ -122,6 +114,8 @@ pub struct Protection {
     pub minimum_size: Option<Size>,
     /// Conductor de puesta a tierra de equipos (250-122).
     pub grounding_size: Option<Size>,
+    /// Tubería para las fases, el neutro y la tierra desnuda.
+    pub conduit: Option<String>,
     pub status: Status,
 }
 
@@ -139,73 +133,6 @@ pub struct QuickResult {
     pub steps: Vec<Step>,
     pub recommendations: Vec<Recommendation>,
     pub warnings: Vec<String>,
-}
-
-/// Nombre de un calibre con su unidad: `3/0 AWG`, `300 kcmil`.
-pub fn size_label(size: &Size) -> String {
-    match size.0.parse::<u32>() {
-        Ok(n) if n >= 250 => format!("{} kcmil", size.0),
-        _ => format!("{} AWG", size.0),
-    }
-}
-
-fn material_name(material: Material) -> &'static str {
-    match material {
-        Material::Copper => "cobre",
-        Material::Aluminum => "aluminio",
-    }
-}
-
-fn insulation_name(insulation: Insulation) -> &'static str {
-    use Insulation::*;
-    match insulation {
-        Tw => "TW",
-        Thw => "THW",
-        Thhw => "THHW",
-        Thw2 => "THW-2",
-        Thhn => "THHN",
-        Thwn => "THWN",
-        Thwn2 => "THWN-2",
-        Xhhw => "XHHW",
-        Xhhw2 => "XHHW-2",
-        Rhh => "RHH",
-        Rhw => "RHW",
-        Rhw2 => "RHW-2",
-    }
-}
-
-fn raceway_name(raceway: RacewayMaterial) -> &'static str {
-    match raceway {
-        RacewayMaterial::Steel => "acero",
-        RacewayMaterial::Pvc => "PVC",
-        RacewayMaterial::Aluminum => "aluminio",
-    }
-}
-
-/// Número con separador de miles y sin decimales sobrantes, para el procedimiento.
-fn plain(value: f64) -> String {
-    let text = format!("{value:.3}");
-    let text = text.trim_end_matches('0').trim_end_matches('.');
-    let (int, frac) = text.split_once('.').unwrap_or((text, ""));
-    let mut grouped = String::new();
-    for (i, c) in int.chars().enumerate() {
-        if i > 0 && (int.len() - i) % 3 == 0 {
-            grouped.push(',');
-        }
-        grouped.push(c);
-    }
-    if frac.is_empty() {
-        grouped
-    } else {
-        format!("{grouped}.{frac}")
-    }
-}
-
-fn factor_text(kind: CircuitKind) -> (&'static str, &'static str) {
-    match kind {
-        CircuitKind::ThreePhase => ("√3", "1.732"),
-        CircuitKind::LineToNeutral | CircuitKind::LineToLine => ("2", "2"),
-    }
 }
 
 fn drop_input(input: &QuickInput, current_a: f64) -> VoltageDropInput {
@@ -269,7 +196,11 @@ fn sizing_input(
     }
 }
 
-fn protection(profile: &Profile, input: &QuickInput, current_a: f64) -> Result<Protection, String> {
+fn protection(
+    profile: &Profile,
+    input: &QuickInput,
+    current_a: f64,
+) -> Result<(Protection, Vec<Step>), String> {
     let n = input.conductors_per_phase;
     let sizing = sizing_input(input, current_a, n, None);
     let design_a = design_current(sizing.continuous_a, sizing.noncontinuous_a);
@@ -290,8 +221,56 @@ fn protection(profile: &Profile, input: &QuickInput, current_a: f64) -> Result<P
     )
     .ok()
     .map(|g| g.size);
+    let norm = profile.id.to_uppercase();
+    let mut steps = conductor_steps(&ConductorData {
+        norm: &norm,
+        continuous_a: sizing.continuous_a,
+        noncontinuous_a: sizing.noncontinuous_a,
+        design_a,
+        breaker_a,
+        poles: poles(input.kind),
+        material: input.material,
+        insulation: input.insulation,
+        ambient_c: input.ambient_c,
+        current_carrying_conductors: sizing.current_carrying_conductors,
+        check: &check,
+        minimum_size: minimum_size.as_ref(),
+        grounding: grounding_size.as_ref().map(|g| (g, input.material)),
+    });
+
+    // Tubería: fases y neutro del calibre elegido, más la tierra desnuda.
+    let has_neutral = input.kind == CircuitKind::LineToNeutral || input.has_neutral;
+    let mut groups = vec![ConductorGroup {
+        count: (poles(input.kind) + u32::from(has_neutral)) * n,
+        size: input.size.clone(),
+        covering: Covering::Insulated(input.insulation.dimension_group()),
+    }];
+    if let Some(ground) = &grounding_size {
+        groups.push(ConductorGroup {
+            count: 1,
+            size: ground.clone(),
+            covering: Covering::Bare,
+        });
+    }
+    let conduit = size_conduit(
+        profile,
+        &ConduitInput {
+            groups,
+            conduit: input.conduit,
+            nipple: false,
+        },
+    )
+    .ok()
+    .map(|c| {
+        steps.push(conduit_step(&c, input.conduit, false));
+        format!(
+            "{} de {} mm ({}\")",
+            input.conduit, c.conduit.metric_designator, c.conduit.trade_size
+        )
+    });
+
     let meets_ampacity = check.meets_ampacity();
-    Ok(Protection {
+    let result = Protection {
         design_a,
         breaker_a,
         poles: poles(input.kind),
@@ -308,12 +287,14 @@ fn protection(profile: &Profile, input: &QuickInput, current_a: f64) -> Result<P
         protected: check.protected,
         minimum_size,
         grounding_size,
+        conduit,
         status: if meets_ampacity && check.protected {
             Status::Complies
         } else {
             Status::Fails
         },
-    })
+    };
+    Ok((result, steps))
 }
 
 /// Calcula un circuito suelto: corriente, protección, conductor y caída de tensión.
@@ -350,20 +331,35 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
         ));
     }
 
-    let protection = protection(profile, input, current_a);
+    let mut steps = vec![current_step(
+        input.kind,
+        (!input.load_in_amperes).then_some(input.power_w),
+        input.power_factor,
+        drop.reference_voltage_v,
+        current_a,
+    )];
+    let protection = match protection(profile, input, current_a) {
+        Ok((p, conductor)) => {
+            steps.extend(conductor);
+            Ok(p)
+        }
+        Err(e) => {
+            steps.push(Step {
+                title: "Protección y conductor".into(),
+                formula: None,
+                substitution: "No evaluado".into(),
+                note: Some(format!("No se pudo calcular: {e}.")),
+            });
+            Err(e)
+        }
+    };
     let conductor_fails = matches!(&protection, Ok(p) if p.status == Status::Fails);
-
-    let mut steps = vec![current_step(input, current_a, drop.reference_voltage_v)];
-    match &protection {
-        Ok(p) => steps.extend(protection_steps(profile, input, current_a, p)),
-        Err(e) => steps.push(Step {
-            title: "Protección y conductor".into(),
-            formula: None,
-            substitution: "No evaluado".into(),
-            note: Some(format!("No se pudo calcular: {e}.")),
-        }),
-    }
-    steps.extend(drop_steps(profile, input, current_a, &drop));
+    steps.extend(drop_steps(
+        &profile.id.to_uppercase(),
+        &base,
+        &drop,
+        input.limit_percent,
+    ));
 
     Ok(QuickResult {
         current_a,
@@ -388,261 +384,6 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
         drop,
         warnings,
     })
-}
-
-fn current_step(input: &QuickInput, current_a: f64, v: f64) -> Step {
-    if input.load_in_amperes {
-        return Step {
-            title: "Corriente del circuito".into(),
-            formula: None,
-            substitution: format!("I = {current_a:.2} A"),
-            note: Some("Corriente capturada directamente.".into()),
-        };
-    }
-    let p = plain(input.power_w);
-    let pf = input.power_factor;
-    let (formula, substitution) = match input.kind {
-        CircuitKind::ThreePhase => (
-            "I = P / (√3 · V · fp)",
-            format!(
-                "I = {p} / (1.732 · {} · {pf:.2}) = {current_a:.2} A",
-                plain(v)
-            ),
-        ),
-        CircuitKind::LineToNeutral | CircuitKind::LineToLine => (
-            "I = P / (V · fp)",
-            format!("I = {p} / ({} · {pf:.2}) = {current_a:.2} A", plain(v)),
-        ),
-    };
-    let voltage = match input.kind {
-        CircuitKind::LineToNeutral => "V es la tensión de fase a neutro.",
-        CircuitKind::LineToLine | CircuitKind::ThreePhase => "V es la tensión entre fases.",
-    };
-    Step {
-        title: "Corriente nominal".into(),
-        formula: Some(formula.into()),
-        substitution,
-        note: Some(voltage.into()),
-    }
-}
-
-fn protection_steps(
-    profile: &Profile,
-    input: &QuickInput,
-    current_a: f64,
-    p: &Protection,
-) -> Vec<Step> {
-    let norm = profile.id.to_uppercase();
-    let n = input.conductors_per_phase;
-    let mut steps = Vec::new();
-
-    steps.push(if input.continuous {
-        Step {
-            title: "Corriente de diseño".into(),
-            formula: Some("Id = 1.25 · I continua + I no continua".into()),
-            substitution: format!(
-                "Id = {CONTINUOUS_LOAD_FACTOR} · {current_a:.2} = {:.2} A",
-                p.design_a
-            ),
-            note: Some("Carga continua: opera a su corriente máxima tres horas o más.".into()),
-        }
-    } else {
-        Step {
-            title: "Corriente de diseño".into(),
-            formula: Some("Id = 1.25 · I continua + I no continua".into()),
-            substitution: format!("Id = {:.2} A", p.design_a),
-            note: Some("Carga no continua: no lleva el 125 %.".into()),
-        }
-    });
-
-    steps.push(Step {
-        title: "Interruptor".into(),
-        formula: None,
-        substitution: format!("{}P-{:.0} A", p.poles, p.breaker_a),
-        note: Some(format!(
-            "Capacidad normalizada igual o inmediata superior a {:.2} A (sección 240-6, {norm}).",
-            p.design_a
-        )),
-    });
-
-    steps.push(Step {
-        title: "Ampacidad del conductor".into(),
-        formula: Some("Ampacidad corregida = tabla · f. temperatura · f. agrupamiento · n".into()),
-        substitution: format!(
-            "{} · {} · {} · {n} = {:.2} A",
-            plain(p.table_ampacity_a),
-            plain(p.temperature_factor),
-            plain(p.bundling_factor),
-            p.corrected_ampacity_a
-        ),
-        note: Some(format!(
-            "Tabla 310-15(b)(16): {} de {} {}, columna de {:.0} °C. Ambiente de {} °C y {} conductores portadores de corriente. En terminales de {:.0} °C: {} A. Ampacidad permitida, la menor: {:.2} A.",
-            size_label(&input.size),
-            material_name(input.material),
-            insulation_name(input.insulation),
-            p.insulation_c,
-            plain(input.ambient_c),
-            p.current_carrying_conductors,
-            p.terminal_c,
-            plain(p.terminal_ampacity_a),
-            p.allowable_ampacity_a
-        )),
-    });
-
-    let ampacity = if p.meets_ampacity {
-        format!(
-            "La ampacidad cubre la carga de {current_a:.2} A y la corriente de diseño de {:.2} A.",
-            p.design_a
-        )
-    } else {
-        format!(
-            "La ampacidad no cubre la carga de {current_a:.2} A o la corriente de diseño de {:.2} A.",
-            p.design_a
-        )
-    };
-    let protected = if p.protected {
-        format!(
-            "El interruptor de {:.0} A protege al conductor (240-4).",
-            p.breaker_a
-        )
-    } else {
-        format!(
-            "El interruptor de {:.0} A no protege al conductor (240-4).",
-            p.breaker_a
-        )
-    };
-    let minimum = match &p.minimum_size {
-        Some(size) if p.status == Status::Fails => {
-            format!(" Calibre mínimo que cumple: {}.", size_label(size))
-        }
-        _ => String::new(),
-    };
-    steps.push(Step {
-        title: "Verificación del conductor".into(),
-        formula: None,
-        substitution: format!(
-            "{} con {:.2} A permitidos: {}",
-            size_label(&input.size),
-            p.allowable_ampacity_a,
-            if p.status == Status::Complies {
-                "cumple"
-            } else {
-                "no cumple"
-            }
-        ),
-        note: Some(format!("{ampacity} {protected}{minimum}")),
-    });
-
-    if let Some(ground) = &p.grounding_size {
-        steps.push(Step {
-            title: "Puesta a tierra de equipos".into(),
-            formula: None,
-            substitution: format!("{} de {}", size_label(ground), material_name(input.material)),
-            note: Some(format!(
-                "Tabla 250-122 para un interruptor de {:.0} A, con el incremento de 250-122(b) si el conductor de fase se sobredimensiona.",
-                p.breaker_a
-            )),
-        });
-    }
-    steps
-}
-
-fn drop_steps(
-    profile: &Profile,
-    input: &QuickInput,
-    current_a: f64,
-    drop: &VoltageDropResult,
-) -> Vec<Step> {
-    let v = drop.reference_voltage_v;
-    let pf = input.power_factor;
-    let sin = (1.0 - pf * pf).sqrt();
-    let (k_symbol, k_value) = factor_text(input.kind);
-    let norm = profile.id.to_uppercase();
-    let mut steps = Vec::new();
-
-    let r_table = drop.table_resistance_ohm_km;
-    let x = drop.reactance_ohm_km;
-    steps.push(Step {
-        title: "Resistencia y reactancia del conductor".into(),
-        formula: None,
-        substitution: format!("R = {} Ω/km · X = {} Ω/km", plain(r_table), plain(x)),
-        note: Some(format!(
-            "Tabla 9, {norm}: {} de {} en conduit de {}, 75 °C.",
-            size_label(&input.size),
-            material_name(input.material),
-            raceway_name(input.conduit.raceway_material())
-        )),
-    });
-
-    let r = drop.resistance_ohm_km;
-    if let Some(t) = input.resistance_temperature_c {
-        let alpha = temperature_coefficient(input.material);
-        steps.push(Step {
-            title: "Ajuste de la resistencia por temperatura".into(),
-            formula: Some("R2 = R1 · [1 + α · (T2 − 75)]".into()),
-            substitution: format!(
-                "R2 = {} · [1 + {alpha} · ({} − {})] = {r:.4} Ω/km",
-                plain(r_table),
-                plain(t),
-                plain(TABLE_9_TEMPERATURE_C)
-            ),
-            note: Some(format!("Tabla 8, nota 2, {norm}.")),
-        });
-    }
-
-    let n = input.conductors_per_phase;
-    let r_text = if input.resistance_temperature_c.is_some() {
-        format!("{r:.4}")
-    } else {
-        plain(r)
-    };
-    steps.push(Step {
-        title: "Caída de tensión".into(),
-        formula: Some(format!(
-            "ΔV = {k_symbol} · I · L · (R · cos θ + X · sen θ) / n"
-        )),
-        substitution: format!(
-            "ΔV = {k_value} · {current_a:.2} · {:.4} · ({r_text} · {pf:.2} + {} · {sin:.3}) / {n} = {:.2} V",
-            input.length_m / 1000.0,
-            plain(x),
-            drop.drop_v
-        ),
-        note: Some("L en kilómetros; n = conductores por fase; cos θ = fp.".into()),
-    });
-
-    let relation = if drop.drop_percent <= input.limit_percent {
-        "no excede"
-    } else {
-        "es mayor que"
-    };
-    steps.push(Step {
-        title: "Porcentaje y comparación".into(),
-        formula: Some("e = ΔV / V · 100".into()),
-        substitution: format!(
-            "e = {:.2} / {} · 100 = {:.2} %",
-            drop.drop_v,
-            plain(v),
-            drop.drop_percent
-        ),
-        note: Some(format!(
-            "{:.2} % {relation} el límite de {:.2} %.",
-            drop.drop_percent, input.limit_percent
-        )),
-    });
-
-    steps.push(Step {
-        title: "Comprobación con la fórmula exacta".into(),
-        formula: None,
-        substitution: format!(
-            "ΔV exacta = {:.2} V · {:.2} %",
-            drop.exact_drop_v, drop.exact_drop_percent
-        ),
-        note: Some(format!(
-            "Resuelta con fasores; difiere {:.2} V de la fórmula de la Tabla 9.",
-            (drop.exact_drop_v - drop.drop_v).abs()
-        )),
-    });
-    steps
 }
 
 #[allow(clippy::too_many_arguments)]

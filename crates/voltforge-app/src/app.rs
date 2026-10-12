@@ -11,7 +11,7 @@ use voltforge_project::{
     Project, ProjectResult, RunResult, Settings, Source, Status, FORMAT_VERSION,
 };
 
-use crate::quick_view::QuickView;
+use crate::quick_view::{caption, steps_ui, QuickView};
 use crate::theme::{self, Palette, ACCENTS};
 
 pub(crate) const SYSTEMS: [(&str, System); 6] = [
@@ -696,6 +696,24 @@ impl App {
         if let Ok(r) = &self.result {
             for warning in &r.warnings {
                 ui.label(RichText::new(format!("Aviso · {warning}")).color(self.palette.na));
+            }
+        }
+
+        // Procedimiento del elemento seleccionado.
+        let selected = rows.iter().find(|(s, _)| *s == self.selection);
+        if let Some((selection, item)) = selected {
+            if let Some(run) = &item.run {
+                let title = match selection {
+                    Selection::Feeder => format!("Procedimiento · alimentador de {}", result.name),
+                    Selection::Circuit(_) => format!("Procedimiento · {} {}", item.id, item.name),
+                };
+                ui.add_space(16.0);
+                ui.label(caption(&self.palette, &title));
+                ui.add_space(2.0);
+                ui.scope(|ui| {
+                    ui.set_max_width(ui.clip_rect().width() - 4.0);
+                    steps_ui(ui, &self.palette, &run.steps);
+                });
             }
         }
         changed

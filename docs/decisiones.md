@@ -65,23 +65,26 @@ Hecho:
 - Línea de comandos: `ejemplo` y `calcular`, con salida en JSON.
 - Interfaz gráfica, pantalla principal: árbol, criterios, cuadro de cargas,
   detalle editable, abrir y guardar, tema oscuro o claro y acento.
+- Procedimiento paso a paso (`voltforge_project::procedure`): lo comparten el
+  cálculo rápido y cada tramo del proyecto, y viaja en el resultado (`Run.steps`),
+  así que también sale en el JSON de la línea de comandos. La memoria en PDF
+  debe construirse a partir de esos mismos pasos.
 - Cálculo rápido de un solo circuito (`voltforge_project::quick` y su vista):
-  corriente, interruptor, verificación del conductor, puesta a tierra y caída
-  de tensión, con procedimiento y recomendaciones. Supone lugar seco, carga
-  lineal y todos los conductores en la misma tubería. Una alternativa solo se
-  propone si cumple ampacidad, protección y caída.
+  corriente, interruptor, conductor, puesta a tierra, tubería y caída de tensión,
+  con recomendaciones. Supone lugar seco, carga lineal, tierra desnuda y todos
+  los conductores en la misma tubería. Una alternativa solo se propone si cumple
+  ampacidad, protección y caída.
 - Integración continua en Windows y Linux, que publica los ejecutables.
 
 Pendiente, en orden:
 
-1. Procedimiento paso a paso y recomendaciones dentro del proyecto (conductor,
-   tubería y caída de cada circuito); pasar un cálculo rápido a un proyecto.
-2. Cálculo rápido de tubería.
-   También: agregar y quitar tableros desde la interfaz y guardar el tema elegido.
-3. Memoria de cálculo en PDF.
-4. Diagrama unifilar automático para instalaciones radiales.
-5. Instalador de Windows.
-6. Servidor MCP para agentes.
+1. Memoria de cálculo en PDF (Typst), a partir de `Run.steps`.
+2. Agregar y quitar tableros desde la interfaz, guardar el tema elegido, pasar
+   un cálculo rápido a un proyecto y alternativas (paralelo, longitud máxima)
+   también dentro del proyecto.
+3. Diagrama unifilar automático para instalaciones radiales.
+4. Instalador de Windows.
+5. Servidor MCP para agentes.
 
 Fuera del alcance de la versión 0.1: reglas de motores y de climatización,
 cortocircuito y capacidad interruptiva, coordinación, transformador y media

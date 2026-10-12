@@ -14,6 +14,9 @@ use voltforge_core::voltage_drop::{voltage_drop, VoltageDropInput};
 use voltforge_core::{CircuitKind, Error, Profile, Size, System};
 
 use crate::model::{LoadKind, Overrides, Panel, Phase, Project, Settings};
+use crate::procedure::{
+    conductor_steps, conduit_step, cumulative_step, current_step, drop_steps, ConductorData, Step,
+};
 
 /// Resultado de una comprobación o de un elemento completo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -100,6 +103,8 @@ pub struct Run {
     pub drop_percent: f64,
     /// Caída acumulada desde la fuente hasta el final de este tramo.
     pub cumulative_drop_percent: f64,
+    /// Procedimiento paso a paso de este tramo.
+    pub steps: Vec<Step>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -264,14 +269,36 @@ fn size_run(
         (None, Err(e)) => return Err(e.clone()),
     };
 
-    let drop = voltage_drop(
-        profile,
-        &VoltageDropInput {
-            size: conductor.size.clone(),
-            ..drop_input
-        },
-    )?;
+    let final_drop_input = VoltageDropInput {
+        size: conductor.size.clone(),
+        ..drop_input
+    };
+    let drop = voltage_drop(profile, &final_drop_input)?;
     let cumulative_drop_percent = spec.upstream_drop_percent + drop.drop_percent;
+
+    let norm = profile.id.to_uppercase();
+    let mut steps = vec![current_step(
+        spec.kind,
+        Some(spec.power_w),
+        spec.power_factor,
+        drop.reference_voltage_v,
+        nominal_a,
+    )];
+    steps.extend(conductor_steps(&ConductorData {
+        norm: &norm,
+        continuous_a,
+        noncontinuous_a,
+        design_a,
+        breaker_a,
+        poles: poles(spec.kind),
+        material,
+        insulation,
+        ambient_c: settings.ambient_c,
+        current_carrying_conductors,
+        check: &conductor,
+        minimum_size: recommended.as_ref().ok().map(|r| &r.ampacity_size),
+        grounding: Some((&grounding_size, settings.material)),
+    }));
 
     let mut checks = vec![
         check(
@@ -339,6 +366,7 @@ fn size_run(
         },
     ) {
         Ok(c) => {
+            steps.push(conduit_step(&c, conduit_type, ov.nipple));
             checks.push(check(
                 "Tubería",
                 true,
@@ -369,6 +397,18 @@ fn size_run(
         }
     };
 
+    steps.extend(drop_steps(
+        &norm,
+        &final_drop_input,
+        &drop,
+        spec.drop_limit_percent,
+    ));
+    steps.push(cumulative_step(
+        spec.upstream_drop_percent,
+        drop.drop_percent,
+        settings.total_drop_limit_percent,
+    ));
+
     let run = Run {
         nominal_a,
         design_a,
@@ -390,6 +430,7 @@ fn size_run(
         drop_v: drop.drop_v,
         drop_percent: drop.drop_percent,
         cumulative_drop_percent,
+        steps,
     };
     Ok((run, checks))
 }

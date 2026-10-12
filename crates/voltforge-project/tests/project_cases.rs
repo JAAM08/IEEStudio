@@ -221,3 +221,23 @@ fn a_case_the_tables_do_not_cover_is_not_evaluated() {
     // Los circuitos de una fase sí se calculan.
     assert!(circuit(&panel.circuits, "C-01").run.is_some());
 }
+
+/// Cada tramo calculado lleva su procedimiento: corriente, diseño, interruptor,
+/// ampacidad, verificación, tierra, tubería, cuatro pasos de caída y la acumulada.
+#[test]
+fn every_run_carries_its_procedure() {
+    let result = calculate(&example::house()).unwrap();
+    let panel = &result.panels[0];
+    for item in std::iter::once(&panel.feeder).chain(&panel.circuits) {
+        let run = item.run.as_ref().unwrap();
+        assert_eq!(run.steps.len(), 12, "{}", item.id);
+        assert_eq!(run.steps[0].title, "Corriente nominal");
+        assert_eq!(run.steps[11].title, "Caída acumulada desde la fuente");
+    }
+    // C-02: 1800 W a 127 V con fp 0.90: I = 1800 / (127 · 0.9) = 15.75 A.
+    let c02 = panel.circuits[1].run.as_ref().unwrap();
+    assert_eq!(
+        c02.steps[0].substitution,
+        "I = 1,800 / (127 · 0.90) = 15.75 A"
+    );
+}

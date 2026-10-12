@@ -3,8 +3,8 @@
 
 use eframe::egui::{self, Align, Layout, RichText};
 use voltforge_core::{Profile, Size};
-use voltforge_project::quick::{quick_circuit, size_label, QuickInput, QuickResult};
-use voltforge_project::Status;
+use voltforge_project::quick::{quick_circuit, QuickInput, QuickResult};
+use voltforge_project::{size_label, Status, Step};
 
 use crate::app::{combo, number, CONDUITS, INSULATIONS, KINDS, MATERIALS, SYSTEMS};
 use crate::theme::{self, Palette};
@@ -22,8 +22,38 @@ impl Default for QuickView {
     }
 }
 
-fn caption(p: &Palette, text: &str) -> RichText {
+pub(crate) fn caption(p: &Palette, text: &str) -> RichText {
     RichText::new(text.to_uppercase()).small().color(p.ink2)
+}
+
+/// Tarjetas numeradas con el procedimiento paso a paso.
+pub(crate) fn steps_ui(ui: &mut egui::Ui, p: &Palette, steps: &[Step]) {
+    let width = ui.available_width().min(1000.0);
+    for (i, step) in steps.iter().enumerate() {
+        card(p).show(ui, |ui| {
+            ui.set_width(width - 30.0);
+            ui.horizontal_top(|ui| {
+                ui.label(
+                    RichText::new(format!("{}", i + 1))
+                        .family(theme::semibold())
+                        .size(16.0)
+                        .color(p.accent),
+                );
+                ui.add_space(8.0);
+                ui.vertical(|ui| {
+                    ui.label(RichText::new(&step.title).family(theme::semibold()));
+                    if let Some(formula) = &step.formula {
+                        ui.label(RichText::new(formula).monospace().color(p.ink2));
+                    }
+                    ui.label(RichText::new(&step.substitution).monospace());
+                    if let Some(note) = &step.note {
+                        ui.label(RichText::new(note).color(p.ink2));
+                    }
+                });
+            });
+        });
+        ui.add_space(6.0);
+    }
 }
 
 fn card(p: &Palette) -> egui::Frame {
@@ -181,7 +211,7 @@ impl QuickView {
                 changed |= combo(ui, "rapido-tubo", &mut input.conduit, &CONDUITS);
                 ui.end_row();
 
-                if input.kind == voltforge_core::CircuitKind::LineToLine {
+                if input.kind != voltforge_core::CircuitKind::LineToNeutral {
                     ui.label(muted("Neutro"));
                     changed |= ui
                         .checkbox(&mut input.has_neutral, "Lleva neutro")
@@ -301,6 +331,9 @@ impl QuickView {
                             if let Some(ground) = &pr.grounding_size {
                                 ui.label(muted(format!("Puesta a tierra: {}", size_label(ground))));
                             }
+                            if let Some(conduit) = &pr.conduit {
+                                ui.label(muted(format!("Tubería: {conduit}")));
+                            }
                         }
                         Err(message) => {
                             ui.label(big("—".to_string()).color(p.na));
@@ -336,31 +369,7 @@ impl QuickView {
         ui.add_space(14.0);
         ui.label(caption(p, "Procedimiento"));
         ui.add_space(2.0);
-        for (i, step) in r.steps.iter().enumerate() {
-            card(p).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.horizontal_top(|ui| {
-                    ui.label(
-                        RichText::new(format!("{}", i + 1))
-                            .family(theme::semibold())
-                            .size(16.0)
-                            .color(p.accent),
-                    );
-                    ui.add_space(8.0);
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new(&step.title).family(theme::semibold()));
-                        if let Some(formula) = &step.formula {
-                            ui.label(RichText::new(formula).monospace().color(p.ink2));
-                        }
-                        ui.label(RichText::new(&step.substitution).monospace());
-                        if let Some(note) = &step.note {
-                            ui.label(muted(note.clone()));
-                        }
-                    });
-                });
-            });
-            ui.add_space(6.0);
-        }
+        steps_ui(ui, p, &r.steps);
     }
 
     fn recommendations(&mut self, ui: &mut egui::Ui, p: &Palette) -> bool {
@@ -415,8 +424,8 @@ impl QuickView {
         ui.add_space(6.0);
         ui.label(muted(
             "Este cálculo revisa corriente, interruptor, ampacidad con sus factores, \
-             puesta a tierra y caída de tensión, en lugar seco y con carga lineal. \
-             La tubería y los demás casos se calculan en el proyecto.",
+             puesta a tierra, tubería y caída de tensión. Supone lugar seco, carga \
+             lineal, tierra desnuda y todos los conductores en la misma tubería.",
         ));
 
         match apply {
