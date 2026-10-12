@@ -43,7 +43,7 @@ Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. Los
 motores y equipos de aire acondicionado se calculan como carga general y
 quedan sin evaluar, porque sus reglas propias aún no están implementadas.
 
-Lo siguiente en el plan: instalador de Windows y servidor MCP para agentes.
+Lo siguiente en el plan está en [docs/roadmap.md](docs/roadmap.md).
 
 ## Probarlo
 
@@ -52,15 +52,20 @@ motor de cálculo).
 
 ```
 cargo test                                     # ejecuta los casos de referencia
-cargo run -p voltforge-cli -- ejemplo casa.json   # escribe un proyecto de ejemplo
-cargo run -p voltforge-cli -- calcular casa.json  # muestra su cuadro de cargas
-cargo run -p voltforge-cli -- memoria casa.json   # escribe casa.pdf, la memoria de cálculo
-cargo run -p voltforge-app -- casa.json           # abre la interfaz gráfica
+cargo run -p voltforge-cli -- ejemplo casa.vfp   # escribe un proyecto de ejemplo
+cargo run -p voltforge-cli -- calcular casa.vfp  # muestra su cuadro de cargas
+cargo run -p voltforge-cli -- memoria casa.vfp   # escribe casa.pdf, la memoria de cálculo
+cargo run -p voltforge-app -- casa.vfp           # abre la interfaz gráfica
 ```
 
-Sin instalar Rust: cada compilación publica los ejecutables `voltforge` (línea de
-comandos) y `voltforge-app` (interfaz gráfica) para Windows y Linux en la pestaña *Actions* del repositorio, dentro de la
+Sin instalar Rust: en la página *Releases* del repositorio está el instalador
+de Windows de cada versión. Además, cada compilación publica los ejecutables
+`voltforge` (línea de comandos) y `voltforge-app` (interfaz gráfica) para
+Windows y Linux, y el instalador, en la pestaña *Actions*, dentro de la
 ejecución más reciente, en la sección *Artifacts*.
+
+Los proyectos se guardan con la extensión `.vfp`. Por dentro son JSON
+legible; también se pueden abrir archivos `.json` de versiones anteriores.
 
 ## Organización
 

@@ -3,8 +3,20 @@ resolver = "2"
 members = ["crates/voltforge-core", "crates/voltforge-rules", "crates/voltforge-electrical", "crates/voltforge-project", "crates/voltforge-cli", "crates/voltforge-app", "crates/voltforge-diagrams", "crates/voltforge-reports"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0-alpha.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/JAAM08/voltforge"
 rust-version = "1.80"
+
+# Ejecutable de distribución: sin símbolos de depuración y con optimización
+# entre crates. «thin» y no «fat»: con typst, «fat» tarda demasiado en enlazar.
+[profile.release]
+lto = "thin"
+strip = true
+panic = "abort"
+
+# Las dependencias sin información de depuración: compila más rápido y ocupa
+# mucho menos disco. El código propio la conserva.
+[profile.dev.package."*"]
+debug = false

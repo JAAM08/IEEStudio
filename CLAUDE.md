@@ -11,8 +11,8 @@ un criterio de cálculo o una decisión técnica, lee `docs/architecture.md`,
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 cargo test
-cargo run -p voltforge-cli -- calcular casa.json
-cargo run -p voltforge-app -- casa.json
+cargo run -p voltforge-cli -- calcular casa.vfp
+cargo run -p voltforge-app -- casa.vfp
 xvfb-run -a cargo run -p voltforge-app -- --captura captura.png   # revisar la interfaz sin pantalla
 # con --espacio calculo|diagrama|documentacion, --panel rapido|unifilar|memoria|ninguno,
 # --propiedades datos|resultados|normativa y --claro

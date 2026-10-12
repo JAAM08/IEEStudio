@@ -8,10 +8,10 @@ const HELP: &str = "\
 VoltForge: cálculo de instalaciones eléctricas de baja tensión
 
 Uso:
-  voltforge ejemplo [archivo.json]     escribe un proyecto de ejemplo
-  voltforge calcular <archivo.json>    calcula un proyecto y muestra el cuadro de cargas
+  voltforge ejemplo [archivo.vfp]     escribe un proyecto de ejemplo
+  voltforge calcular <archivo.vfp>    calcula un proyecto y muestra el cuadro de cargas
   voltforge calcular <archivo> --json  entrega el resultado completo en JSON
-  voltforge memoria <archivo.json> [salida.pdf]
+  voltforge memoria <archivo.vfp> [salida.pdf]
                                        escribe la memoria de cálculo en PDF
   voltforge ayuda                      muestra esta ayuda
 ";

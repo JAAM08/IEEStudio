@@ -26,14 +26,26 @@ struct Prefs {
     dock: DockState<Tab>,
     columns: schedule::Columns,
     diagram_zoom: f32,
+    /// Proyectos abiertos o guardados hace poco; el primero se abre al
+    /// arrancar.
+    #[serde(default)]
+    recent: Vec<PathBuf>,
 }
+
+/// Cuántos proyectos recientes se recuerdan.
+const MAX_RECENT: usize = 8;
+
+/// Extensión de los proyectos. Por dentro es JSON; la extensión propia
+/// permite abrirlos con doble clic sin adueñarse de todos los `.json`.
+pub const EXTENSION: &str = "vfp";
 
 /// Acción que espera a que el usuario decida qué hacer con los cambios sin
 /// guardar.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 enum Pending {
     New,
     Open,
+    OpenPath(PathBuf),
     Example,
     Quit,
 }
@@ -61,6 +73,7 @@ pub struct App {
     allow_close: bool,
     /// Cerrar la ventana al terminar este cuadro.
     quit: bool,
+    recent: Vec<PathBuf>,
 }
 
 pub struct Options {
@@ -86,6 +99,7 @@ impl App {
                 .and_then(|s| s.get_string(STORAGE_KEY))
                 .and_then(|text| serde_json::from_str(&text).ok())
         };
+        let recent = prefs.as_ref().map(|p| p.recent.clone()).unwrap_or_default();
         let (dark, accent, workspace, dock, columns, zoom) = match prefs {
             Some(p) => (
                 p.dark,
@@ -127,9 +141,12 @@ impl App {
             pending: None,
             allow_close: false,
             quit: false,
+            recent,
         };
         app.doc.selection = Selection::Circuit(0, 1);
-        if let Some(path) = options.open {
+        // Abre lo que se pidió; si no, el último proyecto, si todavía existe.
+        let last = app.recent.first().filter(|p| p.exists()).cloned();
+        if let Some(path) = options.open.or(last) {
             app.load(path);
         }
         app.shared.props_tab = match options.properties.as_deref() {
@@ -161,18 +178,49 @@ impl App {
         match loaded {
             Ok(project) => {
                 self.notice = None;
+                self.remember(&path);
                 self.set_project(project, Some(path));
             }
             Err(message) => self.notice = Some(message),
         }
     }
 
+    /// Pone el archivo al principio de la lista de recientes.
+    fn remember(&mut self, path: &std::path::Path) {
+        // Ruta absoluta: el programa se puede abrir desde cualquier carpeta.
+        let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        // En Windows, canonicalize agrega el prefijo \\?\, que confunde al usuario.
+        let path = PathBuf::from(
+            path.to_string_lossy()
+                .trim_start_matches(r"\\?\")
+                .to_string(),
+        );
+        self.recent.retain(|p| p != &path);
+        self.recent.insert(0, path);
+        self.recent.truncate(MAX_RECENT);
+    }
+
+    /// Nombre sugerido al guardar: el del proyecto, sin caracteres que
+    /// Windows no acepta en un nombre de archivo.
+    fn suggested_name(&self) -> String {
+        let clean: String = self
+            .doc
+            .project
+            .name
+            .chars()
+            .filter(|c| !r#"\/:*?"<>|"#.contains(*c))
+            .collect();
+        let clean = clean.trim();
+        let stem = if clean.is_empty() { "proyecto" } else { clean };
+        format!("{stem}.{EXTENSION}")
+    }
+
     fn save(&mut self, ask: bool) {
         let target = match (&self.doc.path, ask) {
             (Some(path), false) => Some(path.clone()),
             _ => rfd::FileDialog::new()
-                .add_filter("Proyecto de VoltForge", &["json"])
-                .set_file_name("proyecto.json")
+                .add_filter("Proyecto de VoltForge", &[EXTENSION])
+                .set_file_name(self.suggested_name())
                 .save_file(),
         };
         let Some(path) = target else {
@@ -181,6 +229,7 @@ impl App {
         match std::fs::write(&path, self.doc.project.to_json()) {
             Ok(()) => {
                 self.done = Some(format!("Guardado en {}", path.display()));
+                self.remember(&path);
                 self.doc.path = Some(path);
                 self.doc.dirty = false;
                 self.notice = None;
@@ -191,7 +240,7 @@ impl App {
 
     fn open_dialog(&mut self) {
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Proyecto de VoltForge", &["json"])
+            .add_filter("Proyecto de VoltForge", &[EXTENSION, "json"])
             .pick_file()
         {
             self.load(path);
@@ -256,6 +305,7 @@ impl App {
         match action {
             Pending::New => self.set_project(empty_project(), None),
             Pending::Open => self.open_dialog(),
+            Pending::OpenPath(path) => self.load(path),
             Pending::Example => self.set_project(example::house(), None),
             Pending::Quit => {
                 self.allow_close = true;
@@ -321,6 +371,34 @@ impl App {
                     ui.close();
                     self.request(Pending::Open);
                 }
+                let recent: Vec<PathBuf> = self.recent.clone();
+                ui.add_enabled_ui(!recent.is_empty(), |ui| {
+                    ui.menu_button("     Abrir reciente", |ui| {
+                        for path in &recent {
+                            let name = path.file_name().map_or_else(
+                                || path.display().to_string(),
+                                |n| n.to_string_lossy().into_owned(),
+                            );
+                            let exists = path.exists();
+                            let response = ui
+                                .add_enabled(exists, egui::Button::new(name))
+                                .on_hover_text(path.display().to_string())
+                                .on_disabled_hover_text(format!(
+                                    "Ya no existe: {}",
+                                    path.display()
+                                ));
+                            if response.clicked() {
+                                ui.close();
+                                self.request(Pending::OpenPath(path.clone()));
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Borrar la lista").clicked() {
+                            ui.close();
+                            self.recent.clear();
+                        }
+                    });
+                });
                 if ui
                     .add(
                         egui::Button::new(format!("{}  Guardar", icon::FLOPPY_DISK))
@@ -690,7 +768,7 @@ impl App {
 
     /// Pregunta qué hacer con los cambios sin guardar antes de seguir.
     fn confirm_window(&mut self, ctx: &egui::Context) {
-        let Some(action) = self.pending else {
+        let Some(action) = self.pending.clone() else {
             return;
         };
         let p = self.shared.palette;
@@ -871,6 +949,7 @@ impl eframe::App for App {
             dock: self.dock.clone(),
             columns: self.shared.columns.clone(),
             diagram_zoom: self.shared.diagram_zoom,
+            recent: self.recent.clone(),
         };
         if let Ok(text) = serde_json::to_string(&prefs) {
             storage.set_string(STORAGE_KEY, text);
