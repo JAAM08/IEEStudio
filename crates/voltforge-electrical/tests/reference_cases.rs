@@ -71,9 +71,9 @@ fn nominal_current_by_circuit_kind() {
 
 #[test]
 fn design_current_only_raises_the_continuous_part() {
-    close(design_current(10.0, 0.0), 12.5);
-    close(design_current(0.0, 10.0), 10.0);
-    close(design_current(8.0, 6.0), 16.0);
+    close(design_current(nom(), 10.0, 0.0), 12.5);
+    close(design_current(nom(), 0.0, 10.0), 10.0);
+    close(design_current(nom(), 8.0, 6.0), 16.0);
 }
 
 #[test]

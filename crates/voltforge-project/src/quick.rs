@@ -10,7 +10,7 @@ use voltforge_electrical::conduit::{size_conduit, ConductorGroup, ConduitInput, 
 use voltforge_electrical::current::{design_current, nominal_current};
 use voltforge_electrical::sizing::{
     check_conductor, equipment_grounding, select_conductor, standard_rating_at_least, SizingInput,
-    VoltageDropLimit, SMALLEST_PARALLEL_SIZE,
+    VoltageDropLimit,
 };
 use voltforge_electrical::voltage_drop::{
     max_length_m, voltage_drop, VoltageDropInput, VoltageDropResult,
@@ -205,7 +205,7 @@ fn protection(
 ) -> Result<(Protection, Vec<Step>), String> {
     let n = input.conductors_per_phase;
     let sizing = sizing_input(input, current_a, n, None);
-    let design_a = design_current(sizing.continuous_a, sizing.noncontinuous_a);
+    let design_a = design_current(profile, sizing.continuous_a, sizing.noncontinuous_a);
     let breaker_a =
         standard_rating_at_least(profile, design_a, false).map_err(|e| e.to_string())?;
     let check =
@@ -223,9 +223,8 @@ fn protection(
     )
     .ok()
     .map(|g| g.size);
-    let norm = profile.id.to_uppercase();
     let mut steps = conductor_steps(&ConductorData {
-        norm: &norm,
+        profile,
         continuous_a: sizing.continuous_a,
         noncontinuous_a: sizing.noncontinuous_a,
         design_a,
@@ -264,7 +263,7 @@ fn protection(
     )
     .ok()
     .map(|c| {
-        steps.push(conduit_step(&c, input.conduit, false));
+        steps.push(conduit_step(profile, &c, input.conduit, false));
         format!(
             "{} de {} mm ({}\")",
             input.conduit, c.conduit.metric_designator, c.conduit.trade_size
@@ -321,14 +320,14 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
     let n = input.conductors_per_phase;
     let rank = profile.size_rank(&input.size).map_err(|e| e.to_string())?;
     let parallel_rank = profile
-        .size_rank(&Size::new(SMALLEST_PARALLEL_SIZE))
+        .size_rank(&profile.parameters.smallest_parallel_size)
         .map_err(|e| e.to_string())?;
 
     let mut warnings = Vec::new();
     if n > 1 && rank < parallel_rank {
         warnings.push(format!(
             "La norma permite conductores en paralelo a partir de {}; el {} no se puede instalar en paralelo.",
-            size_label(&Size::new(SMALLEST_PARALLEL_SIZE)),
+            size_label(&profile.parameters.smallest_parallel_size),
             size_label(&input.size)
         ));
     }
@@ -351,17 +350,13 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
                 formula: None,
                 substitution: "No evaluado".into(),
                 note: Some(format!("No se pudo calcular: {e}.")),
+                references: vec![],
             });
             Err(e)
         }
     };
     let conductor_fails = matches!(&protection, Ok(p) if p.status == Status::Fails);
-    steps.extend(drop_steps(
-        &profile.id.to_uppercase(),
-        &base,
-        &drop,
-        input.limit_percent,
-    ));
+    steps.extend(drop_steps(profile, &base, &drop, input.limit_percent, None));
 
     Ok(QuickResult {
         current_a,
@@ -408,7 +403,7 @@ fn recommendations(
     // caída de tensión y si cumple ampacidad, protección y caída.
     let try_option = |size: &Size, count: u32| -> Option<(f64, bool)> {
         let sizing = sizing_input(input, base.current_a, count, Some(base));
-        let design_a = design_current(sizing.continuous_a, sizing.noncontinuous_a);
+        let design_a = design_current(profile, sizing.continuous_a, sizing.noncontinuous_a);
         let breaker_a = standard_rating_at_least(profile, design_a, false).ok()?;
         let check = check_conductor(profile, &sizing, size, breaker_a).ok()?;
         Some((check.voltage_drop_percent?, check.passes()))
@@ -464,7 +459,7 @@ fn recommendations(
                     value: format!("{percent:.2} %"),
                     detail: format!(
                         "Conductores en paralelo; el agrupamiento se calculó con todos en la misma tubería. La norma permite paralelo a partir de {}.",
-                        size_label(&Size::new(SMALLEST_PARALLEL_SIZE))
+                        size_label(&profile.parameters.smallest_parallel_size)
                     ),
                     apply: Some((size, count)),
                 });

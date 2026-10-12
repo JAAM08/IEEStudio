@@ -22,16 +22,7 @@
 use crate::current::design_current;
 use crate::voltage_drop::{voltage_drop, VoltageDropInput};
 use voltforge_core::{Error, Insulation, Material, Result, Size, TempRating};
-use voltforge_rules::Profile;
-
-/// Capacidad hasta la que 240-4(b) permite el valor inmediato superior.
-pub const NEXT_SIZE_UP_LIMIT_A: f64 = 800.0;
-/// Capacidad de circuito hasta la que las terminales se consideran de 60 °C.
-pub const TERMINAL_60C_LIMIT_A: f64 = 100.0;
-/// Calibre menor que se propone para circuitos de fuerza y alumbrado.
-pub const SMALLEST_CIRCUIT_SIZE: &str = "14";
-/// Calibre menor permitido en paralelo.
-pub const SMALLEST_PARALLEL_SIZE: &str = "1/0";
+use voltforge_rules::{Profile, Rule};
 
 /// Límite de caída de tensión que el conductor también debe cumplir.
 #[derive(Debug, Clone, PartialEq)]
@@ -156,7 +147,7 @@ pub fn standard_rating_at_least(
         .map(|r| r.rating_a)
         .find(|&r| r >= current_a - 1e-9)
         .ok_or(Error::NotInTable {
-            table: "la sección 240-6",
+            table: profile.clause(Rule::StandardRatings),
             what: format!("una capacidad de al menos {current_a:.2} A"),
         })
 }
@@ -194,16 +185,17 @@ pub fn check_conductor(
 ) -> Result<ConductorCheck> {
     let insulation_rating = validate(input)?;
     let load_a = input.continuous_a + input.noncontinuous_a;
-    let design_a = design_current(input.continuous_a, input.noncontinuous_a);
+    let design_a = design_current(profile, input.continuous_a, input.noncontinuous_a);
     let n = f64::from(input.conductors_per_phase);
 
-    let terminal_rule = input
-        .terminal_rating
-        .unwrap_or(if breaker_a <= TERMINAL_60C_LIMIT_A {
-            TempRating::C60
-        } else {
-            TempRating::C75
-        });
+    let terminal_rule =
+        input
+            .terminal_rating
+            .unwrap_or(if breaker_a <= profile.parameters.terminal_60c_limit_a {
+                TempRating::C60
+            } else {
+                TempRating::C75
+            });
     let terminal_rating = terminal_rule.min(insulation_rating);
 
     let table_ampacity_a = profile.ampacity(size, input.material, insulation_rating)?;
@@ -226,10 +218,12 @@ pub fn check_conductor(
     let next_up =
         standard_rating_at_least(profile, allowable_ampacity_a, input.include_iec_ratings);
     let protected_by_rating = breaker_a <= allowable_ampacity_a + 1e-9
-        || (breaker_a <= NEXT_SIZE_UP_LIMIT_A && next_up.is_ok_and(|r| breaker_a <= r));
+        || (breaker_a <= profile.parameters.next_size_up_limit_a
+            && next_up.is_ok_and(|r| breaker_a <= r));
 
     let parallel_allowed = input.conductors_per_phase == 1
-        || profile.size_rank(size)? >= profile.size_rank(&Size::new(SMALLEST_PARALLEL_SIZE))?;
+        || profile.size_rank(size)?
+            >= profile.size_rank(&profile.parameters.smallest_parallel_size)?;
 
     let (voltage_drop_percent, meets_voltage_drop) = match &input.voltage_drop {
         Some(limit) => {
@@ -285,7 +279,7 @@ pub fn equipment_grounding(
     phase_size: &Size,
 ) -> Result<Grounding> {
     let missing = || Error::NotInTable {
-        table: "la Tabla 250-122",
+        table: profile.clause(Rule::EquipmentGrounding),
         what: format!("{material:?} con un dispositivo de {breaker_a} A"),
     };
     let row = profile
@@ -330,10 +324,10 @@ pub fn equipment_grounding(
 pub fn select_conductor(profile: &Profile, input: &SizingInput) -> Result<SizingResult> {
     validate(input)?;
     let load_a = input.continuous_a + input.noncontinuous_a;
-    let design_a = design_current(input.continuous_a, input.noncontinuous_a);
+    let design_a = design_current(profile, input.continuous_a, input.noncontinuous_a);
     let breaker_a = standard_rating_at_least(profile, design_a, input.include_iec_ratings)?;
 
-    let start = profile.size_rank(&Size::new(SMALLEST_CIRCUIT_SIZE))?;
+    let start = profile.size_rank(&profile.parameters.smallest_circuit_size)?;
     let user_min = match &input.minimum_size {
         Some(s) => profile.size_rank(s)?,
         None => start,
@@ -360,7 +354,7 @@ pub fn select_conductor(profile: &Profile, input: &SizingInput) -> Result<Sizing
         }
     }
     let (rank, conductor) = chosen.ok_or(Error::NotInTable {
-        table: "la Tabla 310-15(b)(16)",
+        table: profile.clause(Rule::Ampacity),
         what: format!(
             "un calibre que cumpla con {} conductor(es) por fase para {load_a:.2} A",
             input.conductors_per_phase

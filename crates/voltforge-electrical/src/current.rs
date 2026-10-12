@@ -3,9 +3,7 @@
 use voltforge_core::units::SQRT_3;
 use voltforge_core::validation;
 use voltforge_core::{CircuitKind, Result, System};
-
-/// Fracción adicional que se aplica a la carga continua: 125 %.
-pub const CONTINUOUS_LOAD_FACTOR: f64 = 1.25;
+use voltforge_rules::Profile;
 
 /// Corriente nominal de una carga a partir de su potencia activa.
 ///
@@ -29,6 +27,6 @@ pub fn nominal_current(
 }
 
 /// Corriente de diseño: 125 % de la parte continua más 100 % de la no continua.
-pub fn design_current(continuous_a: f64, noncontinuous_a: f64) -> f64 {
-    CONTINUOUS_LOAD_FACTOR * continuous_a + noncontinuous_a
+pub fn design_current(profile: &Profile, continuous_a: f64, noncontinuous_a: f64) -> f64 {
+    profile.parameters.continuous_load_factor * continuous_a + noncontinuous_a
 }

@@ -1,0 +1,13 @@
+key,value
+code,NOM-001-SEDE-2012
+title,"Instalaciones Eléctricas (utilización)"
+edition,2012
+source_url,https://www.dof.gob.mx/normasOficiales/4951/SENER/SENER.html
+continuous_load_factor,1.25
+terminal_60c_limit_a,100
+next_size_up_limit_a,800
+smallest_circuit_size,14
+smallest_parallel_size,1/0
+jam_ratio_min,2.8
+jam_ratio_max,3.2
+nipple_fill_fraction,0.60

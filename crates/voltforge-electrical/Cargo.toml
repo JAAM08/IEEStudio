@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [features]
 # `serde` permite entregar los resultados en JSON.
-serde = ["dep:serde", "voltforge-core/serde"]
+serde = ["dep:serde", "voltforge-core/serde", "voltforge-rules/serde"]
 
 [dependencies]
 voltforge-core = { path = "../voltforge-core" }

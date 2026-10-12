@@ -11,6 +11,7 @@ use voltforge_core::{
 };
 
 use crate::csv;
+use crate::references::{ClauseEntry, NormativeDocument, Parameters, Rule, RuleReference};
 
 /// Fila de la Tabla 8 (cableado clase B).
 #[derive(Debug, Clone)]
@@ -141,6 +142,11 @@ pub struct Profile {
     pub grounding: Vec<GroundingRow>,
     pub standard_ratings: Vec<StandardRating>,
     pub small_conductor_limits: Vec<SmallConductorLimit>,
+    /// Norma de la que salen las tablas.
+    pub document: NormativeDocument,
+    /// Factores, límites y calibres mínimos del perfil.
+    pub parameters: Parameters,
+    references: HashMap<String, ClauseEntry>,
 }
 
 macro_rules! table {
@@ -155,6 +161,17 @@ macro_rules! table {
 
 impl Profile {
     /// NOM-001-SEDE-2012, Instalaciones Eléctricas (utilización).
+    /// Identificadores de los perfiles disponibles.
+    pub const AVAILABLE: [&'static str; 1] = ["nom-001-sede-2012"];
+
+    /// Perfil por su identificador, el que se guarda en el proyecto.
+    pub fn by_id(id: &str) -> Option<&'static Profile> {
+        match id {
+            "nom-001-sede-2012" => Some(Profile::nom_001_sede_2012()),
+            _ => None,
+        }
+    }
+
     pub fn nom_001_sede_2012() -> &'static Profile {
         static PROFILE: OnceLock<Profile> = OnceLock::new();
         PROFILE.get_or_init(|| {
@@ -197,7 +214,47 @@ impl Profile {
                     }
                 }
             );
+            let fields: HashMap<String, String> = table!("nom-001-sede-2012", "profile.csv", |r| (
+                r.text("key"),
+                r.text("value")
+            ))
+            .into_iter()
+            .collect();
+            let field = |key: &str| fields.get(key).cloned().unwrap_or_default();
+            let number = |key: &str| -> f64 {
+                field(key)
+                    .parse()
+                    .unwrap_or_else(|_| panic!("profile.csv: «{key}» no es un número"))
+            };
+            let parameters = Parameters {
+                continuous_load_factor: number("continuous_load_factor"),
+                terminal_60c_limit_a: number("terminal_60c_limit_a"),
+                next_size_up_limit_a: number("next_size_up_limit_a"),
+                smallest_circuit_size: Size::new(&field("smallest_circuit_size")),
+                smallest_parallel_size: Size::new(&field("smallest_parallel_size")),
+                jam_ratio_min: number("jam_ratio_min"),
+                jam_ratio_max: number("jam_ratio_max"),
+                nipple_fill_fraction: number("nipple_fill_fraction"),
+            };
+            let document = NormativeDocument {
+                code: field("code"),
+                title: field("title"),
+                edition: field("edition"),
+                source_url: fields.get("source_url").cloned(),
+            };
+            let references = table!("nom-001-sede-2012", "references.csv", |r| (
+                r.text("rule"),
+                ClauseEntry {
+                    clause: r.text("clause"),
+                    description: r.text("description"),
+                }
+            ))
+            .into_iter()
+            .collect();
             Profile {
+                parameters,
+                document,
+                references,
                 id: "nom-001-sede-2012",
                 title: "NOM-001-SEDE-2012, Instalaciones Eléctricas (utilización)",
                 size_index: sizes
@@ -294,6 +351,31 @@ impl Profile {
         })
     }
 
+    /// Referencia normativa de una regla en este perfil.
+    pub fn reference(&self, rule: Rule) -> RuleReference {
+        RuleReference {
+            code: self.document.code.clone(),
+            title: self.document.title.clone(),
+            edition: self.document.edition.clone(),
+            clause: self.references.get(rule.id()).map(|e| e.clause.clone()),
+            source_url: self.document.source_url.clone(),
+        }
+    }
+
+    /// Cláusula de una regla, para mensajes: `Tabla 310-15(b)(16)`.
+    pub fn clause(&self, rule: Rule) -> String {
+        self.references
+            .get(rule.id())
+            .map_or_else(|| rule.id().to_string(), |e| e.clause.clone())
+    }
+
+    /// Descripción propia de lo que establece una regla.
+    pub fn rule_description(&self, rule: Rule) -> Option<&str> {
+        self.references
+            .get(rule.id())
+            .map(|e| e.description.as_str())
+    }
+
     /// Propiedades del conductor desnudo (Tabla 8).
     pub fn conductor(&self, size: &Size) -> Result<&ConductorProperties> {
         self.size_index
@@ -319,7 +401,7 @@ impl Profile {
     ) -> Result<(f64, f64)> {
         self.conductor(size)?;
         let missing = || Error::NotInTable {
-            table: "la Tabla 9",
+            table: self.clause(Rule::Impedance),
             what: format!("calibre {size}, {material:?}, canalización {raceway:?}"),
         };
         let row = self.impedance.get(&size.0).ok_or_else(missing)?;
@@ -344,7 +426,7 @@ impl Profile {
         self.insulated
             .get(&(group.code().to_string(), size.0.clone()))
             .ok_or_else(|| Error::NotInTable {
-                table: "la Tabla 5",
+                table: self.clause(Rule::InsulatedDimensions),
                 what: format!("calibre {size}, aislamiento {group:?}"),
             })
     }
@@ -353,7 +435,7 @@ impl Profile {
     pub fn ampacity(&self, size: &Size, material: Material, column: TempRating) -> Result<f64> {
         self.conductor(size)?;
         let missing = || Error::NotInTable {
-            table: "la Tabla 310-15(b)(16)",
+            table: self.clause(Rule::Ampacity),
             what: format!("calibre {size}, {material:?}, {} °C", column.celsius()),
         };
         let row = self
@@ -375,7 +457,7 @@ impl Profile {
     /// Factor de corrección por temperatura ambiente, Tabla 310-15(b)(2)(a).
     pub fn temperature_factor(&self, ambient_c: f64, column: TempRating) -> Result<f64> {
         let missing = || Error::NotInTable {
-            table: "la Tabla 310-15(b)(2)(a)",
+            table: self.clause(Rule::TemperatureCorrection),
             what: format!(
                 "{ambient_c} °C ambiente con conductor de {} °C",
                 column.celsius()
@@ -412,5 +494,45 @@ impl Profile {
         self.conduits
             .iter()
             .filter(move |r| r.conduit_type == conduit.code())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pruebas normativas del perfil: cada regla tiene su cláusula y los
+    /// parámetros tienen los valores de la NOM-001-SEDE-2012.
+    #[test]
+    fn every_rule_has_a_clause() {
+        let profile = Profile::nom_001_sede_2012();
+        for rule in Rule::ALL {
+            let reference = profile.reference(rule);
+            assert!(reference.clause.is_some(), "falta la cláusula de {rule:?}");
+            assert_eq!(reference.code, "NOM-001-SEDE-2012");
+        }
+        assert_eq!(
+            profile.reference(Rule::StandardRatings).cite(),
+            "NOM-001-SEDE-2012, 240-6(a)"
+        );
+    }
+
+    #[test]
+    fn parameters_match_the_2012_edition() {
+        let p = &Profile::nom_001_sede_2012().parameters;
+        assert_eq!(p.continuous_load_factor, 1.25); // 210-19(a)(1)
+        assert_eq!(p.terminal_60c_limit_a, 100.0); // 110-14(c)(1)
+        assert_eq!(p.next_size_up_limit_a, 800.0); // 240-4(b)
+        assert_eq!(p.smallest_parallel_size, Size::new("1/0")); // 310-10(h)
+        assert_eq!(p.nipple_fill_fraction, 0.60); // Capítulo 10, notas, (4)
+        assert_eq!((p.jam_ratio_min, p.jam_ratio_max), (2.8, 3.2)); // Tabla 1, nota 2
+    }
+
+    #[test]
+    fn profiles_are_found_by_id() {
+        for id in Profile::AVAILABLE {
+            assert_eq!(Profile::by_id(id).map(|p| p.id), Some(id));
+        }
+        assert!(Profile::by_id("nom-001-sede-1999").is_none());
     }
 }

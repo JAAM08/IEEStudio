@@ -4,14 +4,15 @@
 //! Lo comparten el cálculo rápido y cada circuito o alimentador del proyecto.
 
 use serde::Serialize;
+use voltforge_core::units::m_to_km;
 use voltforge_core::Insulation;
 use voltforge_core::{CircuitKind, ConduitType, Material, RacewayMaterial, Size};
 use voltforge_electrical::conduit::ConduitResult;
-use voltforge_electrical::current::CONTINUOUS_LOAD_FACTOR;
 use voltforge_electrical::sizing::ConductorCheck;
 use voltforge_electrical::voltage_drop::{
     temperature_coefficient, VoltageDropInput, VoltageDropResult, TABLE_9_TEMPERATURE_C,
 };
+use voltforge_rules::{Profile, Rule, RuleReference};
 
 /// Un paso del procedimiento.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -22,6 +23,8 @@ pub struct Step {
     /// La fórmula con los valores sustituidos y su resultado.
     pub substitution: String,
     pub note: Option<String>,
+    /// Dónde lo establece la norma. Vacío en pasos que solo son cálculo.
+    pub references: Vec<RuleReference>,
 }
 
 /// Nombre de un calibre con su unidad: `3/0 AWG`, `300 kcmil`.
@@ -99,6 +102,7 @@ pub(crate) fn current_step(
             formula: None,
             substitution: format!("I = {current_a:.2} A"),
             note: Some("Corriente capturada directamente.".into()),
+            references: vec![],
         };
     };
     let p = plain(power_w);
@@ -123,12 +127,13 @@ pub(crate) fn current_step(
         formula: Some(formula.into()),
         substitution,
         note: Some(voltage.into()),
+        references: vec![],
     }
 }
 
 /// Datos de la selección de interruptor y conductor de un tramo.
 pub(crate) struct ConductorData<'a> {
-    pub norm: &'a str,
+    pub profile: &'a Profile,
     pub continuous_a: f64,
     pub noncontinuous_a: f64,
     pub design_a: f64,
@@ -147,6 +152,12 @@ pub(crate) struct ConductorData<'a> {
 /// Corriente de diseño, interruptor, ampacidad, verificación y puesta a tierra.
 pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
     let c = d.check;
+    let r = |rules: &[Rule]| {
+        rules
+            .iter()
+            .map(|&rule| d.profile.reference(rule))
+            .collect::<Vec<_>>()
+    };
     let load_a = d.continuous_a + d.noncontinuous_a;
     let mut steps = Vec::new();
 
@@ -157,18 +168,23 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
             formula,
             substitution: format!("Id = {:.2} A", d.design_a),
             note: Some("Carga no continua: no lleva el 125 %.".into()),
+            references: r(&[Rule::DesignCurrent]),
         }
     } else {
         Step {
             title: "Corriente de diseño".into(),
             formula,
             substitution: format!(
-                "Id = {CONTINUOUS_LOAD_FACTOR} · {:.2} + {:.2} = {:.2} A",
-                d.continuous_a, d.noncontinuous_a, d.design_a
+                "Id = {} · {:.2} + {:.2} = {:.2} A",
+                d.profile.parameters.continuous_load_factor,
+                d.continuous_a,
+                d.noncontinuous_a,
+                d.design_a
             ),
             note: Some(
                 "Es continua la carga que opera a su corriente máxima tres horas o más.".into(),
             ),
+            references: r(&[Rule::DesignCurrent]),
         }
     });
 
@@ -177,9 +193,10 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
         formula: None,
         substitution: format!("{}P-{:.0} A", d.poles, d.breaker_a),
         note: Some(format!(
-            "Capacidad normalizada igual o inmediata superior a {:.2} A (sección 240-6, {}).",
-            d.design_a, d.norm
+            "Capacidad normalizada igual o inmediata superior a {:.2} A.",
+            d.design_a
         )),
+        references: r(&[Rule::StandardRatings]),
     });
 
     steps.push(Step {
@@ -194,7 +211,7 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
             c.corrected_ampacity_a
         ),
         note: Some(format!(
-            "Tabla 310-15(b)(16): {} de {} {}, columna de {:.0} °C. Ambiente de {} °C y {} conductores portadores de corriente. En terminales de {:.0} °C: {} A. Ampacidad permitida, la menor: {:.2} A.",
+            "Ampacidad de tabla de {} de {} {}, columna de {:.0} °C. Ambiente de {} °C y {} conductores portadores de corriente. En terminales de {:.0} °C: {} A. Ampacidad permitida, la menor: {:.2} A.",
             size_label(&c.size),
             material_name(d.material),
             insulation_name(d.insulation),
@@ -205,6 +222,13 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
             plain(c.terminal_ampacity_a),
             c.allowable_ampacity_a
         )),
+        references: r(&[
+            Rule::Ampacity,
+            Rule::TemperatureCorrection,
+            Rule::Bundling,
+            Rule::Neutral,
+            Rule::Terminals,
+        ]),
     });
 
     let passes = c.meets_ampacity() && c.protected;
@@ -221,12 +245,12 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
     };
     let protected = if c.protected {
         format!(
-            "El interruptor de {:.0} A protege al conductor (240-4).",
+            "El interruptor de {:.0} A protege al conductor.",
             d.breaker_a
         )
     } else {
         format!(
-            "El interruptor de {:.0} A no protege al conductor (240-4).",
+            "El interruptor de {:.0} A no protege al conductor.",
             d.breaker_a
         )
     };
@@ -249,6 +273,12 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
             if passes { "cumple" } else { "no cumple" }
         ),
         note: Some(format!("{ampacity} {protected}{parallel}{minimum}")),
+        references: r(&[
+            Rule::DesignCurrent,
+            Rule::ConductorProtection,
+            Rule::SmallConductors,
+            Rule::Parallel,
+        ]),
     });
 
     if let Some((ground, material)) = d.grounding {
@@ -257,16 +287,22 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
             formula: None,
             substitution: format!("{} de {}", size_label(ground), material_name(material)),
             note: Some(format!(
-                "Tabla 250-122 para un interruptor de {:.0} A, con el incremento de 250-122(b) si el conductor de fase se sobredimensiona.",
+                "Por la capacidad del interruptor de {:.0} A, con incremento proporcional si el conductor de fase se sobredimensiona.",
                 d.breaker_a
             )),
+            references: r(&[Rule::EquipmentGrounding, Rule::GroundingIncrease]),
         });
     }
     steps
 }
 
 /// Selección de la tubería conduit.
-pub(crate) fn conduit_step(result: &ConduitResult, conduit: ConduitType, nipple: bool) -> Step {
+pub(crate) fn conduit_step(
+    profile: &Profile,
+    result: &ConduitResult,
+    conduit: ConduitType,
+    nipple: bool,
+) -> Step {
     let groups: Vec<String> = result
         .groups
         .iter()
@@ -280,12 +316,13 @@ pub(crate) fn conduit_step(result: &ConduitResult, conduit: ConduitType, nipple:
             )
         })
         .collect();
-    let mut note = format!(
-        "{}. Con {} conductores la ocupación permitida es de {:.0} % ({}); el tubo admite {:.2} mm² (Tabla 4).",
+    let mut note =
+        format!(
+        "{}. Con {} conductores la ocupación permitida es de {:.0} %{}; el tubo admite {:.2} mm².",
         groups.join("; "),
         result.conductor_count,
         result.allowed_fill_fraction * 100.0,
-        if nipple { "niple de 60 cm o menos" } else { "Tabla 1" },
+        if nipple { " por ser niple de 60 cm o menos" } else { "" },
         result.allowed_area_mm2
     );
     if result.upsized_for_jamming {
@@ -302,15 +339,27 @@ pub(crate) fn conduit_step(result: &ConduitResult, conduit: ConduitType, nipple:
             result.fill_percent
         ),
         note: Some(note),
+        references: [
+            Rule::InsulatedDimensions,
+            Rule::ConductorProperties,
+            Rule::ConduitFill,
+            Rule::ConduitDimensions,
+        ]
+        .into_iter()
+        .chain(nipple.then_some(Rule::Nipple))
+        .chain(result.upsized_for_jamming.then_some(Rule::Jamming))
+        .map(|rule| profile.reference(rule))
+        .collect(),
     }
 }
 
 /// Caída de tensión: R y X, ajuste opcional, caída, porcentaje y comprobación.
 pub(crate) fn drop_steps(
-    norm: &str,
+    profile: &Profile,
     input: &VoltageDropInput,
     drop: &VoltageDropResult,
     limit_percent: f64,
+    limit_rule: Option<Rule>,
 ) -> Vec<Step> {
     let v = drop.reference_voltage_v;
     let pf = input.power_factor;
@@ -328,11 +377,12 @@ pub(crate) fn drop_steps(
         formula: None,
         substitution: format!("R = {} Ω/km · X = {} Ω/km", plain(r_table), plain(x)),
         note: Some(format!(
-            "Tabla 9, {norm}: {} de {} en conduit de {}, 75 °C.",
+            "{} de {} en conduit de {}, a 75 °C.",
             size_label(&input.size),
             material_name(input.material),
             raceway_name(input.raceway)
         )),
+        references: vec![profile.reference(Rule::Impedance)],
     });
 
     let r = drop.resistance_ohm_km;
@@ -348,7 +398,11 @@ pub(crate) fn drop_steps(
                 plain(t),
                 plain(TABLE_9_TEMPERATURE_C)
             ),
-            note: Some(format!("Tabla 8, nota 2, {norm}.")),
+            note: Some(format!(
+                "α = {alpha} para {}.",
+                material_name(input.material)
+            )),
+            references: vec![profile.reference(Rule::ResistanceTemperature)],
         });
     }
 
@@ -365,12 +419,13 @@ pub(crate) fn drop_steps(
         substitution: format!(
             "ΔV = {k_value} · {:.2} · {:.4} · ({r_text} · {pf:.2} + {} · {sin:.3}) / {} = {:.2} V",
             input.current_a,
-            input.length_m / 1000.0,
+            m_to_km(input.length_m),
             plain(x),
             input.conductors_per_phase,
             drop.drop_v
         ),
         note: Some("L en kilómetros; n = conductores por fase; cos θ = fp.".into()),
+        references: vec![profile.reference(Rule::Impedance)],
     });
 
     let relation = if drop.drop_percent <= limit_percent {
@@ -391,6 +446,10 @@ pub(crate) fn drop_steps(
             "{:.2} % {relation} el límite de {limit_percent:.2} %.",
             drop.drop_percent
         )),
+        references: limit_rule
+            .map(|rule| profile.reference(rule))
+            .into_iter()
+            .collect(),
     });
 
     steps.push(Step {
@@ -401,15 +460,21 @@ pub(crate) fn drop_steps(
             drop.exact_drop_v, drop.exact_drop_percent
         ),
         note: Some(format!(
-            "Resuelta con fasores; difiere {:.2} V de la fórmula de la Tabla 9.",
+            "Resuelta con fasores; difiere {:.2} V de la fórmula aproximada.",
             (drop.exact_drop_v - drop.drop_v).abs()
         )),
+        references: vec![],
     });
     steps
 }
 
 /// Caída acumulada desde la fuente hasta el final del tramo.
-pub(crate) fn cumulative_step(upstream_percent: f64, own_percent: f64, limit_percent: f64) -> Step {
+pub(crate) fn cumulative_step(
+    profile: &Profile,
+    upstream_percent: f64,
+    own_percent: f64,
+    limit_percent: f64,
+) -> Step {
     let total = upstream_percent + own_percent;
     let relation = if total <= limit_percent {
         "no excede"
@@ -423,5 +488,9 @@ pub(crate) fn cumulative_step(upstream_percent: f64, own_percent: f64, limit_per
         note: Some(format!(
             "{total:.2} % {relation} el límite de {limit_percent:.2} %."
         )),
+        references: vec![
+            profile.reference(Rule::BranchDrop),
+            profile.reference(Rule::FeederDrop),
+        ],
     }
 }

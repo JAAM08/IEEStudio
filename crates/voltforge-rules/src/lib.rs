@@ -5,6 +5,8 @@
 //! archivos CSV de `data/<perfil>/`, que se incrustan al compilar.
 
 mod csv;
+pub mod references;
 pub mod tables;
 
+pub use references::{cite_all, Parameters, Rule, RuleReference};
 pub use tables::Profile;

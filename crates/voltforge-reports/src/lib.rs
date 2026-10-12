@@ -14,6 +14,7 @@ use voltforge_project::{
     insulation_name, material_name, size_label, PanelResult, Project, ProjectResult, RunResult,
     Status, Step,
 };
+use voltforge_rules::{cite_all, Profile, Rule};
 
 static FONTS: [&[u8]; 3] = [
     include_bytes!("../../../assets/fonts/IBMPlexSans-Regular.ttf"),
@@ -69,7 +70,7 @@ const PREAMBLE: &str = r##"
   ..pares.pos().enumerate().map(((i, c)) => if calc.even(i) { text(fill: gris, c) } else { c })
 )
 
-#let paso(n, nombre, formula, sustitucion, nota) = block(
+#let paso(n, nombre, formula, sustitucion, nota, ref) = block(
   breakable: false,
   width: 100%,
   inset: (left: 0pt, y: 3pt),
@@ -82,6 +83,7 @@ const PREAMBLE: &str = r##"
       linebreak()
       mono(sustitucion)
       if nota != none { linebreak(); text(8.5pt, fill: gris, nota) }
+      if ref != none { linebreak(); text(7.5pt, fill: acento, "Referencia: " + ref) }
     },
   ),
 )
@@ -187,12 +189,13 @@ fn steps(out: &mut String, steps: &[Step]) {
     for (i, step) in steps.iter().enumerate() {
         let _ = writeln!(
             out,
-            "#paso({}, {}, {}, {}, {})",
+            "#paso({}, {}, {}, {}, {}, {})",
             i + 1,
             q(&step.title),
             opt(&step.formula),
             q(&step.substitution),
-            opt(&step.note)
+            opt(&step.note),
+            opt(&cite_all(&step.references))
         );
     }
 }
@@ -254,6 +257,7 @@ fn panel_runs(panel: &PanelResult) -> impl Iterator<Item = (String, &RunResult)>
 /// Texto Typst de la memoria de cálculo de un proyecto.
 pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     let s = &project.settings;
+    let profile = Profile::by_id(&project.profile).unwrap_or(Profile::nom_001_sede_2012());
     let mut out = String::new();
     head(
         &mut out,
@@ -310,18 +314,34 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             (
                 "Resistencia para la caída de tensión",
                 match s.resistance_temperature_c {
-                    Some(t) => format!("Ajustada a {t} °C (Tabla 8, nota 2)"),
-                    None => "La de la Tabla 9, a 75 °C".to_string(),
+                    Some(t) => format!(
+                        "Ajustada a {t} °C ({})",
+                        profile.clause(Rule::ResistanceTemperature)
+                    ),
+                    None => format!(
+                        "La de la tabla de impedancias, a 75 °C ({})",
+                        profile.clause(Rule::Impedance)
+                    ),
                 },
             ),
             (
                 "Interruptores",
-                if s.include_iec_ratings {
-                    "Capacidades de la sección 240-6, incluidas 16, 32 y 63 A"
-                } else {
-                    "Capacidades de la sección 240-6, sin 16, 32 y 63 A"
-                }
-                .to_string(),
+                format!(
+                    "Capacidades normalizadas ({}), {} 16, 32 y 63 A",
+                    profile.clause(Rule::StandardRatings),
+                    if s.include_iec_ratings {
+                        "incluidas"
+                    } else {
+                        "sin"
+                    }
+                ),
+            ),
+            (
+                "Norma",
+                format!(
+                    "{}, {} (edición {})",
+                    profile.document.code, profile.document.title, profile.document.edition
+                ),
             ),
         ],
     );
@@ -375,12 +395,13 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                 } else {
                     format!("{id} {}", item.name)
                 };
+                let cite = cite_all(&check.references).map_or(String::new(), |c| format!(" ({c})"));
                 notes.push(format!(
                     "- #estado({}) · #{}; · #{}; #{};",
                     q(check.status.label()),
                     q(&who),
                     q(&format!("{}:", check.name)),
-                    q(&check.detail)
+                    q(&format!("{}{cite}", check.detail))
                 ));
             }
         }

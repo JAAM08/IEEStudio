@@ -7,5 +7,10 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[features]
+# `serde` permite entregar las referencias en JSON.
+serde = ["dep:serde", "voltforge-core/serde"]
+
 [dependencies]
 voltforge-core = { path = "../voltforge-core" }
+serde = { version = "1", features = ["derive"], optional = true }

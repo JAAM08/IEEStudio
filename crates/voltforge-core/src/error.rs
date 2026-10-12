@@ -9,7 +9,7 @@ pub enum Error {
     /// El calibre no existe en el perfil normativo.
     UnknownSize(String),
     /// La tabla no tiene valor para la combinación pedida.
-    NotInTable { table: &'static str, what: String },
+    NotInTable { table: String, what: String },
     /// Un dato de entrada no es válido.
     InvalidInput(String),
     /// Ningún tubo de la tabla admite los conductores.
@@ -22,7 +22,9 @@ impl fmt::Display for Error {
             Error::UnknownSize(s) => {
                 write!(f, "el calibre «{s}» no existe en el perfil normativo")
             }
-            Error::NotInTable { table, what } => write!(f, "{table} no tiene valor para {what}"),
+            Error::NotInTable { table, what } => {
+                write!(f, "{table} no tiene un valor para {what}")
+            }
             Error::InvalidInput(msg) => write!(f, "dato inválido: {msg}"),
             Error::NoConduitFits { conduit, area_mm2 } => write!(
                 f,

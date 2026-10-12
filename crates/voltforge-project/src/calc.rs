@@ -17,7 +17,7 @@ use crate::model::{LoadKind, Overrides, Panel, Phase, Project, Settings};
 use crate::procedure::{
     conductor_steps, conduit_step, cumulative_step, current_step, drop_steps, ConductorData, Step,
 };
-use voltforge_rules::Profile;
+use voltforge_rules::{Profile, Rule, RuleReference};
 
 /// Resultado de una comprobación o de un elemento completo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -46,6 +46,16 @@ pub struct Check {
     pub name: String,
     pub status: Status,
     pub detail: String,
+    /// Dónde lo establece la norma.
+    pub references: Vec<RuleReference>,
+}
+
+impl Check {
+    /// Agrega las referencias normativas de las reglas que verifica.
+    fn cite(mut self, profile: &Profile, rules: &[Rule]) -> Self {
+        self.references = rules.iter().map(|&r| profile.reference(r)).collect();
+        self
+    }
 }
 
 fn check(name: &str, passes: bool, detail: String) -> Check {
@@ -58,6 +68,7 @@ fn check(name: &str, passes: bool, detail: String) -> Check {
         name: name.to_string(),
         status,
         detail,
+        references: vec![],
     }
 }
 
@@ -158,6 +169,8 @@ struct RunSpec<'a> {
     has_neutral: bool,
     overrides: &'a Overrides,
     drop_limit_percent: f64,
+    /// Regla del límite de caída: derivado o alimentador.
+    drop_rule: Rule,
     upstream_drop_percent: f64,
 }
 
@@ -196,7 +209,7 @@ fn size_run(
     let nominal_a = nominal_current(spec.power_w, spec.power_factor, spec.kind, system)?;
     let continuous_a = nominal_a * spec.continuous_fraction;
     let noncontinuous_a = nominal_a - continuous_a;
-    let design_a = design_current(continuous_a, noncontinuous_a);
+    let design_a = design_current(profile, continuous_a, noncontinuous_a);
     let n = ov.conductors_per_phase.unwrap_or(1);
     let material = ov.material.unwrap_or(settings.material);
     let insulation = ov.insulation.unwrap_or(settings.insulation);
@@ -279,7 +292,6 @@ fn size_run(
     let drop = voltage_drop(profile, &final_drop_input)?;
     let cumulative_drop_percent = spec.upstream_drop_percent + drop.drop_percent;
 
-    let norm = profile.id.to_uppercase();
     let mut steps = vec![current_step(
         spec.kind,
         Some(spec.power_w),
@@ -288,7 +300,7 @@ fn size_run(
         nominal_a,
     )];
     steps.extend(conductor_steps(&ConductorData {
-        norm: &norm,
+        profile,
         continuous_a,
         noncontinuous_a,
         design_a,
@@ -311,6 +323,16 @@ fn size_run(
                 "{:.2} A permitidos para {:.2} A de carga y {:.2} A de diseño",
                 conductor.allowable_ampacity_a, nominal_a, design_a
             ),
+        )
+        .cite(
+            profile,
+            &[
+                Rule::DesignCurrent,
+                Rule::Ampacity,
+                Rule::TemperatureCorrection,
+                Rule::Bundling,
+                Rule::Terminals,
+            ],
         ),
         check(
             "Protección",
@@ -319,7 +341,8 @@ fn size_run(
                 "interruptor de {breaker_a:.0} A con conductor de {:.2} A",
                 conductor.allowable_ampacity_a
             ),
-        ),
+        )
+        .cite(profile, &[Rule::ConductorProtection, Rule::SmallConductors]),
         check(
             "Caída de tensión",
             drop.drop_percent <= spec.drop_limit_percent,
@@ -327,7 +350,8 @@ fn size_run(
                 "{:.2} % de {:.2} % permitido",
                 drop.drop_percent, spec.drop_limit_percent
             ),
-        ),
+        )
+        .cite(profile, &[spec.drop_rule]),
         check(
             "Caída acumulada",
             cumulative_drop_percent <= settings.total_drop_limit_percent,
@@ -335,14 +359,21 @@ fn size_run(
                 "{cumulative_drop_percent:.2} % de {:.2} % permitido",
                 settings.total_drop_limit_percent
             ),
-        ),
+        )
+        .cite(profile, &[Rule::BranchDrop, Rule::FeederDrop]),
     ];
     if n > 1 && !conductor.parallel_allowed {
-        checks.push(check(
-            "Conductores en paralelo",
-            false,
-            "solo se permiten desde 1/0 AWG".to_string(),
-        ));
+        checks.push(
+            check(
+                "Conductores en paralelo",
+                false,
+                format!(
+                    "solo se permiten desde {}",
+                    profile.parameters.smallest_parallel_size
+                ),
+            )
+            .cite(profile, &[Rule::Parallel]),
+        );
     }
 
     let dims = insulation.dimension_group();
@@ -369,15 +400,18 @@ fn size_run(
         },
     ) {
         Ok(c) => {
-            steps.push(conduit_step(&c, conduit_type, ov.nipple));
-            checks.push(check(
-                "Tubería",
-                true,
-                format!(
-                    "{conduit_type} de {} mm, ocupación de {:.1} %",
-                    c.conduit.metric_designator, c.fill_percent
-                ),
-            ));
+            steps.push(conduit_step(profile, &c, conduit_type, ov.nipple));
+            checks.push(
+                check(
+                    "Tubería",
+                    true,
+                    format!(
+                        "{conduit_type} de {} mm, ocupación de {:.1} %",
+                        c.conduit.metric_designator, c.fill_percent
+                    ),
+                )
+                .cite(profile, &[Rule::ConduitFill, Rule::ConduitDimensions]),
+            );
             Some(ConduitChoice {
                 conduit_type: conduit_type.to_string(),
                 metric_designator: c.conduit.metric_designator,
@@ -395,18 +429,21 @@ fn size_run(
                 name: "Tubería".to_string(),
                 status: Status::NotEvaluated,
                 detail: e.to_string(),
+                references: vec![],
             });
             None
         }
     };
 
     steps.extend(drop_steps(
-        &norm,
+        profile,
         &final_drop_input,
         &drop,
         spec.drop_limit_percent,
+        Some(spec.drop_rule),
     ));
     steps.push(cumulative_step(
+        profile,
         spec.upstream_drop_percent,
         drop.drop_percent,
         settings.total_drop_limit_percent,
@@ -454,6 +491,7 @@ fn run_result(
                 name: "Cálculo".to_string(),
                 status: Status::NotEvaluated,
                 detail: e.to_string(),
+                references: vec![],
             }],
         ),
     };
@@ -602,6 +640,7 @@ impl<'a> Context<'a> {
                     has_neutral: panel.feeder.has_neutral,
                     overrides: &panel.feeder.overrides,
                     drop_limit_percent: settings.feeder_drop_limit_percent,
+                    drop_rule: Rule::FeederDrop,
                     upstream_drop_percent,
                 },
             );
@@ -637,6 +676,7 @@ impl<'a> Context<'a> {
                         has_neutral: c.has_neutral,
                         overrides: &c.overrides,
                         drop_limit_percent: settings.branch_drop_limit_percent,
+                        drop_rule: Rule::BranchDrop,
                         upstream_drop_percent: panel_drop_percent,
                     },
                 );
@@ -645,6 +685,7 @@ impl<'a> Context<'a> {
                     status: Status::NotEvaluated,
                     detail: "calculado como carga general; sus reglas propias aún no se aplican"
                         .to_string(),
+                    references: vec![],
                 };
                 let extra = match c.load.kind {
                     LoadKind::Motor => vec![pending("Reglas de motores")],
@@ -704,10 +745,8 @@ impl<'a> Context<'a> {
 /// faltante o un caso que las tablas no cubren no es un error: el elemento
 /// queda como «no evaluado» con su explicación.
 pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
-    let profile = match project.profile.as_str() {
-        "nom-001-sede-2012" => Profile::nom_001_sede_2012(),
-        other => return Err(format!("perfil normativo desconocido: «{other}»")),
-    };
+    let profile = Profile::by_id(&project.profile)
+        .ok_or_else(|| format!("perfil normativo desconocido: «{}»", project.profile))?;
     validate(project)?;
 
     let mut children: HashMap<&str, Vec<usize>> = HashMap::new();

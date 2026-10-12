@@ -3,15 +3,7 @@
 use voltforge_core::units::percent;
 use voltforge_core::{ConduitType, Error, InsulationGroup, Result, Size};
 use voltforge_rules::tables::ConduitRow;
-use voltforge_rules::Profile;
-
-/// Límites de la relación diámetro interior del tubo entre diámetro del
-/// conductor en los que tres conductores pueden atascarse (Tabla 1, nota 2).
-pub const JAM_RATIO_MIN: f64 = 2.8;
-pub const JAM_RATIO_MAX: f64 = 3.2;
-
-/// Ocupación permitida en un niple de hasta 60 cm (notas de las tablas, nota 4).
-pub const NIPPLE_FILL_FRACTION: f64 = 0.60;
+use voltforge_rules::{Profile, Rule};
 
 /// Cubierta de un conductor dentro del tubo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,7 +105,7 @@ pub fn size_conduit(profile: &Profile, input: &ConduitInput) -> Result<ConduitRe
     let conductor_area_mm2: f64 = groups.iter().map(|g| g.total_area_mm2).sum();
 
     let allowed_fill_fraction = if input.nipple {
-        NIPPLE_FILL_FRACTION
+        profile.parameters.nipple_fill_fraction
     } else {
         profile
             .fill
@@ -124,7 +116,7 @@ pub fn size_conduit(profile: &Profile, input: &ConduitInput) -> Result<ConduitRe
             })
             .map(|r| r.fill_fraction)
             .ok_or(Error::NotInTable {
-                table: "la Tabla 1",
+                table: profile.clause(Rule::ConduitFill),
                 what: format!("{conductor_count} conductores"),
             })?
     };
@@ -137,7 +129,9 @@ pub fn size_conduit(profile: &Profile, input: &ConduitInput) -> Result<ConduitRe
     .then(|| groups[0].diameter_mm);
     let jam_ratio_of = |row: &ConduitRow| jam_diameter.map(|d| row.internal_diameter_mm / d);
     let jams = |row: &ConduitRow| {
-        jam_ratio_of(row).is_some_and(|r| (JAM_RATIO_MIN..=JAM_RATIO_MAX).contains(&r))
+        jam_ratio_of(row).is_some_and(|r| {
+            (profile.parameters.jam_ratio_min..=profile.parameters.jam_ratio_max).contains(&r)
+        })
     };
 
     let fits: Vec<&ConduitRow> = profile

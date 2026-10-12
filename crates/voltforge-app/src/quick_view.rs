@@ -50,6 +50,13 @@ pub(crate) fn steps_ui(ui: &mut egui::Ui, p: &Palette, steps: &[Step]) {
                     if let Some(note) = &step.note {
                         ui.label(RichText::new(note).color(p.ink2));
                     }
+                    if let Some(cite) = voltforge_rules::cite_all(&step.references) {
+                        ui.label(
+                            RichText::new(format!("Referencia: {cite}"))
+                                .small()
+                                .color(p.accent),
+                        );
+                    }
                 });
             });
         });
