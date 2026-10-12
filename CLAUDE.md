@@ -1,7 +1,9 @@
 # VoltForge
 
 Cálculo de instalaciones eléctricas de baja tensión en Rust. Antes de cambiar
-un criterio de cálculo o una decisión técnica, lee `docs/decisiones.md`.
+un criterio de cálculo o una decisión técnica, lee `docs/architecture.md`,
+`docs/engineering-methodology.md` y `docs/decisions/`. Lo pendiente está en
+`docs/roadmap.md`.
 
 ## Comandos
 
@@ -21,12 +23,18 @@ los ejecuta en Windows y Linux.
 
 - Interfaz, mensajes, comentarios y documentación en español. Identificadores
   de código en inglés.
-- `voltforge-core` no tiene dependencias obligatorias y no conoce la interfaz.
-- Ningún valor normativo se escribe en el código: va en `data/<perfil>/*.csv`
-  con su origen en el README de esa carpeta.
+- `voltforge-core` no tiene dependencias obligatorias. Ningún crate de cálculo
+  (core, rules, electrical, project) conoce la interfaz; ver el orden de
+  dependencias en `docs/architecture.md`.
+- Ningún valor normativo se escribe en el código: tablas en `data/<perfil>/*.csv`,
+  factores y límites en `profile.csv`, cláusulas en `references.csv`. Los
+  mensajes citan reglas con `Rule`, nunca con texto como «Tabla 9».
 - El motor no redondea. Un caso que las tablas no cubren devuelve un error
   explicativo y se muestra como «no evaluado»; nunca se supone un valor.
-- Cada regla de cálculo nueva lleva una prueba con resultado calculado a mano
-  y la referencia a la tabla o artículo en un comentario.
+- Cada regla de cálculo nueva lleva su `Rule` con referencia y sus tres tipos de
+  prueba: matemática, de referencia (de preferencia un caso en `fixtures/`) y
+  normativa.
+- Nada se marca conforme si falta un dato o una verificación; la aprobación
+  profesional nunca la da el programa.
 - El dueño del proyecto revisa el funcionamiento, no el código: explica los
   cambios en términos de lo que el programa hace.

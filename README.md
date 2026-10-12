@@ -6,9 +6,9 @@ VoltForge modela una instalación una sola vez y de ese modelo deriva los
 cálculos, el cuadro de cargas, el diagrama unifilar y la memoria de cálculo.
 El perfil normativo inicial es la NOM-001-SEDE-2012.
 
-> **Estado: desarrollo temprano.** Hoy existen el motor de cálculo, el modelo
-> del proyecto y una línea de comandos. Ya hay una primera interfaz gráfica; todavía no
-> hay instalador.
+> **Estado: desarrollo temprano.** Hay motor de cálculo, aplicación de
+> escritorio, línea de comandos, unifilar y memoria en PDF; todavía no hay
+> instalador. Ver [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Qué funciona hoy
 
@@ -63,15 +63,23 @@ ejecución más reciente, en la sección *Artifacts*.
 ## Organización
 
 ```
-crates/voltforge-core/     motor de cálculo, sin dependencias obligatorias
-crates/voltforge-project/  modelo del proyecto y cuadro de cargas
-crates/voltforge-cli/      línea de comandos
-crates/voltforge-report/   memoria de cálculo en PDF (Typst)
-crates/voltforge-app/      interfaz gráfica de escritorio (egui)
-assets/fonts/              tipografía IBM Plex de la interfaz y de la memoria
-data/nom-001-sede-2012/    tablas de la norma en CSV, revisables en una hoja de cálculo
-tools/                     extracción y validación de las tablas desde el texto de la norma
+crates/voltforge-core/         tipos, unidades, errores y validación; sin dependencias obligatorias
+crates/voltforge-rules/        perfiles normativos: tablas, parámetros y referencias
+crates/voltforge-electrical/   fórmulas: corriente, caída, conductor, protección, tierra, tubería
+crates/voltforge-project/      proyecto, cuadro de cargas, procedimiento, cálculo rápido, veredicto
+crates/voltforge-diagrams/     diagrama unifilar
+crates/voltforge-reports/      memoria de cálculo en PDF (Typst)
+crates/voltforge-cli/          línea de comandos
+crates/voltforge-app/          aplicación de escritorio (egui)
+data/nom-001-sede-2012/        tablas, parámetros y cláusulas de la norma en CSV
+fixtures/engineering-cases/    casos de referencia en CSV, revisables por un ingeniero
+docs/                          arquitectura, metodología, fuentes normativas y decisiones
+assets/fonts/                  tipografía IBM Plex de la interfaz y de la memoria
+tools/                         extracción y validación de las tablas desde el texto de la norma
 ```
+
+Detalles en [`docs/architecture.md`](docs/architecture.md). Para contribuir,
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 El motor no depende de ninguna interfaz, calcula con precisión completa y no
 redondea pasos intermedios. Cuando una tabla no cubre un caso, devuelve un
@@ -81,8 +89,14 @@ error que explica qué falta en lugar de suponer un valor.
 
 - Las tablas se validan por consistencia interna y se cotejaron contra una
   captura independiente. Ver [`data/nom-001-sede-2012/README.md`](data/nom-001-sede-2012/README.md).
-- Cada cálculo tiene casos de prueba con resultado conocido en
-  [`crates/voltforge-core/tests/`](crates/voltforge-core/tests/).
+- Cada cálculo tiene pruebas matemáticas, de referencia y normativas, y los
+  casos de [`fixtures/engineering-cases/`](fixtures/engineering-cases/) se
+  pueden revisar en una hoja de cálculo. Ver
+  [`docs/engineering-methodology.md`](docs/engineering-methodology.md).
+- Cada paso del procedimiento cita la cláusula de la norma; en el repositorio
+  no hay texto de normas. Ver [`docs/normative-sources.md`](docs/normative-sources.md).
+- El programa separa cálculo, verificación normativa y aprobación
+  profesional, y nunca da la tercera.
 
 ## Responsabilidad profesional
 

@@ -1,0 +1,5 @@
+# Versión fija del compilador para que todos compilen igual: desarrolladores,
+# integración continua y agentes.
+[toolchain]
+channel = "1.97.0"
+components = ["rustfmt", "clippy"]

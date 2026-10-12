@@ -18,6 +18,8 @@ de cálculo.
 | `table_250_122_equipment_grounding.csv` | Tabla 250-122 |
 | `section_240_6_standard_ratings.csv` | Sección 240-6(a). La columna `series` separa los valores de uso común en México de los de la serie IEC (16, 32 y 63 A) |
 | `section_240_4_d_small_conductors.csv` | Sección 240-4(d), calibres 14 a 10 AWG |
+| `profile.csv` | Datos de la norma (código, título, edición, URL) y parámetros: 125 % de carga continua (210-19(a)(1)), terminales de 60 °C hasta 100 A (110-14(c)), valor inmediato superior hasta 800 A (240-4(b)), calibres mínimos, atascamiento (Tabla 1, nota 2) y niples (notas de las tablas, nota 4) |
+| `references.csv` | Cláusula de cada regla del motor, con una descripción propia (no es texto de la norma) |
 
 ## Cómo se capturaron
 
