@@ -27,18 +27,21 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
 | Interfaz gráfica | Pantalla principal: árbol del proyecto, criterios, cuadro de cargas y detalle editable del elemento seleccionado; recalcula con cada cambio. Tema oscuro o claro y color de acento a elegir |
 | Procedimiento | Cada circuito y alimentador del proyecto muestra su procedimiento paso a paso: fórmula, valores sustituidos y la tabla o artículo de la norma |
-| Memoria de cálculo | PDF con datos y criterios, cuadro de cargas, observaciones, el procedimiento de cada tramo y espacio para firmas; también la hoja de un cálculo rápido. Desde el menú Archivo o con `voltforge memoria` |
+| Diagrama unifilar | Se dibuja solo a partir del proyecto: fuente, alimentadores, tableros, subtableros y circuitos con interruptor, conductores, tubería y caída de tensión. En la pestaña Unifilar y en la memoria |
+| Memoria de cálculo | PDF con datos y criterios, cuadro de cargas, diagrama unifilar, observaciones, el procedimiento de cada tramo y espacio para firmas; también la hoja de un cálculo rápido. Desde el menú Archivo o con `voltforge memoria` |
 | Cálculo rápido | Un solo circuito, sin proyecto: corriente nominal y de diseño, interruptor, verificación del conductor, puesta a tierra, tubería y caída de tensión; fórmula y procedimiento con los valores sustituidos, comprobación exacta y, si no cumple, alternativas ya calculadas (calibre mayor, conductores en paralelo, longitud máxima) que se aplican con un clic |
 
 ![Pantalla principal de VoltForge](docs/pantalla-principal.png)
 
 ![Cálculo rápido de un circuito](docs/calculo-rapido.png)
 
+![Diagrama unifilar](docs/unifilar.png)
+
 Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. Los
 motores y equipos de aire acondicionado se calculan como carga general y
 quedan sin evaluar, porque sus reglas propias aún no están implementadas.
 
-Lo siguiente en el plan: diagrama unifilar e instalador de Windows.
+Lo siguiente en el plan: instalador de Windows y servidor MCP para agentes.
 
 ## Probarlo
 

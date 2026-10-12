@@ -77,16 +77,20 @@ Hecho:
 - Memoria de cálculo en PDF (`voltforge-report`): el documento se escribe como
   texto Typst desde el resultado ya calculado y Typst lo compone, embebido en
   el programa; no calcula nada. Tamaño carta. Comando `memoria` y menú Archivo.
+- Diagrama unifilar (`voltforge_project::diagram`): lista de trazos y textos en
+  coordenadas propias, independiente de quien lo pinta. La interfaz lo dibuja
+  con egui y la memoria lo recibe como SVG en una hoja horizontal. Instalación
+  radial: cada tablero es una barra; sus circuitos cuelgan en columnas y sus
+  subtableros a la derecha.
 - Integración continua en Windows y Linux, que publica los ejecutables.
 
 Pendiente, en orden:
 
-1. Agregar y quitar tableros desde la interfaz, guardar el tema elegido, pasar
+1. Exportar el unifilar a DXF para AutoCAD. Agregar y quitar tableros desde la interfaz, guardar el tema elegido, pasar
    un cálculo rápido a un proyecto y alternativas (paralelo, longitud máxima)
    también dentro del proyecto.
-2. Diagrama unifilar automático para instalaciones radiales.
-3. Instalador de Windows.
-4. Servidor MCP para agentes.
+2. Instalador de Windows, con la reducción del tamaño del ejecutable.
+3. Servidor MCP para agentes.
 
 Fuera del alcance de la versión 0.1: reglas de motores y de climatización,
 cortocircuito y capacidad interruptiva, coordinación, transformador y media

@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 
 use typst_as_lib::TypstEngine;
 use voltforge_core::{CircuitKind, System};
+use voltforge_project::diagram::single_line;
 use voltforge_project::quick::{QuickInput, QuickResult};
 use voltforge_project::{
     insulation_name, material_name, size_label, PanelResult, Project, ProjectResult, RunResult,
@@ -355,6 +356,14 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
         }
         out.push_str(")\n");
     }
+
+    // Diagrama unifilar en una hoja horizontal, ajustado a la página.
+    let svg = single_line(project, result).to_svg();
+    let _ = writeln!(
+        out,
+        "\n#page(flipped: true)[\n= Diagrama unifilar\n#block(height: 1fr, width: 100%, image(bytes({}), format: \"svg\", width: 100%, height: 100%, fit: \"contain\"))\n]",
+        q(&svg)
+    );
 
     // Observaciones: todo lo que no cumple o no se evaluó, y los avisos.
     let mut notes = Vec::new();

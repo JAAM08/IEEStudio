@@ -95,6 +95,8 @@ pub struct Run {
     /// Criterio que determinó el calibre propuesto.
     pub governing: Option<String>,
     pub conductors_per_phase: u32,
+    /// Conductores de fase y neutro en el tramo, sin el de puesta a tierra.
+    pub conductor_count: u32,
     pub current_carrying_conductors: u32,
     pub allowable_ampacity_a: f64,
     pub grounding_size: Size,
@@ -423,6 +425,7 @@ fn size_run(
             .ok()
             .map(|r| governing_label(r.governing).to_string()),
         conductors_per_phase: n,
+        conductor_count: phase_conductors + neutral_conductors,
         current_carrying_conductors,
         allowable_ampacity_a: conductor.allowable_ampacity_a,
         grounding_size,

@@ -6,11 +6,13 @@ use eframe::egui::{self, Align, Color32, Layout, RichText, Sense};
 use egui_extras::{Column, TableBuilder};
 use voltforge_core::sizing::Insulation;
 use voltforge_core::{CircuitKind, ConduitType, Material, Profile, Size, System};
+use voltforge_project::diagram::single_line;
 use voltforge_project::{
     calculate, example, Circuit, Feeder, Load, LoadKind, Overrides, Panel, PanelResult, Phase,
     Project, ProjectResult, RunResult, Settings, Source, Status, FORMAT_VERSION,
 };
 
+use crate::diagram_view;
 use crate::quick_view::{caption, steps_ui, QuickView};
 use crate::theme::{self, Palette, ACCENTS};
 
@@ -123,12 +125,15 @@ struct Capture {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum View {
     Project,
+    Diagram,
     Quick,
 }
 
 pub struct App {
     view: View,
     quick: QuickView,
+    /// Zoom del diagrama unifilar.
+    zoom: f32,
     project: Project,
     path: Option<PathBuf>,
     dirty: bool,
@@ -176,15 +181,20 @@ impl App {
         open: Option<PathBuf>,
         capture: Option<PathBuf>,
         light: bool,
-        quick: bool,
+        view: Option<&str>,
     ) -> Self {
         theme::install_fonts(&cc.egui_ctx);
         let dark = !light;
         let palette = Palette::new(dark, ACCENTS[0].1);
         theme::apply(&cc.egui_ctx, &palette);
         let mut app = App {
-            view: if quick { View::Quick } else { View::Project },
+            view: match view {
+                Some("rapido") => View::Quick,
+                Some("unifilar") => View::Diagram,
+                _ => View::Project,
+            },
             quick: QuickView::default(),
+            zoom: 1.4,
             project: example::house(),
             path: None,
             dirty: false,
@@ -258,7 +268,7 @@ impl App {
     /// Escribe la memoria del proyecto o la hoja del cálculo rápido en PDF.
     fn export_pdf(&mut self) {
         let (pdf, name) = match self.view {
-            View::Project => (
+            View::Project | View::Diagram => (
                 self.result
                     .as_ref()
                     .map_err(Clone::clone)
@@ -349,6 +359,7 @@ impl App {
             ui.label(self.strong("VoltForge").size(15.0));
             ui.add_space(8.0);
             ui.selectable_value(&mut self.view, View::Project, "Proyecto");
+            ui.selectable_value(&mut self.view, View::Diagram, "Unifilar");
             ui.selectable_value(&mut self.view, View::Quick, "Cálculo rápido");
             ui.add_space(8.0);
             ui.menu_button("Archivo", |ui| {
@@ -371,7 +382,7 @@ impl App {
                 }
                 ui.separator();
                 let export = match self.view {
-                    View::Project => "Exportar memoria en PDF…",
+                    View::Project | View::Diagram => "Exportar memoria en PDF…",
                     View::Quick => "Exportar hoja en PDF…",
                 };
                 if ui.button(export).clicked() {
@@ -412,7 +423,7 @@ impl App {
                     .map_or("sin guardar".to_string(), |n| {
                         n.to_string_lossy().into_owned()
                     });
-                if self.view == View::Project {
+                if self.view != View::Quick {
                     ui.label(self.muted(file));
                     ui.label(&self.project.name);
                 }
@@ -1040,6 +1051,21 @@ impl eframe::App for App {
 
         if self.view == View::Quick {
             self.quick.ui(ui, &p);
+            self.handle_capture(ui.ctx());
+            return;
+        }
+        if self.view == View::Diagram {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(p.bg).inner_margin(16))
+                .show(ui, |ui| match &self.result {
+                    Ok(result) => {
+                        let diagram = single_line(&self.project, result);
+                        diagram_view::show(ui, &p, &diagram, &mut self.zoom);
+                    }
+                    Err(e) => {
+                        ui.label(RichText::new(e).color(p.bad));
+                    }
+                });
             self.handle_capture(ui.ctx());
             return;
         }
