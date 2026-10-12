@@ -4,16 +4,19 @@
 
 use eframe::egui::{self, RichText};
 use egui_phosphor::regular as icon;
-use voltforge_core::Size;
-use voltforge_project::{size_label, Overrides, Phase, RunResult, Status};
+use voltforge_core::{CircuitKind, Size};
+use voltforge_project::{
+    size_label, CompressorLoad, LoadKind, MotorLoad, Overrides, Phase, RunResult, Status,
+};
 use voltforge_rules::{cite_all, Profile, Rule};
 
 use super::Shared;
 use crate::state::{Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{
-    combo, combo_override, muted, number, property, section, source_badge, status_text, strong,
-    Source, CONDUITS, INSULATIONS, KINDS, LOAD_KINDS, MATERIALS, SYSTEMS,
+    combo, combo_override, motor_hp_combo, muted, number, optional_number, property, section,
+    source_badge, status_text, strong, Source, CONDUITS, INSULATIONS, KINDS, LOAD_KINDS, MATERIALS,
+    MOTOR_TYPES, SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -240,6 +243,11 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
     let mut changed = false;
     let settings = doc.project.settings.clone();
     let id_problem = doc.circuit_id_problem(i, c);
+    // Potencia calculada de un motor o compresor, para mostrarla.
+    let computed_w = doc
+        .panel_result(i)
+        .and_then(|r| r.circuits.get(c))
+        .map(|r| r.load_w);
     let circuit = &mut doc.project.panels[i].circuits[c];
     section(ui, p, "Circuito");
     property(ui, p, "ID", |ui| {
@@ -254,9 +262,49 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
         changed |= ui.text_edit_singleline(&mut circuit.name).changed();
     });
     section(ui, p, "Carga");
-    property(ui, p, "Potencia", |ui| {
-        changed |= number(ui, &mut circuit.load.power_w, 10.0, 0.0, 5.0e6, " W");
+    property(ui, p, "Tipo de carga", |ui| {
+        if combo(ui, ("tipo-carga", c), &mut circuit.load.kind, &LOAD_KINDS) {
+            changed = true;
+            // Al elegir motor o aire acondicionado se piden sus datos.
+            match circuit.load.kind {
+                LoadKind::Motor if circuit.load.motor.is_none() => {
+                    circuit.load.motor = Some(MotorLoad {
+                        hp: "1".to_string(),
+                        motor_type: Default::default(),
+                        nameplate_a: None,
+                        service_factor_marked: false,
+                    });
+                }
+                LoadKind::AirConditioning if circuit.load.compressor.is_none() => {
+                    circuit.load.compressor = Some(CompressorLoad::default());
+                }
+                _ => {}
+            }
+        }
     });
+    let equipment = matches!(
+        (
+            circuit.load.kind,
+            &circuit.load.motor,
+            &circuit.load.compressor
+        ),
+        (LoadKind::Motor, Some(_), _) | (LoadKind::AirConditioning, _, Some(_))
+    );
+    if equipment {
+        property(ui, p, "Potencia", |ui| {
+            ui.label(
+                RichText::new(computed_w.map_or("—".to_string(), |w| format!("{w:.0} W")))
+                    .monospace(),
+            )
+            .on_hover_text(
+                "Calculada con la corriente del equipo: la de tabla del motor o la de placa del compresor.",
+            );
+        });
+    } else {
+        property(ui, p, "Potencia", |ui| {
+            changed |= number(ui, &mut circuit.load.power_w, 10.0, 0.0, 5.0e6, " W");
+        });
+    }
     property(ui, p, "Factor de potencia", |ui| {
         changed |= ui
             .add(
@@ -267,12 +315,20 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
             )
             .changed();
     });
-    property(ui, p, "Tipo de carga", |ui| {
-        changed |= combo(ui, ("tipo-carga", c), &mut circuit.load.kind, &LOAD_KINDS);
-    });
-    changed |= ui
-        .checkbox(&mut circuit.load.continuous, "Carga continua (3 h o más)")
-        .changed();
+    if !equipment {
+        changed |= ui
+            .checkbox(&mut circuit.load.continuous, "Carga continua (3 h o más)")
+            .changed();
+    }
+    let three_phase = circuit.kind == CircuitKind::ThreePhase;
+    if let (LoadKind::Motor, Some(motor)) = (circuit.load.kind, circuit.load.motor.as_mut()) {
+        changed |= motor_inputs(ui, p, motor, three_phase, c);
+    }
+    if let (LoadKind::AirConditioning, Some(plate)) =
+        (circuit.load.kind, circuit.load.compressor.as_mut())
+    {
+        changed |= compressor_inputs(ui, p, plate);
+    }
     section(ui, p, "Conexión");
     property(ui, p, "Conexión", |ui| {
         if combo(ui, ("conexion", c), &mut circuit.kind, &KINDS) {
@@ -303,6 +359,88 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
         changed |= number(ui, &mut circuit.length_m, 0.5, 0.0, 5000.0, " m");
     });
     changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
+    changed
+}
+
+/// Datos del motor: potencia de la tabla, tipo y placa.
+fn motor_inputs(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    motor: &mut MotorLoad,
+    three_phase: bool,
+    c: usize,
+) -> bool {
+    let mut changed = false;
+    section(ui, p, "Motor");
+    property(ui, p, "Potencia", |ui| {
+        changed |= motor_hp_combo(ui, ("hp", c), &mut motor.hp, three_phase);
+    })
+    .on_hover_text(if three_phase {
+        "Tabla 430-250: motores de tres fases"
+    } else {
+        "Tabla 430-248: motores de una fase"
+    });
+    if three_phase {
+        property(ui, p, "Tipo", |ui| {
+            changed |= combo(ui, ("tipo-motor", c), &mut motor.motor_type, &MOTOR_TYPES);
+        });
+    }
+    property(ui, p, "Corriente de placa", |ui| {
+        changed |= optional_number(ui, &mut motor.nameplate_a, 10.0, " A");
+    })
+    .on_hover_text("Para ajustar el relevador de sobrecarga. Conductores y protección usan la corriente de la tabla.");
+    changed |= ui
+        .checkbox(
+            &mut motor.service_factor_marked,
+            "Factor de servicio 1.15 o más, o elevación de 40 °C",
+        )
+        .on_hover_text("El relevador de sobrecarga puede ajustarse al 125 % en lugar del 115 %.")
+        .changed();
+    changed
+}
+
+/// Datos de placa de un equipo de aire acondicionado o refrigeración.
+fn compressor_inputs(ui: &mut egui::Ui, p: &Palette, plate: &mut CompressorLoad) -> bool {
+    let mut changed = false;
+    section(ui, p, "Placa del equipo");
+    ui.label(
+        muted(
+            p,
+            "Basta la corriente de carga nominal, o la ampacidad mínima y la protección máxima.",
+        )
+        .size(11.0),
+    );
+    for (label, value, default, tip) in [
+        (
+            "Nominal (RLA)",
+            &mut plate.rated_load_a,
+            10.0,
+            "Corriente de carga nominal del motocompresor",
+        ),
+        (
+            "Selección (BCSC)",
+            &mut plate.branch_selection_a,
+            10.0,
+            "Corriente de selección del circuito derivado, si la placa la trae",
+        ),
+        (
+            "Mínima (MCA)",
+            &mut plate.minimum_circuit_a,
+            15.0,
+            "Ampacidad mínima del circuito marcada en el equipo",
+        ),
+        (
+            "Máxima (MOP)",
+            &mut plate.maximum_protection_a,
+            20.0,
+            "Protección máxima marcada en el equipo",
+        ),
+    ] {
+        property(ui, p, label, |ui| {
+            changed |= optional_number(ui, value, default, " A");
+        })
+        .on_hover_text(tip);
+    }
     changed
 }
 
@@ -347,6 +485,33 @@ fn decisions(
                 }
             });
     });
+    property(ui, p, "Interruptor", |ui| {
+        let text = ov
+            .breaker_a
+            .map_or("Lo propone VoltForge".to_string(), |b| format!("{b:.0} A"));
+        egui::ComboBox::from_id_salt(("interruptor", id))
+            .selected_text(text)
+            .height(320.0)
+            .show_ui(ui, |ui| {
+                changed |= ui
+                    .selectable_value(&mut ov.breaker_a, None, "Lo propone VoltForge")
+                    .changed();
+                for r in Profile::nom_001_sede_2012()
+                    .standard_ratings
+                    .iter()
+                    .filter(|r| r.common || project.include_iec_ratings)
+                {
+                    changed |= ui
+                        .selectable_value(
+                            &mut ov.breaker_a,
+                            Some(r.rating_a),
+                            format!("{:.0} A", r.rating_a),
+                        )
+                        .changed();
+                }
+            });
+    })
+    .on_hover_text("VoltForge verifica el interruptor que fijes; no lo cambia.");
     property(ui, p, "Conductores por fase", |ui| {
         let mut n = ov.conductors_per_phase.unwrap_or(1);
         if ui.add(egui::DragValue::new(&mut n).range(1..=12)).changed() {

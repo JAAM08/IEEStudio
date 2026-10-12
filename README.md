@@ -6,9 +6,10 @@ VoltForge modela una instalación una sola vez y de ese modelo deriva los
 cálculos, el cuadro de cargas, el diagrama unifilar y la memoria de cálculo.
 El perfil normativo inicial es la NOM-001-SEDE-2012.
 
-> **Estado: desarrollo temprano.** Hay motor de cálculo, aplicación de
-> escritorio, línea de comandos, unifilar y memoria en PDF; todavía no hay
-> instalador. Ver [`docs/roadmap.md`](docs/roadmap.md).
+> **Estado: alfa.** Hay motor de cálculo, aplicación de escritorio con
+> instalador para Windows, línea de comandos, unifilar y memoria en PDF. Los
+> casos de referencia aún no los revisa un ingeniero. Ver
+> [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Qué funciona hoy
 
@@ -19,7 +20,9 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Caída de tensión | Por impedancia con la Tabla 9, conductores en paralelo, ajuste opcional de resistencia por temperatura y comprobación con la fórmula exacta |
 | Longitud máxima | Longitud con la que un tramo cumple un límite de caída |
 | Conductor | Menor calibre que cumple terminales, temperatura ambiente, agrupamiento, protección y, si se pide, un límite de caída de tensión; indica qué criterio lo determinó |
-| Interruptor | Capacidad normalizada inmediata superior a la corriente de diseño |
+| Interruptor | Capacidad normalizada inmediata superior a la corriente de diseño, o el que fije el usuario, verificado |
+| Motores | Corriente por las tablas 430-248 y 430-250, conductor al 125 %, interruptor por la Tabla 430-52, relevador de sobrecarga y alimentadores con el 25 % del motor mayor (430-24) |
+| Aire acondicionado | Con la ampacidad mínima y la protección máxima de la placa, o con la corriente de carga nominal del compresor (artículo 440) |
 | Puesta a tierra | Tabla 250-122, con el incremento proporcional cuando el conductor de fase se sobredimensiona |
 | Tubería conduit | EMT, IMC, RMC y PVC cédula 40 y 80; ocupación de 53, 31 y 40 % según el número de conductores, niples al 60 % y verificación de atascamiento |
 
@@ -39,9 +42,7 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 
 ![Vista previa de la memoria](docs/memoria.png)
 
-Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. Los
-motores y equipos de aire acondicionado se calculan como carga general y
-quedan sin evaluar, porque sus reglas propias aún no están implementadas.
+Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. 
 
 Lo siguiente en el plan está en [docs/roadmap.md](docs/roadmap.md).
 

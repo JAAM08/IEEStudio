@@ -13,7 +13,8 @@ use voltforge_electrical::sizing::{
 };
 use voltforge_electrical::voltage_drop::{voltage_drop, VoltageDropInput};
 
-use crate::model::{LoadKind, Overrides, Panel, Phase, Project, Settings};
+use crate::model::{Overrides, Panel, Phase, Project, Settings};
+use crate::motors::{motor_circuit, MotorCircuit};
 use crate::procedure::{
     conductor_steps, conduit_step, cumulative_step, current_step, drop_steps, ConductorData, Step,
 };
@@ -59,7 +60,7 @@ impl Check {
     }
 }
 
-fn check(name: &str, passes: bool, detail: String) -> Check {
+pub(crate) fn check(name: &str, passes: bool, detail: String) -> Check {
     let status = if passes {
         Status::Complies
     } else {
@@ -98,6 +99,8 @@ pub struct Run {
     pub nominal_a: f64,
     pub design_a: f64,
     pub breaker_a: f64,
+    /// El interruptor lo fijó el usuario.
+    pub breaker_forced: bool,
     pub poles: u32,
     pub length_m: f64,
     pub size: Size,
@@ -163,6 +166,23 @@ pub struct ProjectResult {
     pub verdict: Verdict,
 }
 
+/// Corriente de un tramo que ya resolvió quien llama: circuitos de motor o de
+/// compresor y alimentadores con motores.
+pub(crate) struct Given {
+    pub nominal_a: f64,
+    pub design_a: f64,
+    /// Interruptor propuesto. `None` toma el normalizado igual o inmediato
+    /// superior a la corriente de diseño.
+    pub breaker_a: Option<f64>,
+    /// Circuito derivado de motor: el conductor se protege según el artículo 430.
+    pub motor_protection: bool,
+    /// Pasos de corriente, diseño e interruptor.
+    pub steps: Vec<Step>,
+    pub ampacity_rules: Vec<Rule>,
+    /// Alimentador con motores: interruptor máximo según 430-62.
+    pub feeder_motor_limit_a: Option<f64>,
+}
+
 struct RunSpec<'a> {
     kind: CircuitKind,
     power_w: f64,
@@ -175,6 +195,7 @@ struct RunSpec<'a> {
     /// Regla del límite de caída: derivado o alimentador.
     drop_rule: Rule,
     upstream_drop_percent: f64,
+    given: Option<Given>,
 }
 
 pub(crate) fn poles(kind: CircuitKind) -> u32 {
@@ -193,6 +214,70 @@ pub(crate) fn is_wye(system: &System) -> bool {
     }
 }
 
+/// √3 en tres fases; 1 en una o dos fases.
+pub(crate) fn phase_multiplier(kind: CircuitKind) -> f64 {
+    match kind {
+        CircuitKind::ThreePhase => voltforge_core::units::SQRT_3,
+        CircuitKind::LineToNeutral | CircuitKind::LineToLine => 1.0,
+    }
+}
+
+/// Alimentador con motores (430-24, 440-33): 125 % de la carga continua que
+/// no es motor, más el resto, más el 25 % del motor mayor. Su interruptor
+/// puede llegar al del motor mayor más el resto de la carga (430-62, 430-63).
+fn feeder_with_motors(
+    profile: &Profile,
+    system: &System,
+    kind: CircuitKind,
+    demanded_w: f64,
+    power_factor: f64,
+    continuous_fraction: f64,
+    largest: &LargestMotor,
+) -> Result<Given, Error> {
+    let p = &profile.parameters;
+    let nominal_a = nominal_current(demanded_w, power_factor, kind, system)?;
+    let volts = kind.reference_voltage(system)?;
+    let k = phase_multiplier(kind);
+    let continuous_a = nominal_a * continuous_fraction;
+    let noncontinuous_a = nominal_a - continuous_a;
+    let motor_a = largest.va / (k * volts);
+    let extra = p.motor_largest_factor - 1.0;
+    let design_a = p.continuous_load_factor * continuous_a + noncontinuous_a + extra * motor_a;
+    let limit_a = nominal_a + (largest.breaker_va - largest.va) / (k * volts);
+    let r = |rules: &[Rule]| rules.iter().map(|&x| profile.reference(x)).collect();
+    let steps = vec![
+        current_step(kind, Some(demanded_w), power_factor, volts, nominal_a),
+        Step {
+            title: "Corriente de diseño".into(),
+            formula: Some("Id = 1.25 · I continua + I no continua + 0.25 · I motor mayor".into()),
+            substitution: format!(
+                "Id = {} · {:.2} + {:.2} + {} · {:.2} = {:.2} A",
+                crate::procedure::plain(p.continuous_load_factor),
+                continuous_a,
+                noncontinuous_a,
+                crate::procedure::plain(extra),
+                motor_a,
+                design_a
+            ),
+            note: Some(format!(
+                "Motor mayor: {}{}. Su corriente se lleva a la tensión del alimentador por su potencia aparente. Los motores cuentan al 100 % en la carga y el mayor suma otro 25 %.",
+                largest.label,
+                if largest.panel.is_empty() { String::new() } else { format!(", tablero {}", largest.panel) }
+            )),
+            references: r(&[Rule::MotorFeederConductor, Rule::CompressorConductor, Rule::DesignCurrent]),
+        },
+    ];
+    Ok(Given {
+        nominal_a,
+        design_a,
+        breaker_a: None,
+        motor_protection: false,
+        steps,
+        ampacity_rules: vec![Rule::MotorFeederConductor, Rule::DesignCurrent],
+        feeder_motor_limit_a: Some(limit_a),
+    })
+}
+
 fn governing_label(g: Governing) -> &'static str {
     match g {
         Governing::Ampacity => "ampacidad",
@@ -209,10 +294,22 @@ fn size_run(
     spec: &RunSpec,
 ) -> Result<(Run, Vec<Check>), Error> {
     let ov = spec.overrides;
-    let nominal_a = nominal_current(spec.power_w, spec.power_factor, spec.kind, system)?;
-    let continuous_a = nominal_a * spec.continuous_fraction;
-    let noncontinuous_a = nominal_a - continuous_a;
-    let design_a = design_current(profile, continuous_a, noncontinuous_a);
+    let given = spec.given.as_ref();
+    let (nominal_a, continuous_a, noncontinuous_a, design_a) = match given {
+        Some(g) => (g.nominal_a, 0.0, g.nominal_a, g.design_a),
+        None => {
+            let nominal = nominal_current(spec.power_w, spec.power_factor, spec.kind, system)?;
+            let continuous = nominal * spec.continuous_fraction;
+            let noncontinuous = nominal - continuous;
+            (
+                nominal,
+                continuous,
+                noncontinuous,
+                design_current(profile, continuous, noncontinuous),
+            )
+        }
+    };
+    let motor_protection = given.is_some_and(|g| g.motor_protection);
     let n = ov.conductors_per_phase.unwrap_or(1);
     let material = ov.material.unwrap_or(settings.material);
     let insulation = ov.insulation.unwrap_or(settings.insulation);
@@ -266,10 +363,19 @@ fn size_run(
             input: drop_input.clone(),
             limit_percent: spec.drop_limit_percent,
         }),
-        motor: None,
+        design_a: given.map(|g| g.design_a),
+        breaker_a: None,
+        motor_protection,
     };
 
-    let breaker_a = standard_rating_at_least(profile, design_a, settings.include_iec_ratings)?;
+    let breaker_a = match ov.breaker_a.or(given.and_then(|g| g.breaker_a)) {
+        Some(b) => b,
+        None => standard_rating_at_least(profile, design_a, settings.include_iec_ratings)?,
+    };
+    let sizing = SizingInput {
+        breaker_a: Some(breaker_a),
+        ..sizing
+    };
     let recommended = select_conductor(profile, &sizing);
     let (conductor, grounding_size) = match (&ov.size, &recommended) {
         (Some(forced), _) => {
@@ -296,19 +402,25 @@ fn size_run(
     let drop = voltage_drop(profile, &final_drop_input)?;
     let cumulative_drop_percent = spec.upstream_drop_percent + drop.drop_percent;
 
-    let mut steps = vec![current_step(
-        spec.kind,
-        Some(spec.power_w),
-        spec.power_factor,
-        drop.reference_voltage_v,
-        nominal_a,
-    )];
+    let mut steps = match given {
+        Some(g) => g.steps.clone(),
+        None => vec![current_step(
+            spec.kind,
+            Some(spec.power_w),
+            spec.power_factor,
+            drop.reference_voltage_v,
+            nominal_a,
+        )],
+    };
     steps.extend(conductor_steps(&ConductorData {
         profile,
         continuous_a,
         noncontinuous_a,
         design_a,
         breaker_a,
+        breaker_forced: ov.breaker_a.is_some(),
+        given_design: given.is_some(),
+        motor_protection,
         poles: poles(spec.kind),
         material,
         insulation,
@@ -319,34 +431,56 @@ fn size_run(
         grounding: Some((&grounding_size, settings.material)),
     }));
 
-    let mut checks = vec![
-        check(
-            "Ampacidad",
-            conductor.meets_ampacity(),
-            format!(
-                "{:.2} A permitidos para {:.2} A de carga y {:.2} A de diseño",
-                conductor.allowable_ampacity_a, nominal_a, design_a
-            ),
-        )
-        .cite(
-            profile,
-            &[
-                Rule::DesignCurrent,
-                Rule::Ampacity,
-                Rule::TemperatureCorrection,
-                Rule::Bundling,
-                Rule::Terminals,
-            ],
+    let mut ampacity_rules = given.map_or(vec![Rule::DesignCurrent], |g| g.ampacity_rules.clone());
+    ampacity_rules.extend([
+        Rule::Ampacity,
+        Rule::TemperatureCorrection,
+        Rule::Bundling,
+        Rule::Terminals,
+    ]);
+    let mut checks = vec![check(
+        "Ampacidad",
+        conductor.meets_ampacity(),
+        format!(
+            "{:.2} A permitidos para {:.2} A de carga y {:.2} A de diseño",
+            conductor.allowable_ampacity_a, nominal_a, design_a
         ),
-        check(
-            "Protección",
-            conductor.protected,
+    )
+    .cite(profile, &ampacity_rules)];
+    // En un circuito de motor la protección la verifica su propia regla.
+    if !motor_protection {
+        let motor_limit = given.and_then(|g| g.feeder_motor_limit_a);
+        let by_430_62 = motor_limit.is_some_and(|max| breaker_a <= max + 1e-9);
+        let covers_design = breaker_a >= design_a - 1e-9;
+        let protected = conductor.protected || by_430_62;
+        let detail = if !covers_design {
+            format!("el interruptor de {breaker_a:.0} A es menor que la corriente de diseño de {design_a:.2} A")
+        } else if conductor.protected {
             format!(
                 "interruptor de {breaker_a:.0} A con conductor de {:.2} A",
                 conductor.allowable_ampacity_a
-            ),
-        )
-        .cite(profile, &[Rule::ConductorProtection, Rule::SmallConductors]),
+            )
+        } else if by_430_62 {
+            format!(
+                "interruptor de {breaker_a:.0} A: mayor que la ampacidad, dentro de los {:.0} A que permite 430-62 para alimentadores de motores",
+                motor_limit.unwrap_or_default()
+            )
+        } else {
+            format!(
+                "interruptor de {breaker_a:.0} A con conductor de {:.2} A",
+                conductor.allowable_ampacity_a
+            )
+        };
+        let mut rules = vec![Rule::ConductorProtection, Rule::SmallConductors];
+        if ov.breaker_a.is_some() {
+            rules.push(Rule::BreakerRating);
+        }
+        if motor_limit.is_some() {
+            rules.push(Rule::MotorFeederProtection);
+        }
+        checks.push(check("Protección", protected && covers_design, detail).cite(profile, &rules));
+    }
+    checks.extend([
         check(
             "Caída de tensión",
             drop.drop_percent <= spec.drop_limit_percent,
@@ -365,7 +499,7 @@ fn size_run(
             ),
         )
         .cite(profile, &[Rule::BranchDrop, Rule::FeederDrop]),
-    ];
+    ]);
     if n > 1 && !conductor.parallel_allowed {
         checks.push(
             check(
@@ -457,6 +591,7 @@ fn size_run(
         nominal_a,
         design_a,
         breaker_a,
+        breaker_forced: ov.breaker_a.is_some(),
         poles: poles(spec.kind),
         length_m: spec.length_m,
         size: conductor.size.clone(),
@@ -510,20 +645,42 @@ fn run_result(
     }
 }
 
+/// Motor o compresor de mayor potencia aguas abajo de un tablero.
+#[derive(Debug, Clone, Default)]
+struct LargestMotor {
+    va: f64,
+    /// Potencia equivalente a su interruptor máximo, para 430-62.
+    breaker_va: f64,
+    label: String,
+    panel: String,
+}
+
 /// Carga agregada de un tablero, incluidos sus subtableros.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 struct PanelLoad {
     connected_w: f64,
-    continuous_w: f64,
+    /// Potencia aparente de la carga continua: la corriente es proporcional
+    /// a ella, no a los watts, cuando los factores de potencia difieren.
+    continuous_va: f64,
     apparent_va: f64,
     phase_va: [f64; 3],
     phases_assigned: bool,
+    largest_motor: Option<LargestMotor>,
+}
+
+/// Potencia de un circuito: la de sus datos de motor o compresor si los
+/// tiene, si no la capturada.
+struct CircuitLoad {
+    power_w: f64,
+    va: f64,
 }
 
 struct Context<'a> {
     project: &'a Project,
     profile: &'a Profile,
     children: HashMap<&'a str, Vec<usize>>,
+    /// Datos de motor o compresor de cada circuito, por tablero.
+    motors: Vec<Vec<Option<Result<MotorCircuit, Error>>>>,
     loads: Vec<PanelLoad>,
     results: Vec<Option<PanelResult>>,
     warnings: Vec<String>,
@@ -570,19 +727,53 @@ fn validate(project: &Project) -> Result<(), String> {
 }
 
 impl<'a> Context<'a> {
+    fn circuit_load(&self, panel: usize, circuit: usize) -> CircuitLoad {
+        let c = &self.project.panels[panel].circuits[circuit];
+        let pf = c.load.power_factor;
+        match &self.motors[panel][circuit] {
+            Some(Ok(m)) => CircuitLoad {
+                power_w: m.va * pf,
+                va: m.va,
+            },
+            _ => CircuitLoad {
+                power_w: c.load.power_w,
+                va: if pf > 0.0 { c.load.power_w / pf } else { 0.0 },
+            },
+        }
+    }
+
     fn aggregate(&mut self, index: usize) -> PanelLoad {
         let panel = &self.project.panels[index];
         let mut load = PanelLoad {
             phases_assigned: true,
             ..PanelLoad::default()
         };
-        for c in &panel.circuits {
-            let pf = c.load.power_factor;
-            let va = if pf > 0.0 { c.load.power_w / pf } else { 0.0 };
-            load.connected_w += c.load.power_w;
+        for (k, c) in panel.circuits.iter().enumerate() {
+            let CircuitLoad { power_w, va } = self.circuit_load(index, k);
+            load.connected_w += power_w;
             load.apparent_va += va;
-            if c.load.continuous {
-                load.continuous_w += c.load.power_w;
+            match &self.motors[index][k] {
+                // Los motores no son carga continua: su 125 % lo da 430-24.
+                Some(Ok(m)) => {
+                    let candidate = LargestMotor {
+                        va: m.va,
+                        breaker_va: m.va * m.breaker_max_a / m.current_a,
+                        label: format!("{} ({})", m.label, c.id),
+                        panel: panel.id.clone(),
+                    };
+                    if load
+                        .largest_motor
+                        .as_ref()
+                        .map_or(true, |l| candidate.va > l.va)
+                    {
+                        load.largest_motor = Some(candidate);
+                    }
+                }
+                _ => {
+                    if c.load.continuous {
+                        load.continuous_va += va;
+                    }
+                }
             }
             let expected = poles(c.kind) as usize;
             if c.phases.len() == expected {
@@ -606,14 +797,19 @@ impl<'a> Context<'a> {
         {
             let sub = self.aggregate(child);
             load.connected_w += sub.connected_w;
-            load.continuous_w += sub.continuous_w;
+            load.continuous_va += sub.continuous_va;
             load.apparent_va += sub.apparent_va;
             for i in 0..3 {
                 load.phase_va[i] += sub.phase_va[i];
             }
             load.phases_assigned &= sub.phases_assigned;
+            if let Some(m) = sub.largest_motor {
+                if load.largest_motor.as_ref().map_or(true, |l| m.va > l.va) {
+                    load.largest_motor = Some(m);
+                }
+            }
         }
-        self.loads[index] = load;
+        self.loads[index] = load.clone();
         load
     }
 
@@ -622,7 +818,7 @@ impl<'a> Context<'a> {
         let panel: &Panel = &project.panels[index];
         let settings = &project.settings;
         let system = &project.source.system;
-        let load = self.loads[index];
+        let load = self.loads[index].clone();
 
         let power_factor = if load.apparent_va > 0.0 {
             load.connected_w / load.apparent_va
@@ -630,6 +826,30 @@ impl<'a> Context<'a> {
             1.0
         };
         let demanded_w = load.connected_w * panel.feeder.demand_factor;
+        let continuous_fraction = if load.apparent_va > 0.0 {
+            load.continuous_va / load.apparent_va
+        } else {
+            0.0
+        };
+        let given = match &load.largest_motor {
+            Some(m) if load.connected_w > 0.0 => feeder_with_motors(
+                self.profile,
+                system,
+                panel.kind,
+                demanded_w,
+                power_factor,
+                continuous_fraction,
+                m,
+            )
+            .ok(),
+            _ => None,
+        };
+        let motor_breaker_a = match (&load.largest_motor, panel.kind.reference_voltage(system)) {
+            (Some(m), Ok(v)) => {
+                Some(m.breaker_va / (v * crate::calc::phase_multiplier(panel.kind)))
+            }
+            _ => None,
+        };
         let feeder = if load.connected_w > 0.0 {
             let outcome = size_run(
                 self.profile,
@@ -639,15 +859,26 @@ impl<'a> Context<'a> {
                     kind: panel.kind,
                     power_w: demanded_w,
                     power_factor,
-                    continuous_fraction: load.continuous_w / load.connected_w,
+                    continuous_fraction,
                     length_m: panel.feeder.length_m,
                     has_neutral: panel.feeder.has_neutral,
                     overrides: &panel.feeder.overrides,
                     drop_limit_percent: settings.feeder_drop_limit_percent,
                     drop_rule: Rule::FeederDrop,
                     upstream_drop_percent,
+                    given,
                 },
             );
+            // Coordinación: un interruptor de alimentador menor que el del
+            // motor mayor puede dispararse cuando el motor arranca.
+            if let (Ok((run, _)), Some(motor_a)) = (&outcome, motor_breaker_a) {
+                if run.breaker_a + 1e-9 < motor_a {
+                    self.warnings.push(format!(
+                        "{}: el interruptor del alimentador ({:.0} A) es menor que el del motor mayor ({:.0} A); puede dispararse al arrancar el motor",
+                        panel.name, run.breaker_a, motor_a
+                    ));
+                }
+            }
             run_result(&panel.id, "Alimentador", demanded_w, outcome, vec![])
         } else {
             run_result(
@@ -666,7 +897,21 @@ impl<'a> Context<'a> {
         let circuits = panel
             .circuits
             .iter()
-            .map(|c| {
+            .enumerate()
+            .map(|(k, c)| {
+                let motor = self.motors[index][k].clone();
+                let given = match &motor {
+                    Some(Ok(m)) => Some(Given {
+                        nominal_a: m.current_a,
+                        design_a: m.design_a,
+                        breaker_a: Some(m.breaker_max_a),
+                        motor_protection: true,
+                        steps: m.steps.clone(),
+                        ampacity_rules: m.ampacity_rules.clone(),
+                        feeder_motor_limit_a: None,
+                    }),
+                    _ => None,
+                };
                 let outcome = size_run(
                     self.profile,
                     settings,
@@ -682,21 +927,21 @@ impl<'a> Context<'a> {
                         drop_limit_percent: settings.branch_drop_limit_percent,
                         drop_rule: Rule::BranchDrop,
                         upstream_drop_percent: panel_drop_percent,
+                        given,
                     },
                 );
-                let pending = |rule: &str| Check {
-                    name: rule.to_string(),
-                    status: Status::NotEvaluated,
-                    detail: "calculado como carga general; sus reglas propias aún no se aplican"
-                        .to_string(),
-                    references: vec![],
+                let extra = match motor {
+                    Some(Ok(m)) => m.checks,
+                    Some(Err(e)) => vec![Check {
+                        name: "Datos del equipo".to_string(),
+                        status: Status::NotEvaluated,
+                        detail: format!("{e}; se calculó como carga general"),
+                        references: vec![],
+                    }],
+                    None => vec![],
                 };
-                let extra = match c.load.kind {
-                    LoadKind::Motor => vec![pending("Reglas de motores")],
-                    LoadKind::AirConditioning => vec![pending("Reglas de climatización")],
-                    LoadKind::General | LoadKind::Lighting => vec![],
-                };
-                run_result(&c.id, &c.name, c.load.power_w, outcome, extra)
+                let load_w = self.circuit_load(index, k).power_w;
+                run_result(&c.id, &c.name, load_w, outcome, extra)
             })
             .collect();
 
@@ -762,10 +1007,21 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         }
     }
     let count = project.panels.len();
+    let motors = project
+        .panels
+        .iter()
+        .map(|p| {
+            p.circuits
+                .iter()
+                .map(|c| motor_circuit(profile, &project.settings, &project.source.system, c))
+                .collect()
+        })
+        .collect();
     let mut ctx = Context {
         project,
         profile,
         children,
+        motors,
         loads: vec![PanelLoad::default(); count],
         results: vec![None; count],
         warnings: Vec::new(),

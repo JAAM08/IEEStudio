@@ -17,6 +17,10 @@
   vista previa de la memoria y preferencias guardadas; línea de comandos con
   salida JSON.
 - Integración continua en Windows y Linux que publica los ejecutables.
+- Motores y motocompresores (artículos 430 y 440): corriente por tabla,
+  conductor, interruptor, sobrecarga, placa de equipos de aire acondicionado y
+  alimentadores con motores (ver la decisión 0011). También en el cálculo
+  rápido. Interruptor fijado por el usuario en cualquier tramo.
 - Instalador de Windows (Inno Setup) con ícono, accesos directos y la
   extensión `.vfp`; una etiqueta `v*` publica la versión en GitHub. El
   programa abre el último proyecto usado y recuerda los recientes.
@@ -26,22 +30,21 @@
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.
 
-1. Motores y aire acondicionado (artículos 430 y 440).
-2. Cálculo de la carga según el artículo 220: alumbrado por m², contactos,
+1. Cálculo de la carga según el artículo 220: alumbrado por m², contactos,
    factores de demanda.
-3. Cortocircuito y capacidad interruptiva (110-9 y 110-10).
-4. Datos del proyecto en la memoria (cliente, ubicación, responsable, cédula,
+2. Cortocircuito y capacidad interruptiva (110-9 y 110-10).
+3. Datos del proyecto en la memoria (cliente, ubicación, responsable, cédula,
    revisión) e importar y exportar el cuadro de cargas en Excel.
-5. Transformador y acometida en media tensión (artículo 450); conductor del
+4. Transformador y acometida en media tensión (artículo 450); conductor del
    electrodo de puesta a tierra (250-66); balanceo automático de fases;
    paralelos automáticos dentro del proyecto; deshacer y rehacer; unifilar en
    DXF; pasar un cálculo rápido al proyecto.
-6. Servidor MCP para agentes.
-7. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).
+5. Servidor MCP para agentes.
+6. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).
    Requisito para la beta.
 
 ## Fuera del alcance de la versión 0.1
 
-Reglas de motores y de climatización, cortocircuito y capacidad interruptiva,
+Cortocircuito y capacidad interruptiva,
 coordinación, transformador y media tensión, charola, sistema fotovoltaico,
 sistemas de tierra y otros perfiles normativos.

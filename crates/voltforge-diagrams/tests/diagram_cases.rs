@@ -45,6 +45,8 @@ fn industrial() -> Project {
                     power_factor: 1.0,
                     continuous: true,
                     kind: LoadKind::General,
+                    motor: None,
+                    compressor: None,
                 },
                 length_m: 25.0,
                 has_neutral: false,
@@ -72,7 +74,15 @@ fn single_line_diagram_covers_every_run() {
     let house = example::house();
     let diagram = single_line(&house, &calculate(&house).unwrap());
     let t = texts(&diagram);
-    for id in ["C-01", "C-02", "C-03", "C-04", "C-05", "Alimentador TG-1"] {
+    for id in [
+        "C-01",
+        "C-02",
+        "C-03",
+        "C-04",
+        "C-05",
+        "C-06",
+        "Alimentador TG-1",
+    ] {
         assert!(t.iter().any(|s| s == id), "falta {id}");
     }
     // C-02: interruptor de 20 A, dos conductores de 10 AWG y tierra desnuda de 10.
@@ -81,7 +91,7 @@ fn single_line_diagram_covers_every_run() {
     // El alimentador trifásico con neutro lleva cuatro conductores.
     assert!(t.iter().any(|s| s == "4-10, 1-10d"));
     // Una zona por circuito y una por tablero, para seleccionar desde el diagrama.
-    assert_eq!(diagram.hotspots.len(), 6);
+    assert_eq!(diagram.hotspots.len(), 7);
     assert!(diagram.hotspots.iter().any(|h| h.circuit == Some(4)));
     let svg = diagram.to_svg();
     assert!(svg.starts_with("<svg"));

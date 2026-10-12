@@ -138,6 +138,14 @@ pub(crate) struct ConductorData<'a> {
     pub noncontinuous_a: f64,
     pub design_a: f64,
     pub breaker_a: f64,
+    /// El usuario fijó el interruptor.
+    pub breaker_forced: bool,
+    /// La corriente de diseño ya tiene su paso (motores, alimentadores con
+    /// motores): no se repite.
+    pub given_design: bool,
+    /// Circuito de motor: el interruptor ya tiene su paso y el conductor se
+    /// protege según el artículo 430.
+    pub motor_protection: bool,
     pub poles: u32,
     pub material: Material,
     pub insulation: Insulation,
@@ -162,42 +170,57 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
     let mut steps = Vec::new();
 
     let formula = Some("Id = 1.25 · I continua + I no continua".to_string());
-    steps.push(if d.continuous_a <= 0.0 {
-        Step {
-            title: "Corriente de diseño".into(),
-            formula,
-            substitution: format!("Id = {:.2} A", d.design_a),
-            note: Some("Carga no continua: no lleva el 125 %.".into()),
-            references: r(&[Rule::DesignCurrent]),
-        }
-    } else {
-        Step {
-            title: "Corriente de diseño".into(),
-            formula,
-            substitution: format!(
-                "Id = {} · {:.2} + {:.2} = {:.2} A",
-                d.profile.parameters.continuous_load_factor,
-                d.continuous_a,
-                d.noncontinuous_a,
-                d.design_a
-            ),
-            note: Some(
-                "Es continua la carga que opera a su corriente máxima tres horas o más.".into(),
-            ),
-            references: r(&[Rule::DesignCurrent]),
-        }
-    });
+    if !d.given_design {
+        steps.push(if d.continuous_a <= 0.0 {
+            Step {
+                title: "Corriente de diseño".into(),
+                formula,
+                substitution: format!("Id = {:.2} A", d.design_a),
+                note: Some("Carga no continua: no lleva el 125 %.".into()),
+                references: r(&[Rule::DesignCurrent]),
+            }
+        } else {
+            Step {
+                title: "Corriente de diseño".into(),
+                formula,
+                substitution: format!(
+                    "Id = {} · {:.2} + {:.2} = {:.2} A",
+                    d.profile.parameters.continuous_load_factor,
+                    d.continuous_a,
+                    d.noncontinuous_a,
+                    d.design_a
+                ),
+                note: Some(
+                    "Es continua la carga que opera a su corriente máxima tres horas o más.".into(),
+                ),
+                references: r(&[Rule::DesignCurrent]),
+            }
+        });
+    }
 
-    steps.push(Step {
-        title: "Interruptor".into(),
-        formula: None,
-        substitution: format!("{}P-{:.0} A", d.poles, d.breaker_a),
-        note: Some(format!(
-            "Capacidad normalizada igual o inmediata superior a {:.2} A.",
-            d.design_a
-        )),
-        references: r(&[Rule::StandardRatings]),
-    });
+    if !d.motor_protection {
+        steps.push(Step {
+            title: "Interruptor".into(),
+            formula: None,
+            substitution: format!("{}P-{:.0} A", d.poles, d.breaker_a),
+            note: Some(if d.breaker_forced {
+                format!(
+                    "Fijado por ti. No debe ser menor que la corriente de diseño de {:.2} A y debe proteger al conductor.",
+                    d.design_a
+                )
+            } else {
+                format!(
+                    "Capacidad normalizada igual o inmediata superior a {:.2} A.",
+                    d.design_a
+                )
+            }),
+            references: r(&if d.breaker_forced {
+                vec![Rule::StandardRatings, Rule::BreakerRating]
+            } else {
+                vec![Rule::StandardRatings]
+            }),
+        });
+    }
 
     steps.push(Step {
         title: "Ampacidad del conductor".into(),
@@ -243,7 +266,12 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
             d.design_a
         )
     };
-    let protected = if c.protected {
+    let protected = if d.motor_protection {
+        format!(
+            "El relevador de sobrecarga protege al conductor; el interruptor de {:.0} A, contra cortocircuito.",
+            d.breaker_a
+        )
+    } else if c.protected {
         format!(
             "El interruptor de {:.0} A protege al conductor.",
             d.breaker_a
@@ -273,12 +301,20 @@ pub(crate) fn conductor_steps(d: &ConductorData) -> Vec<Step> {
             if passes { "cumple" } else { "no cumple" }
         ),
         note: Some(format!("{ampacity} {protected}{parallel}{minimum}")),
-        references: r(&[
-            Rule::DesignCurrent,
-            Rule::ConductorProtection,
-            Rule::SmallConductors,
-            Rule::Parallel,
-        ]),
+        references: r(&if d.motor_protection {
+            vec![
+                Rule::MotorBranchConductor,
+                Rule::MotorConductorProtection,
+                Rule::Parallel,
+            ]
+        } else {
+            vec![
+                Rule::DesignCurrent,
+                Rule::ConductorProtection,
+                Rule::SmallConductors,
+                Rule::Parallel,
+            ]
+        }),
     });
 
     if let Some((ground, material)) = d.grounding {

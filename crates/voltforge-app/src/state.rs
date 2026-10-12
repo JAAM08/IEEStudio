@@ -168,6 +168,8 @@ impl Doc {
                 power_factor: 0.9,
                 continuous: false,
                 kind: LoadKind::General,
+                motor: None,
+                compressor: None,
             },
             length_m: 10.0,
             has_neutral: false,

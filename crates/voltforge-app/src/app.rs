@@ -84,6 +84,8 @@ pub struct Options {
     pub focus: Option<Tab>,
     /// Empieza sin paneles, para revisar esa pantalla.
     pub no_panels: bool,
+    /// Circuito o tablero que se selecciona al abrir, por su ID.
+    pub select: Option<String>,
     /// Pestaña inicial de Propiedades: `datos`, `resultados` o `normativa`.
     pub properties: Option<String>,
 }
@@ -148,6 +150,17 @@ impl App {
         let last = app.recent.first().filter(|p| p.exists()).cloned();
         if let Some(path) = options.open.or(last) {
             app.load(path);
+        }
+        if let Some(id) = &options.select {
+            let project = &app.doc.project;
+            for (i, panel) in project.panels.iter().enumerate() {
+                if &panel.id == id {
+                    app.doc.selection = Selection::Feeder(i);
+                }
+                if let Some(c) = panel.circuits.iter().position(|c| &c.id == id) {
+                    app.doc.selection = Selection::Circuit(i, c);
+                }
+            }
         }
         app.shared.props_tab = match options.properties.as_deref() {
             Some("resultados") => crate::panels::properties::PropsTab::Results,

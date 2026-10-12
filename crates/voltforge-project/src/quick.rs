@@ -17,6 +17,8 @@ use voltforge_electrical::voltage_drop::{
 };
 
 use crate::calc::{is_wye, poles};
+use crate::model::MotorLoad;
+use crate::motors::{motor_parts, MotorCircuit};
 use crate::procedure::{
     conductor_steps, conduit_step, current_step, drop_steps, plain, size_label, ConductorData, Step,
 };
@@ -54,6 +56,11 @@ pub struct QuickInput {
     pub limit_percent: f64,
     /// Temperatura del conductor para ajustar la resistencia; `None` usa 75 °C.
     pub resistance_temperature_c: Option<f64>,
+    /// Motor: su corriente sale de la tabla por potencia y tensión, y su
+    /// conductor e interruptor siguen el artículo 430. Sustituye la carga
+    /// en watts o amperes.
+    #[serde(default)]
+    pub motor: Option<MotorLoad>,
 }
 
 impl Default for QuickInput {
@@ -77,6 +84,7 @@ impl Default for QuickInput {
             ambient_c: 30.0,
             limit_percent: 3.0,
             resistance_temperature_c: None,
+            motor: None,
         }
     }
 }
@@ -188,6 +196,7 @@ fn sizing_input(
     current_a: f64,
     n: u32,
     drop: Option<&VoltageDropInput>,
+    motor: Option<&MotorCircuit>,
 ) -> SizingInput {
     let (continuous_a, noncontinuous_a) = if input.continuous {
         (current_a, 0.0)
@@ -212,20 +221,34 @@ fn sizing_input(
             input: d.clone(),
             limit_percent: input.limit_percent,
         }),
-        motor: None,
+        design_a: motor.map(|m| m.design_a),
+        breaker_a: motor.map(|m| m.breaker_max_a),
+        motor_protection: motor.is_some(),
     }
+}
+
+/// Corriente de diseño e interruptor: los del motor, o 125 % de la continua
+/// más la no continua y el normalizado igual o inmediato superior.
+fn design_and_breaker(profile: &Profile, sizing: &SizingInput) -> Result<(f64, f64), String> {
+    let design_a = sizing
+        .design_a
+        .unwrap_or_else(|| design_current(profile, sizing.continuous_a, sizing.noncontinuous_a));
+    let breaker_a = match sizing.breaker_a {
+        Some(b) => b,
+        None => standard_rating_at_least(profile, design_a, false).map_err(|e| e.to_string())?,
+    };
+    Ok((design_a, breaker_a))
 }
 
 fn protection(
     profile: &Profile,
     input: &QuickInput,
     current_a: f64,
+    motor: Option<&MotorCircuit>,
 ) -> Result<(Protection, Vec<Step>), String> {
     let n = input.conductors_per_phase;
-    let sizing = sizing_input(input, current_a, n, None);
-    let design_a = design_current(profile, sizing.continuous_a, sizing.noncontinuous_a);
-    let breaker_a =
-        standard_rating_at_least(profile, design_a, false).map_err(|e| e.to_string())?;
+    let sizing = sizing_input(input, current_a, n, None, motor);
+    let (design_a, breaker_a) = design_and_breaker(profile, &sizing)?;
     let check =
         check_conductor(profile, &sizing, &input.size, breaker_a).map_err(|e| e.to_string())?;
     let minimum_size = select_conductor(profile, &sizing)
@@ -247,6 +270,9 @@ fn protection(
         noncontinuous_a: sizing.noncontinuous_a,
         design_a,
         breaker_a,
+        breaker_forced: false,
+        given_design: motor.is_some(),
+        motor_protection: motor.is_some(),
         poles: poles(input.kind),
         material: input.material,
         insulation: input.insulation,
@@ -324,11 +350,18 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
     if !(input.limit_percent.is_finite() && input.limit_percent > 0.0) {
         return Err("el límite de caída debe ser mayor que cero".into());
     }
-    let current_a = if input.load_in_amperes {
-        input.current_a
-    } else {
-        nominal_current(input.power_w, input.power_factor, input.kind, &input.system)
-            .map_err(|e| e.to_string())?
+    let motor = match &input.motor {
+        Some(data) => Some(
+            motor_parts(profile, false, input.kind, &input.system, data, None)
+                .map_err(|e| e.to_string())?,
+        ),
+        None => None,
+    };
+    let current_a = match &motor {
+        Some(m) => m.current_a,
+        None if input.load_in_amperes => input.current_a,
+        None => nominal_current(input.power_w, input.power_factor, input.kind, &input.system)
+            .map_err(|e| e.to_string())?,
     };
     let base = drop_input(input, current_a);
     let drop = voltage_drop(profile, &base).map_err(|e| e.to_string())?;
@@ -350,14 +383,17 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
         ));
     }
 
-    let mut steps = vec![current_step(
-        input.kind,
-        (!input.load_in_amperes).then_some(input.power_w),
-        input.power_factor,
-        drop.reference_voltage_v,
-        current_a,
-    )];
-    let protection = match protection(profile, input, current_a) {
+    let mut steps = match &motor {
+        Some(m) => m.steps.clone(),
+        None => vec![current_step(
+            input.kind,
+            (!input.load_in_amperes).then_some(input.power_w),
+            input.power_factor,
+            drop.reference_voltage_v,
+            current_a,
+        )],
+    };
+    let protection = match protection(profile, input, current_a, motor.as_ref()) {
         Ok((p, conductor)) => {
             steps.extend(conductor);
             Ok(p)
@@ -388,6 +424,7 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
             max_length,
             rank,
             parallel_rank,
+            motor.as_ref(),
         ),
         status: if drop_complies {
             Status::Complies
@@ -411,6 +448,7 @@ fn recommendations(
     max_length: f64,
     rank: usize,
     parallel_rank: usize,
+    motor: Option<&MotorCircuit>,
 ) -> Vec<Recommendation> {
     let limit = input.limit_percent;
     let n = input.conductors_per_phase;
@@ -420,9 +458,8 @@ fn recommendations(
     // Evalúa una alternativa contra el interruptor del circuito: devuelve su
     // caída de tensión y si cumple ampacidad, protección y caída.
     let try_option = |size: &Size, count: u32| -> Option<(f64, bool)> {
-        let sizing = sizing_input(input, base.current_a, count, Some(base));
-        let design_a = design_current(profile, sizing.continuous_a, sizing.noncontinuous_a);
-        let breaker_a = standard_rating_at_least(profile, design_a, false).ok()?;
+        let sizing = sizing_input(input, base.current_a, count, Some(base), motor);
+        let (_, breaker_a) = design_and_breaker(profile, &sizing).ok()?;
         let check = check_conductor(profile, &sizing, size, breaker_a).ok()?;
         Some((check.voltage_drop_percent?, check.passes()))
     };

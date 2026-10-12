@@ -97,10 +97,11 @@ pub enum Rule {
     CompressorConductor,
     CompressorProtection,
     EquipmentNameplate,
+    BreakerRating,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 34] = [
+    pub const ALL: [Rule; 35] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -135,6 +136,7 @@ impl Rule {
         Rule::CompressorConductor,
         Rule::CompressorProtection,
         Rule::EquipmentNameplate,
+        Rule::BreakerRating,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -174,6 +176,7 @@ impl Rule {
             Rule::CompressorConductor => "compressor_conductor",
             Rule::CompressorProtection => "compressor_protection",
             Rule::EquipmentNameplate => "equipment_nameplate",
+            Rule::BreakerRating => "breaker_rating",
         }
     }
 }

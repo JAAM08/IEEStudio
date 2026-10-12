@@ -20,8 +20,8 @@
 //!    incremento proporcional cuando los conductores de fase se sobredimensionan,
 //!    y sin exigir que sea mayor que los de fase.
 //! 8. Motores (430-22, 430-52, Tabla 240-4(g)): la corriente de diseño y el
-//!    interruptor vienen de `motor`, la ampacidad corregida también cubre la
-//!    corriente de diseño y el conductor no se protege según 240-4.
+//!    interruptor se dan ya calculados, la ampacidad corregida también cubre
+//!    la corriente de diseño y el conductor no se protege según 240-4.
 
 use crate::current::design_current;
 use crate::voltage_drop::{voltage_drop, VoltageDropInput};
@@ -62,21 +62,17 @@ pub struct SizingInput {
     /// Calibre mínimo impuesto por el usuario.
     pub minimum_size: Option<Size>,
     pub voltage_drop: Option<VoltageDropLimit>,
-    /// Circuito de motor o motocompresor: la corriente de diseño y la
-    /// protección vienen de los artículos 430 y 440, y el conductor no se
-    /// protege según 240-4 (Tabla 240-4(g)).
-    pub motor: Option<MotorSizing>,
-}
-
-/// Datos de un circuito de motor para dimensionar el conductor.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MotorSizing {
-    /// Corriente que deben cubrir los conductores, ya con sus factores
-    /// (430-22, 430-24, 440-32 o la ampacidad mínima de la placa). La cubren
-    /// tanto la ampacidad de terminales como la corregida.
-    pub design_a: f64,
-    /// Interruptor del circuito.
-    pub breaker_a: f64,
+    /// Corriente de diseño ya calculada con sus factores (430-22, 430-24,
+    /// 440-32 o la ampacidad mínima de la placa). La deben cubrir tanto la
+    /// ampacidad de terminales como la corregida. `None` usa el 125 % de la
+    /// continua más la no continua.
+    pub design_a: Option<f64>,
+    /// Interruptor elegido. `None` toma el normalizado igual o inmediato
+    /// superior a la corriente de diseño.
+    pub breaker_a: Option<f64>,
+    /// Circuito derivado de motor o motocompresor: el conductor se protege
+    /// según los artículos 430 y 440, no según 240-4 (Tabla 240-4(g)).
+    pub motor_protection: bool,
 }
 
 /// Verificaciones de un calibre para el circuito.
@@ -228,7 +224,11 @@ pub fn check_conductor(
 
     // En un motor el interruptor puede ser hasta 2.5 veces su corriente: las
     // terminales se deciden por la corriente de diseño, que es lo conservador.
-    let terminal_basis_a = input.motor.map_or(breaker_a, |m| m.design_a);
+    let terminal_basis_a = if input.motor_protection {
+        design_a
+    } else {
+        breaker_a
+    };
     let terminal_rule = input.terminal_rating.unwrap_or(
         if terminal_basis_a <= profile.parameters.terminal_60c_limit_a {
             TempRating::C60
@@ -297,7 +297,7 @@ pub fn check_conductor(
         meets_design_current: terminal_ampacity_a >= design_a - 1e-9,
         meets_load: corrected_ampacity_a >= load_a - 1e-9,
         // Los conductores de motores se protegen según el artículo 430.
-        protected: input.motor.is_some() || (protected_by_rating && within_small_limit),
+        protected: input.motor_protection || (protected_by_rating && within_small_limit),
         small_conductor_limit_a,
         parallel_allowed,
         voltage_drop_percent,
@@ -372,8 +372,8 @@ pub fn equipment_grounding(
 /// Corriente de la carga y corriente de diseño. En un motor la ampacidad
 /// corregida también debe cubrir la de diseño (430-22).
 fn loads(profile: &Profile, input: &SizingInput) -> (f64, f64) {
-    match input.motor {
-        Some(m) => (m.design_a, m.design_a),
+    match input.design_a {
+        Some(d) => (d, d),
         None => (
             input.continuous_a + input.noncontinuous_a,
             design_current(profile, input.continuous_a, input.noncontinuous_a),
@@ -385,8 +385,8 @@ fn loads(profile: &Profile, input: &SizingInput) -> (f64, f64) {
 pub fn select_conductor(profile: &Profile, input: &SizingInput) -> Result<SizingResult> {
     validate(input)?;
     let (load_a, design_a) = loads(profile, input);
-    let breaker_a = match input.motor {
-        Some(m) => m.breaker_a,
+    let breaker_a = match input.breaker_a {
+        Some(b) => b,
         None => standard_rating_at_least(profile, design_a, input.include_iec_ratings)?,
     };
 

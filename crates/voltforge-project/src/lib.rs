@@ -6,6 +6,7 @@
 mod calc;
 pub mod example;
 mod model;
+mod motors;
 mod procedure;
 pub mod quick;
 pub mod verdict;
@@ -14,7 +15,8 @@ pub use calc::{
     calculate, Check, ConduitChoice, PanelResult, ProjectResult, Run, RunResult, Status,
 };
 pub use model::{
-    Circuit, Feeder, Load, LoadKind, Overrides, Panel, Phase, Project, Settings, Source,
-    FORMAT_VERSION,
+    Circuit, CompressorLoad, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel, Phase, Project,
+    Settings, Source, FORMAT_VERSION,
 };
+pub use motors::hp_label;
 pub use procedure::{insulation_name, material_name, size_label, Step};

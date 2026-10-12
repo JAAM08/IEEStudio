@@ -42,7 +42,9 @@ fn base(continuous_a: f64, noncontinuous_a: f64) -> SizingInput {
         include_iec_ratings: false,
         minimum_size: None,
         voltage_drop: None,
-        motor: None,
+        design_a: None,
+        breaker_a: None,
+        motor_protection: false,
     }
 }
 

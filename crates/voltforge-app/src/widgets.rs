@@ -2,9 +2,9 @@
 
 use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke};
 use egui_phosphor::regular as icon;
-use voltforge_core::{CircuitKind, ConduitType, Insulation, Material, System};
+use voltforge_core::{CircuitKind, ConduitType, Insulation, Material, MotorType, System};
 use voltforge_project::verdict::{Calculation, Compliance, Verdict};
-use voltforge_project::{LoadKind, Status, Step};
+use voltforge_project::{hp_label, LoadKind, Status, Step};
 
 use crate::theme::{semibold, Palette};
 
@@ -126,6 +126,88 @@ pub fn number(
     .changed()
 }
 
+/// Dato opcional: un número o nada. Sin dato muestra un botón para capturarlo.
+pub fn optional_number(
+    ui: &mut egui::Ui,
+    value: &mut Option<f64>,
+    default: f64,
+    suffix: &str,
+) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| match value {
+        Some(v) => {
+            changed |= ui
+                .add(
+                    egui::DragValue::new(v)
+                        .speed(0.1)
+                        .range(0.1..=10_000.0)
+                        .max_decimals(2)
+                        .suffix(suffix),
+                )
+                .changed();
+            if ui
+                .small_button(icon::X)
+                .on_hover_text("Quitar el dato")
+                .clicked()
+            {
+                *value = None;
+                changed = true;
+            }
+        }
+        None => {
+            if ui.button("Capturar").clicked() {
+                *value = Some(default);
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+/// Potencia de un motor, de las que trae su tabla (430-248 o 430-250).
+pub fn motor_hp_combo(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    hp: &mut String,
+    three_phase: bool,
+) -> bool {
+    let profile = voltforge_rules::Profile::nom_001_sede_2012();
+    let rows = if three_phase {
+        &profile.three_phase_motors
+    } else {
+        &profile.single_phase_motors
+    };
+    let mut changed = false;
+    let text = if rows.iter().any(|r| &r.hp == hp) {
+        format!("{} hp", hp_label(hp))
+    } else {
+        format!("{} hp · fuera de tabla", hp_label(hp))
+    };
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(text)
+        .height(320.0)
+        .show_ui(ui, |ui| {
+            for r in rows {
+                let label = format!("{} hp · {} kW", hp_label(&r.hp), r.kw);
+                if ui.selectable_label(hp == &r.hp, label).clicked() {
+                    *hp = r.hp.clone();
+                    changed = true;
+                }
+            }
+        });
+    changed
+}
+
+pub const MOTOR_TYPES: [(&str, MotorType); 4] = [
+    ("Jaula de ardilla", MotorType::SquirrelCage),
+    (
+        "Diseño B de alta eficiencia",
+        MotorType::DesignBEnergyEfficient,
+    ),
+    ("Rotor devanado", MotorType::WoundRotor),
+    ("Síncrono", MotorType::Synchronous),
+];
+
 pub fn status_color(p: &Palette, status: Status) -> Color32 {
     match status {
         Status::Complies => p.ok,
@@ -229,11 +311,17 @@ pub fn source_badge(ui: &mut egui::Ui, p: &Palette, source: Source) {
 }
 
 /// Fila de propiedad: etiqueta a la izquierda, valor o control a la derecha.
-pub fn property(ui: &mut egui::Ui, p: &Palette, label: &str, add: impl FnOnce(&mut egui::Ui)) {
+pub fn property(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    label: &str,
+    add: impl FnOnce(&mut egui::Ui),
+) -> egui::Response {
     ui.horizontal(|ui| {
         fixed_label(ui, p, label);
         add(ui);
-    });
+    })
+    .response
 }
 
 /// Etiqueta de ancho fijo, alineada a la izquierda, para formar columnas.
@@ -250,14 +338,19 @@ pub fn fixed_label(ui: &mut egui::Ui, p: &Palette, label: &str) {
 
 /// Grupo del procedimiento al que pertenece un paso.
 fn step_group(title: &str) -> &'static str {
-    match title {
-        "Corriente nominal" | "Corriente del circuito" | "Corriente de diseño" => "Corriente",
-        "Interruptor" => "Protección",
-        "Ampacidad del conductor" | "Verificación del conductor" | "Puesta a tierra de equipos" => {
-            "Conductor y puesta a tierra"
-        }
-        "Tubería conduit" => "Tubería",
-        _ => "Caída de tensión",
+    if title.starts_with("Corriente") {
+        "Corriente"
+    } else if title.starts_with("Interruptor") || title.starts_with("Relevador") {
+        "Protección"
+    } else if matches!(
+        title,
+        "Ampacidad del conductor" | "Verificación del conductor" | "Puesta a tierra de equipos"
+    ) {
+        "Conductor y puesta a tierra"
+    } else if title.starts_with("Tubería") {
+        "Tubería"
+    } else {
+        "Caída de tensión"
     }
 }
 

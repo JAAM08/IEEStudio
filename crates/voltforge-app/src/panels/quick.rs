@@ -7,7 +7,10 @@ use voltforge_project::quick::{quick_circuit, QuickInput, QuickResult};
 use voltforge_project::{size_label, Status};
 
 use crate::theme::{self, Palette};
-use crate::widgets::{combo, number, steps_ui, CONDUITS, INSULATIONS, KINDS, MATERIALS, SYSTEMS};
+use crate::widgets::{
+    combo, motor_hp_combo, number, optional_number, steps_ui, CONDUITS, INSULATIONS, KINDS,
+    MATERIALS, MOTOR_TYPES, SYSTEMS,
+};
 use voltforge_rules::Profile;
 
 pub struct QuickView {
@@ -151,24 +154,63 @@ impl QuickView {
                 ui.end_row();
 
                 ui.label(muted("Carga en"));
+                // 0: watts, 1: amperes, 2: motor por su potencia en hp.
+                let mut mode = match (&input.motor, input.load_in_amperes) {
+                    (Some(_), _) => 2,
+                    (None, true) => 1,
+                    (None, false) => 0,
+                };
                 ui.horizontal(|ui| {
-                    changed |= ui
-                        .radio_value(&mut input.load_in_amperes, false, "watts")
+                    let mut picked = false;
+                    picked |= ui.radio_value(&mut mode, 0, "watts").changed();
+                    picked |= ui.radio_value(&mut mode, 1, "amperes").changed();
+                    picked |= ui
+                        .radio_value(&mut mode, 2, "motor")
+                        .on_hover_text("La corriente sale de las tablas 430-248 y 430-250")
                         .changed();
-                    changed |= ui
-                        .radio_value(&mut input.load_in_amperes, true, "amperes")
-                        .changed();
+                    if picked {
+                        changed = true;
+                        input.load_in_amperes = mode == 1;
+                        input.motor = (mode == 2).then(|| {
+                            input.motor.clone().unwrap_or(voltforge_project::MotorLoad {
+                                hp: "1".to_string(),
+                                motor_type: Default::default(),
+                                nameplate_a: None,
+                                service_factor_marked: false,
+                            })
+                        });
+                    }
                 });
                 ui.end_row();
 
-                if input.load_in_amperes {
+                let three_phase = input.kind == voltforge_core::CircuitKind::ThreePhase;
+                if let Some(motor) = input.motor.as_mut() {
+                    ui.label(muted("Potencia"));
+                    changed |= motor_hp_combo(ui, "rapido-hp", &mut motor.hp, three_phase);
+                    ui.end_row();
+                    if three_phase {
+                        ui.label(muted("Tipo de motor"));
+                        changed |= combo(ui, "rapido-tipo-motor", &mut motor.motor_type, &MOTOR_TYPES);
+                        ui.end_row();
+                    }
+                    ui.label(muted("Corriente de placa"));
+                    changed |= optional_number(ui, &mut motor.nameplate_a, 10.0, " A");
+                    ui.end_row();
+                    ui.label(muted("Factor de servicio"));
+                    changed |= ui
+                        .checkbox(&mut motor.service_factor_marked, "1.15 o más, o 40 °C")
+                        .on_hover_text("El relevador de sobrecarga puede ajustarse al 125 % en lugar del 115 %.")
+                        .changed();
+                    ui.end_row();
+                } else if input.load_in_amperes {
                     ui.label(muted("Corriente"));
                     changed |= number(ui, &mut input.current_a, 0.5, 0.0, 10_000.0, " A");
+                    ui.end_row();
                 } else {
                     ui.label(muted("Carga"));
                     changed |= number(ui, &mut input.power_w, 50.0, 0.0, 10_000_000.0, " W");
+                    ui.end_row();
                 }
-                ui.end_row();
 
                 ui.label(muted("Factor de potencia"));
                 changed |= ui
@@ -181,11 +223,13 @@ impl QuickView {
                     .changed();
                 ui.end_row();
 
-                ui.label(muted("Tipo de carga"));
-                changed |= ui
-                    .checkbox(&mut input.continuous, "Continua (3 h o más)")
-                    .changed();
-                ui.end_row();
+                if input.motor.is_none() {
+                    ui.label(muted("Tipo de carga"));
+                    changed |= ui
+                        .checkbox(&mut input.continuous, "Continua (3 h o más)")
+                        .changed();
+                    ui.end_row();
+                }
 
                 ui.label(muted("Longitud"));
                 changed |= number(ui, &mut input.length_m, 0.5, 0.0, 100_000.0, " m");
@@ -307,7 +351,9 @@ impl QuickView {
                                 RichText::new(format!("De diseño: {:.2} A", pr.design_a))
                                     .monospace(),
                             );
-                            ui.label(muted(if self.input.continuous {
+                            ui.label(muted(if self.input.motor.is_some() {
+                                "Motor: 125 % de la corriente de tabla".to_string()
+                            } else if self.input.continuous {
                                 "Carga continua: 125 %".to_string()
                             } else {
                                 "Carga no continua".to_string()

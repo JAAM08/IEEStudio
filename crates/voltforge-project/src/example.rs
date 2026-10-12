@@ -1,10 +1,10 @@
-//! Proyecto de ejemplo: una casa habitación con un tablero y cinco circuitos.
+//! Proyecto de ejemplo: una casa habitación con un tablero y seis circuitos.
 
 use voltforge_core::{CircuitKind, Size, System};
 
 use crate::model::{
-    Circuit, Feeder, Load, LoadKind, Overrides, Panel, Phase, Project, Settings, Source,
-    FORMAT_VERSION,
+    Circuit, CompressorLoad, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel, Phase, Project,
+    Settings, Source, FORMAT_VERSION,
 };
 
 #[allow(clippy::too_many_arguments)] // constructor interno del ejemplo
@@ -28,6 +28,8 @@ fn circuit(
             power_factor: 0.9,
             continuous,
             kind: load_kind,
+            motor: None,
+            compressor: None,
         },
         length_m,
         has_neutral: false,
@@ -38,7 +40,7 @@ fn circuit(
 /// Casa habitación con acometida 3F-4H 220Y/127 V.
 pub fn house() -> Project {
     use CircuitKind::{LineToLine, LineToNeutral};
-    use LoadKind::{AirConditioning, General, Lighting};
+    use LoadKind::{AirConditioning, General, Lighting, Motor};
     let mut living_room = circuit(
         "C-04",
         "Contactos sala",
@@ -51,6 +53,41 @@ pub fn house() -> Project {
     );
     // Calibre fijado por el usuario, para mostrar un circuito que no cumple.
     living_room.overrides.size = Some(Size::new("12"));
+    // Minisplit con la ampacidad mínima y la protección máxima de su placa.
+    let mut air = circuit(
+        "C-03",
+        "Aire acondicionado",
+        LineToLine,
+        &[Phase::A, Phase::C],
+        2400.0,
+        false,
+        AirConditioning,
+        15.0,
+    );
+    air.load.compressor = Some(CompressorLoad {
+        minimum_circuit_a: Some(15.0),
+        maximum_protection_a: Some(25.0),
+        ..CompressorLoad::default()
+    });
+    // Bomba de agua sin la corriente de placa: el relevador de sobrecarga
+    // queda sin evaluar hasta capturarla.
+    let mut pump = circuit(
+        "C-06",
+        "Bomba de agua",
+        LineToNeutral,
+        &[Phase::A],
+        373.0,
+        false,
+        Motor,
+        12.0,
+    );
+    pump.load.power_factor = 0.8;
+    pump.load.motor = Some(MotorLoad {
+        hp: "1/2".to_string(),
+        motor_type: Default::default(),
+        nameplate_a: None,
+        service_factor_marked: false,
+    });
     Project {
         format_version: FORMAT_VERSION,
         name: "Casa habitación (ejemplo)".to_string(),
@@ -92,16 +129,7 @@ pub fn house() -> Project {
                     General,
                     22.0,
                 ),
-                circuit(
-                    "C-03",
-                    "Aire acondicionado",
-                    LineToLine,
-                    &[Phase::A, Phase::C],
-                    2400.0,
-                    false,
-                    AirConditioning,
-                    15.0,
-                ),
+                air,
                 living_room,
                 circuit(
                     "C-05",
@@ -113,6 +141,7 @@ pub fn house() -> Project {
                     Lighting,
                     40.0,
                 ),
+                pump,
             ],
         }],
     }

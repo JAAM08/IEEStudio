@@ -170,3 +170,36 @@ fn undersized_conductor_gets_a_larger_size() {
     assert_eq!(r.status, Status::Complies);
     assert_eq!(r.recommendations[0].apply, Some((Size::new("12"), 1)));
 }
+
+/// Cálculo rápido de un motor: la corriente sale de la Tabla 430-250, los
+/// conductores llevan el 125 % y el interruptor el 250 % redondeado hacia
+/// arriba; el conductor no se protege según 240-4.
+#[test]
+fn quick_motor_follows_article_430() {
+    let mut input = QuickInput {
+        kind: voltforge_core::CircuitKind::ThreePhase,
+        length_m: 30.0,
+        size: Size::new("6"),
+        motor: Some(voltforge_project::MotorLoad {
+            hp: "15".to_string(),
+            motor_type: Default::default(),
+            nameplate_a: Some(40.0),
+            service_factor_marked: true,
+        }),
+        ..QuickInput::default()
+    };
+    let r = quick_circuit(Profile::nom_001_sede_2012(), &input).unwrap();
+    assert_eq!(r.current_a, 42.0);
+    let p = r.protection.as_ref().unwrap();
+    assert!((p.design_a - 52.5).abs() < 1e-9);
+    assert_eq!(p.breaker_a, 110.0);
+    assert_eq!(p.status, Status::Complies);
+    assert_eq!(r.steps[0].title, "Corriente del motor");
+    assert!(r.steps.iter().any(|s| s.title == "Relevador de sobrecarga"));
+
+    // 8 AWG (40 A a 60 °C) no cubre los 52.5 A: se propone 6 AWG.
+    input.size = Size::new("8");
+    let r = quick_circuit(Profile::nom_001_sede_2012(), &input).unwrap();
+    assert_eq!(r.protection.as_ref().unwrap().status, Status::Fails);
+    assert!(r.recommendations.iter().any(|x| x.title == "Subir a 6 AWG"));
+}

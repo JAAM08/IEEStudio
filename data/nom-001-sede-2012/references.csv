@@ -33,3 +33,4 @@ compressor_rating,440-6(a),"La corriente de carga nominal o de selección del mo
 compressor_conductor,"440-32, 440-33","Conductores de motocompresores: 125 % de su corriente nominal"
 compressor_protection,440-22(a),"Protección del motocompresor: hasta 175 % de su corriente y, si no arranca, hasta 225 %"
 equipment_nameplate,"440-4(b), 440-22(c), 440-35","Ampacidad mínima y protección máxima marcadas en la placa del equipo"
+breaker_rating,"210-20(a), 215-3","El interruptor no es menor que la carga no continua más el 125 % de la continua"

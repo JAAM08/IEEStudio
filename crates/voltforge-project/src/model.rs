@@ -6,10 +6,12 @@
 
 use serde::{Deserialize, Serialize};
 use voltforge_core::Insulation;
-use voltforge_core::{CircuitKind, ConduitType, Material, Size, System};
+use voltforge_core::{CircuitKind, ConduitType, Material, MotorType, Size, System};
 
-/// Versión del formato de archivo.
-pub const FORMAT_VERSION: u32 = 1;
+/// Versión del formato de archivo. La 2 agrega los datos de motores y
+/// motocompresores y el interruptor fijado; lee sin cambios los archivos de
+/// la 1.
+pub const FORMAT_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Project {
@@ -139,6 +141,45 @@ pub struct Load {
     pub continuous: bool,
     #[serde(default)]
     pub kind: LoadKind,
+    /// Datos del motor, si `kind` es `Motor`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub motor: Option<MotorLoad>,
+    /// Datos de placa del equipo, si `kind` es `AirConditioning`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compressor: Option<CompressorLoad>,
+}
+
+/// Motor de un circuito. Su corriente sale de las tablas por potencia y
+/// tensión, no de la placa (430-6(a)(1)).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MotorLoad {
+    /// Potencia en caballos de fuerza, como en la tabla: `7-1/2`.
+    pub hp: String,
+    #[serde(default)]
+    pub motor_type: MotorType,
+    /// Corriente de la placa, para ajustar el relevador de sobrecarga.
+    #[serde(default)]
+    pub nameplate_a: Option<f64>,
+    /// Factor de servicio de 1.15 o más, o elevación de temperatura de 40 °C
+    /// o menos: el relevador puede ajustarse al 125 % en lugar del 115 %.
+    #[serde(default)]
+    pub service_factor_marked: bool,
+}
+
+/// Datos de placa de un motocompresor o de su equipo (artículo 440). Basta
+/// la corriente de carga nominal, o la ampacidad mínima y la protección
+/// máxima que marca el equipo.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompressorLoad {
+    /// Corriente de carga nominal (RLA).
+    pub rated_load_a: Option<f64>,
+    /// Corriente de selección del circuito derivado (BCSC).
+    pub branch_selection_a: Option<f64>,
+    /// Ampacidad mínima del circuito (MCA).
+    pub minimum_circuit_a: Option<f64>,
+    /// Protección máxima (MOP).
+    pub maximum_protection_a: Option<f64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -167,6 +208,9 @@ pub struct Overrides {
     pub nonlinear: bool,
     /// Otros conductores portadores de corriente en la misma canalización.
     pub other_current_carrying_conductors: u32,
+    /// Interruptor fijado. El programa lo verifica, no lo cambia.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub breaker_a: Option<f64>,
 }
 
 fn one() -> f64 {
@@ -191,8 +235,12 @@ impl Project {
         Ok(project)
     }
 
-    /// Escribe el proyecto como JSON legible.
+    /// Escribe el proyecto como JSON legible, siempre en el formato actual.
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).expect("el modelo siempre se puede serializar")
+        let current = Project {
+            format_version: FORMAT_VERSION,
+            ..self.clone()
+        };
+        serde_json::to_string_pretty(&current).expect("el modelo siempre se puede serializar")
     }
 }

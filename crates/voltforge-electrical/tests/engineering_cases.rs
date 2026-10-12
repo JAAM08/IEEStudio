@@ -159,7 +159,9 @@ fn conductor_sizing_cases() {
                 include_iec_ratings: false,
                 minimum_size: None,
                 voltage_drop: None,
-                motor: None,
+                design_a: None,
+                breaker_a: None,
+                motor_protection: false,
             };
             (
                 r.text("id"),
@@ -299,7 +301,6 @@ fn motor_cases() {
     use voltforge_electrical::motor::{
         compressor_branch, full_load_current, motor_branch, CompressorNameplate,
     };
-    use voltforge_electrical::sizing::MotorSizing;
 
     let mut failures = Vec::new();
     let rows = parse("motors.csv", &fixture("motors.csv"), |r| {
@@ -378,10 +379,9 @@ fn motor_cases() {
             include_iec_ratings: false,
             minimum_size: None,
             voltage_drop: None,
-            motor: Some(MotorSizing {
-                design_a,
-                breaker_a,
-            }),
+            design_a: Some(design_a),
+            breaker_a: Some(breaker_a),
+            motor_protection: true,
         };
         let r = select_conductor(nom(), &input).unwrap();
         if r.conductor.size != Size::new(&size) {
