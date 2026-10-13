@@ -26,6 +26,8 @@ pub struct Shared {
     pub diagram_zoom: f32,
     pub quick: quick::QuickView,
     pub preview: report::Preview,
+    /// Aviso de una acción terminada, para la barra de estado.
+    pub done: Option<String>,
 }
 
 impl Shared {
@@ -38,6 +40,7 @@ impl Shared {
             props_tab: properties::PropsTab::Inputs,
             diagram_zoom: 1.3,
             quick: quick::QuickView::default(),
+            done: None,
             preview: report::Preview::default(),
         }
     }

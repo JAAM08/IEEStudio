@@ -160,6 +160,13 @@ fn print_report(result: &ProjectResult) {
         "\nResumen: {} cumplen, {} no cumplen, {} no evaluados",
         result.complies, result.fails, result.not_evaluated
     );
+    if let Some(g) = &result.grounding_electrode {
+        println!(
+            "Conductor al electrodo de puesta a tierra: {} de cobre (Tabla 250-66, acometida de {})",
+            voltforge_project::size_label(&g.size),
+            g.service
+        );
+    }
     for warning in &result.warnings {
         println!("Aviso: {warning}");
     }

@@ -28,6 +28,10 @@
   (110-9, 110-10; ver la decisión 0013).
 - Datos de la obra en la memoria (cliente, ubicación, revisión, responsable
   y cédula) y cuadro de cargas de ida y vuelta con Excel (decisión 0014).
+- Conductor al electrodo de puesta a tierra de la acometida (Tabla 250-66,
+  con el área equivalente de los paralelos) y balanceo automático de fases
+  por tablero (todas las combinaciones hasta 10 circuitos; búsqueda local
+  arriba de eso), que se puede deshacer.
 - Servidor MCP para agentes de IA (`voltforge mcp`): proyecto de ejemplo,
   cálculo de proyecto y de un circuito, memoria, Excel, DXF y reglas.
 - Unifilar en DXF (R12, en capas) y botón para pasar un cálculo rápido al
@@ -48,8 +52,7 @@ industriales en baja tensión, con motores.
 
 ## Después de la 1.0
 
-Transformador y acometida en media tensión (artículo 450); conductor del
-electrodo de puesta a tierra (250-66); balanceo automático de fases; lo que
+Transformador y acometida en media tensión (artículo 450); lo que
 falta del artículo 220 (estufas y secadoras, calefacción, neutro del
 alimentador, métodos opcionales); falla de fase a tierra; coordinación de
 protecciones; charola; sistemas fotovoltaicos; sistemas de tierra y otros

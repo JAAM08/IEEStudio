@@ -1,0 +1,15 @@
+service_material,service_max_size,service_max_area_mm2,electrode_copper,electrode_aluminum
+copper,2,33.6,8,6
+copper,1/0,53.5,6,4
+copper,3/0,85.0,4,2
+copper,350,177,2,1/0
+copper,600,304,1/0,3/0
+copper,1100,557.38,2/0,4/0
+copper,,,3/0,250
+aluminum,1/0,53.50,8,6
+aluminum,3/0,85.00,6,4
+aluminum,250,127,4,2
+aluminum,500,253,2,1/0
+aluminum,900,456,1/0,3/0
+aluminum,1750,887,2/0,4/0
+aluminum,,,3/0,250

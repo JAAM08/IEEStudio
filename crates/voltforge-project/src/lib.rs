@@ -3,6 +3,7 @@
 //! Una instalación se captura una sola vez en [`Project`]; de ese modelo
 //! [`calculate`] deriva cada circuito, cada alimentador y el cuadro de cargas.
 
+pub mod balance;
 mod calc;
 mod demand;
 pub mod example;
@@ -14,7 +15,8 @@ pub mod quick;
 pub mod verdict;
 
 pub use calc::{
-    calculate, Check, ConduitChoice, PanelResult, ProjectResult, Run, RunResult, Status,
+    calculate, Check, ConduitChoice, ElectrodeConductor, PanelResult, ProjectResult, Run,
+    RunResult, Status,
 };
 pub use demand::DemandLine;
 pub use model::{

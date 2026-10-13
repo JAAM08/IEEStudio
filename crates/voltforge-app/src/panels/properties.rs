@@ -1077,6 +1077,41 @@ fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
         ui.label(RichText::new(detail).color(color));
         ui.add_space(4.0);
     }
+    section(ui, p, "Acometida");
+    if let Some(ka) = result.source_fault_ka {
+        result_row(
+            ui,
+            p,
+            "Cortocircuito",
+            format!("{ka:.2} kA"),
+            Source::Calculated,
+        );
+    }
+    match &result.grounding_electrode {
+        Some(gec) => {
+            result_row(
+                ui,
+                p,
+                "Al electrodo",
+                format!("{} de cobre", size_label(&gec.size)),
+                Source::Calculated,
+            );
+            ui.label(
+                muted(
+                    p,
+                    format!(
+                        "Tabla 250-66, para {}; de aluminio sería {}.",
+                        gec.service,
+                        size_label(&gec.aluminum_size)
+                    ),
+                )
+                .size(11.0),
+            );
+        }
+        None => {
+            ui.label(muted(p, "Sin alimentador calculado desde la fuente.").size(11.0));
+        }
+    }
     section(ui, p, "Tableros");
     for panel in &result.panels {
         ui.horizontal(|ui| {

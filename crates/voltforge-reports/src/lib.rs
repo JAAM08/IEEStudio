@@ -429,6 +429,19 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                         }
                     }
             }),
+            (
+                "Conductor al electrodo de puesta a tierra",
+                result.grounding_electrode.as_ref().map_or(
+                    "Sin alimentador calculado desde la fuente".to_string(),
+                    |g| {
+                        format!(
+                            "{} de cobre para una acometida de {} (Tabla 250-66)",
+                            size_label(&g.size),
+                            g.service
+                        )
+                    },
+                ),
+            ),
             ("Conductor", capitalize(material_name(s.material))),
             ("Aislamiento", insulation_name(s.insulation).to_string()),
             ("Canalización", s.conduit.to_string()),

@@ -181,6 +181,18 @@ pub struct DemandTier {
     pub percent: f64,
 }
 
+/// Fila de la Tabla 250-66.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ElectrodeRow {
+    pub service_material: Material,
+    /// Mayor calibre de acometida de la fila; `None` en la última.
+    pub service_max_size: Option<String>,
+    /// Área de ese calibre como la imprime la tabla, en mm².
+    pub service_max_area_mm2: Option<f64>,
+    pub electrode_copper: String,
+    pub electrode_aluminum: String,
+}
+
 /// Fila de la Tabla 220-56.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KitchenDemandRow {
@@ -224,6 +236,8 @@ pub struct Profile {
     pub office_receptacles: Vec<(String, f64)>,
     /// Tabla 220-56.
     pub kitchen_demand: Vec<KitchenDemandRow>,
+    /// Tabla 250-66.
+    pub grounding_electrode: Vec<ElectrodeRow>,
     /// Norma de la que salen las tablas.
     pub document: NormativeDocument,
     /// Factores, límites y calibres mínimos del perfil.
@@ -509,6 +523,21 @@ impl Profile {
                         percent: r.get("percent"),
                     }
                 ),
+                grounding_electrode: table!(
+                    "nom-001-sede-2012",
+                    "table_250_66_grounding_electrode.csv",
+                    |r| ElectrodeRow {
+                        service_material: match r.text("service_material").as_str() {
+                            "copper" => Material::Copper,
+                            "aluminum" => Material::Aluminum,
+                            other => panic!("material desconocido: {other}"),
+                        },
+                        service_max_size: r.opt_text("service_max_size"),
+                        service_max_area_mm2: r.opt("service_max_area_mm2"),
+                        electrode_copper: r.text("electrode_copper"),
+                        electrode_aluminum: r.text("electrode_aluminum"),
+                    }
+                ),
                 small_conductor_limits: table!(
                     "nom-001-sede-2012",
                     "section_240_4_d_small_conductors.csv",
@@ -662,6 +691,28 @@ impl Profile {
                     && r.conductors_max.map_or(true, |max| current_carrying <= max)
             })
             .map_or(1.0, |r| r.factor)
+    }
+
+    /// Fila de la Tabla 250-66 para el área equivalente del mayor conductor
+    /// de la acometida. El límite de cada fila es el área de su calibre en la
+    /// Tabla 8, o la que imprime la Tabla 250-66 si el calibre no está ahí.
+    pub fn grounding_electrode_row(
+        &self,
+        material: Material,
+        area_mm2: f64,
+    ) -> Option<&ElectrodeRow> {
+        self.grounding_electrode
+            .iter()
+            .filter(|r| r.service_material == material)
+            .find(|r| {
+                let limit = r
+                    .service_max_size
+                    .as_deref()
+                    .and_then(|s| self.conductor(&Size::new(s)).ok())
+                    .map(|c| c.area_mm2)
+                    .or(r.service_max_area_mm2);
+                limit.map_or(true, |max| area_mm2 <= max + 1e-9)
+            })
     }
 
     /// Tipo de inmueble o de área de la Tabla 220-12.
@@ -843,6 +894,35 @@ mod tests {
         assert_eq!(profile.office_receptacle_va_per_m2("stores"), None);
         assert_eq!(profile.parameters.appliance_demand_factor, 0.75);
         assert_eq!(profile.parameters.appliance_demand_min_count, 4);
+    }
+
+    /// Pruebas normativas de la Tabla 250-66.
+    #[test]
+    fn table_250_66_matches_the_2012_edition() {
+        let profile = Profile::nom_001_sede_2012();
+        let gec = |material, size: &str, n: f64| {
+            let area = profile.conductor(&Size::new(size)).unwrap().area_mm2 * n;
+            profile
+                .grounding_electrode_row(material, area)
+                .map(|r| (r.electrode_copper.clone(), r.electrode_aluminum.clone()))
+                .unwrap()
+        };
+        let cu = Material::Copper;
+        let al = Material::Aluminum;
+        assert_eq!(gec(cu, "2", 1.0), ("8".into(), "6".into()));
+        assert_eq!(gec(cu, "1", 1.0), ("6".into(), "4".into()));
+        assert_eq!(gec(cu, "1/0", 1.0), ("6".into(), "4".into()));
+        assert_eq!(gec(cu, "3/0", 1.0), ("4".into(), "2".into()));
+        assert_eq!(gec(cu, "4/0", 1.0), ("2".into(), "1/0".into()));
+        assert_eq!(gec(cu, "350", 1.0), ("2".into(), "1/0".into()));
+        assert_eq!(gec(cu, "500", 1.0), ("1/0".into(), "3/0".into()));
+        // Dos de 300 kcmil equivalen a 304 mm²: hasta 600 kcmil.
+        assert_eq!(gec(cu, "300", 2.0), ("1/0".into(), "3/0".into()));
+        // Tres de 500 kcmil: 760 mm², más de 1100 kcmil.
+        assert_eq!(gec(cu, "500", 3.0), ("3/0".into(), "250".into()));
+        assert_eq!(gec(al, "1/0", 1.0), ("8".into(), "6".into()));
+        assert_eq!(gec(al, "250", 1.0), ("4".into(), "2".into()));
+        assert_eq!(gec(al, "600", 1.0), ("1/0".into(), "3/0".into()));
     }
 
     #[test]

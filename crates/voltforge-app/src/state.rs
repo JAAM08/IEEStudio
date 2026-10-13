@@ -212,6 +212,33 @@ impl Doc {
         parts
     }
 
+    /// Reparte las fases de los circuitos del tablero para balancearlo.
+    /// Devuelve el desbalance antes y después, en porciento.
+    pub fn balance_phases(&mut self, panel: usize) -> Option<(f64, f64)> {
+        let result = self.panel_result(panel)?.clone();
+        let p = &self.project.panels[panel];
+        let before = result.imbalance_percent.unwrap_or(100.0);
+        let va: Vec<f64> = p
+            .circuits
+            .iter()
+            .zip(&result.circuits)
+            .map(|(c, r)| {
+                if c.load.power_factor > 0.0 {
+                    r.load_w / c.load.power_factor
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        let phases = voltforge_project::balance::balance(p, &va);
+        for (c, ph) in self.project.panels[panel].circuits.iter_mut().zip(phases) {
+            c.phases = ph;
+        }
+        self.edited();
+        let after = self.panel_result(panel)?.imbalance_percent?;
+        Some((before, after))
+    }
+
     /// Primer identificador `C-NN` libre en un tablero.
     pub fn free_circuit_id(&self, panel: usize) -> String {
         let circuits = &self.project.panels[panel].circuits;

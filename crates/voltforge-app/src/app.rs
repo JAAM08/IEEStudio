@@ -1195,6 +1195,10 @@ impl eframe::App for App {
         self.about_window(&ctx);
         self.confirm_window(&ctx);
         self.import_window(&ctx);
+        if let Some(done) = self.shared.done.take() {
+            self.notice = None;
+            self.done = Some(done);
+        }
         if let Some(input) = self.shared.quick.take_request() {
             self.quick_to_project(&input);
         }

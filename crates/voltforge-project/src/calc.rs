@@ -196,6 +196,19 @@ pub struct PanelResult {
     pub circuits: Vec<RunResult>,
 }
 
+/// Conductor al electrodo de puesta a tierra, según el mayor conductor de la
+/// acometida (Tabla 250-66).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ElectrodeConductor {
+    /// De cobre.
+    pub size: Size,
+    /// La alternativa de aluminio.
+    pub aluminum_size: Size,
+    /// El conductor de acometida del que sale: `2 × 300 kcmil de cobre`.
+    pub service: String,
+    pub step: Step,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ProjectResult {
     pub project: String,
@@ -211,6 +224,8 @@ pub struct ProjectResult {
     pub source_fault_ka: Option<f64>,
     /// Aportación de los motores a la falla, en kA.
     pub motor_fault_ka: Option<f64>,
+    /// Conductor al electrodo de puesta a tierra de la acometida (250-66).
+    pub grounding_electrode: Option<ElectrodeConductor>,
     /// Cálculo, verificación normativa y aprobación profesional, por separado.
     pub verdict: Verdict,
 }
@@ -1241,6 +1256,81 @@ impl<'a> Context<'a> {
     }
 }
 
+/// Conductor al electrodo de puesta a tierra con el mayor de los
+/// alimentadores que salen de la fuente.
+fn electrode_conductor(
+    profile: &Profile,
+    project: &Project,
+    roots: &[usize],
+    results: &[Option<PanelResult>],
+) -> Option<ElectrodeConductor> {
+    let mut best: Option<(usize, ElectrodeConductor)> = None;
+    for &i in roots {
+        let panel = &project.panels[i];
+        let Some(run) = results[i].as_ref().and_then(|r| r.feeder.run.as_ref()) else {
+            continue;
+        };
+        let material = panel
+            .feeder
+            .overrides
+            .material
+            .unwrap_or(project.settings.material);
+        let Ok(props) = profile.conductor(&run.size) else {
+            continue;
+        };
+        let n = run.conductors_per_phase;
+        let area = props.area_mm2 * f64::from(n);
+        let Some(row) = profile.grounding_electrode_row(material, area) else {
+            continue;
+        };
+        let size = Size::new(&row.electrode_copper);
+        let rank = profile.size_rank(&size).unwrap_or(0);
+        let conductor = format!(
+            "{}{} de {}",
+            if n > 1 {
+                format!("{n} × ")
+            } else {
+                String::new()
+            },
+            crate::procedure::size_label(&run.size),
+            crate::procedure::material_name(material)
+        );
+        let range = match &row.service_max_size {
+            Some(s) => format!("hasta {}", crate::procedure::size_label(&Size::new(s))),
+            None => "el mayor intervalo de la tabla".to_string(),
+        };
+        let step = Step {
+            title: "Conductor al electrodo de puesta a tierra".into(),
+            formula: None,
+            substitution: format!(
+                "Acometida de {conductor}{}: {} de cobre ({} de aluminio)",
+                if n > 1 {
+                    format!(", {} mm² equivalentes", crate::procedure::plain(area))
+                } else {
+                    String::new()
+                },
+                crate::procedure::size_label(&size),
+                crate::procedure::size_label(&Size::new(&row.electrode_aluminum))
+            ),
+            note: Some(format!(
+                "Fila de la tabla: {range} de {}. Si el conductor llega solo a una varilla, tubo o placa, no se exige mayor que 6 AWG de cobre; a un electrodo en concreto, 4 AWG de cobre (250-66(a) y (b)).",
+                crate::procedure::material_name(material)
+            )),
+            references: vec![profile.reference(Rule::GroundingElectrode)],
+        };
+        let candidate = ElectrodeConductor {
+            aluminum_size: Size::new(&row.electrode_aluminum),
+            size,
+            service: conductor,
+            step,
+        };
+        if best.as_ref().map_or(true, |(r, _)| rank > *r) {
+            best = Some((rank, candidate));
+        }
+    }
+    best.map(|(_, c)| c)
+}
+
 /// Calcula todo el proyecto.
 ///
 /// Devuelve `Err` solo si la estructura del proyecto es inválida. Un dato
@@ -1310,6 +1400,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         ctx.compute(root, 0.0, root_upstream.clone());
     }
 
+    let grounding_electrode = electrode_conductor(profile, project, &roots, &ctx.results);
     let panels: Vec<PanelResult> = ctx.results.into_iter().flatten().collect();
     let statuses: Vec<Status> = panels
         .iter()
@@ -1338,6 +1429,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         warnings: ctx.warnings,
         source_fault_ka,
         motor_fault_ka,
+        grounding_electrode,
         verdict,
     })
 }

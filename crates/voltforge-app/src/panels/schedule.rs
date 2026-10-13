@@ -330,6 +330,15 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         {
             action = Some(Action::Remove);
         }
+        if ui
+            .button(format!("{} Balancear fases", icon::SCALES))
+            .on_hover_text(
+                "Reparte las fases de los circuitos de una y dos fases de este tablero para que quede lo más balanceado posible. Se puede deshacer con Ctrl+Z.",
+            )
+            .clicked()
+        {
+            action = Some(Action::Balance);
+        }
         ui.separator();
         ui.add(
             egui::TextEdit::singleline(&mut shared.filter)
@@ -570,6 +579,14 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         Some(Action::Add) => doc.add_circuit(panel_index),
         Some(Action::Duplicate) => doc.duplicate_circuit(),
         Some(Action::Remove) => doc.remove_selected(),
+        Some(Action::Balance) => {
+            shared.done = Some(match doc.balance_phases(panel_index) {
+                Some((before, after)) => {
+                    format!("Fases balanceadas: desbalance de {before:.1} % a {after:.1} %")
+                }
+                None => "Fases asignadas; el tablero no se pudo calcular".to_string(),
+            });
+        }
         None => {}
     }
 }
@@ -578,6 +595,7 @@ enum Action {
     Add,
     Duplicate,
     Remove,
+    Balance,
 }
 
 /// Franja de resumen del tablero: densa, en una línea, sin tarjetas.

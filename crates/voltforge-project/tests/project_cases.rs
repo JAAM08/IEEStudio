@@ -622,6 +622,9 @@ fn bus_fault_adds_the_feeder_impedance() {
     // corriente de los motores: 4 · 3770.3 / (3 · 127.017) = 39.6 A.
     close(result.source_fault_ka.unwrap(), 5.66314);
     close(panel.fault_ka.unwrap(), 2.76722);
+    // Acometida de 10 AWG: 2 AWG o menor, conductor al electrodo de 8 AWG.
+    let gec = result.grounding_electrode.as_ref().unwrap();
+    assert_eq!(gec.size, Size::new("8"));
 }
 
 /// Un alimentador de 446.13 A: un solo conductor sería de 1500 kcmil. El
@@ -653,6 +656,11 @@ fn large_feeders_go_parallel() {
         .steps
         .iter()
         .any(|s| s.title == "Conductores en paralelo"));
+    // Tabla 250-66: dos de 300 kcmil equivalen a 304 mm² (600 kcmil): 1/0 AWG.
+    let gec = result.grounding_electrode.as_ref().unwrap();
+    assert_eq!(gec.size, Size::new("1/0"));
+    assert_eq!(gec.aluminum_size, Size::new("3/0"));
+    assert_eq!(gec.service, "2 × 300 kcmil de cobre");
     // El circuito de 446 A también va en paralelo.
     let c = panel.circuits[0].run.as_ref().unwrap();
     assert!(c.conductors_per_phase >= 2);
