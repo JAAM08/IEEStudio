@@ -2,6 +2,8 @@
 
 use std::process::ExitCode;
 
+mod mcp;
+
 use voltforge_project::{calculate, example, PanelResult, Project, ProjectResult, RunResult};
 
 const HELP: &str = "\
@@ -20,6 +22,7 @@ Uso:
   voltforge importar <archivo.vfp> <libro.xlsx>
                                        agrega o actualiza tableros y circuitos desde
                                        Excel y guarda el proyecto
+  voltforge mcp                        servidor MCP para agentes de IA (entrada y salida estándar)
   voltforge ayuda                      muestra esta ayuda
 ";
 
@@ -47,6 +50,7 @@ fn main() -> ExitCode {
             (Some(path), Some(book)) => import(path, book),
             _ => Err("faltan el archivo del proyecto y el libro de Excel".to_string()),
         },
+        Some("mcp") => mcp::serve(),
         Some("ayuda" | "--help" | "-h") | None => {
             print!("{HELP}");
             Ok(())

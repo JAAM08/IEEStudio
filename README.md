@@ -60,6 +60,8 @@ cargo run -p voltforge-cli -- ejemplo casa.vfp   # escribe un proyecto de ejempl
 cargo run -p voltforge-cli -- calcular casa.vfp  # muestra su cuadro de cargas
 cargo run -p voltforge-cli -- memoria casa.vfp   # escribe casa.pdf, la memoria de cálculo
 cargo run -p voltforge-app -- casa.vfp           # abre la interfaz gráfica
+cargo run -p voltforge-cli -- excel casa.vfp     # cuadro de cargas en Excel
+cargo run -p voltforge-cli -- dxf casa.vfp       # unifilar en DXF
 ```
 
 Sin instalar Rust: en la página *Releases* del repositorio está el instalador
@@ -70,6 +72,28 @@ ejecución más reciente, en la sección *Artifacts*.
 
 Los proyectos se guardan con la extensión `.vfp`. Por dentro son JSON
 legible; también se pueden abrir archivos `.json` de versiones anteriores.
+
+## Agentes de IA
+
+`voltforge mcp` es un servidor MCP (Model Context Protocol) por entrada y
+salida estándar. Un agente puede pedir el proyecto de ejemplo, calcular un
+proyecto o un circuito, escribir la memoria, el Excel o el DXF y consultar las
+reglas con su cláusula. Con el instalador de Windows, la configuración del
+cliente (por ejemplo Claude Desktop) es:
+
+```json
+{
+  "mcpServers": {
+    "voltforge": {
+      "command": "C:\\Program Files\\VoltForge\\voltforge.exe",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+El servidor nunca aprueba un proyecto: cada resultado lleva el veredicto en
+tres niveles y la aprobación profesional queda pendiente.
 
 ## Organización
 
