@@ -105,3 +105,30 @@ fn a_sheet_without_the_key_columns_is_rejected() {
     assert!(error.contains("Tablero"), "{error}");
     assert!(import_xlsx(&mut project, b"no es excel").is_err());
 }
+
+/// Un tablero con áreas de distinto tipo las conserva al volver de Excel, y
+/// un área total distinta no las aplasta: se informa.
+#[test]
+fn areas_by_type_survive_the_round_trip() {
+    let mut house = example::house();
+    house.panels[0].areas.push(voltforge_project::Area {
+        description: "Pasillos".into(),
+        occupancy: Some("halls_corridors".into()),
+        m2: 20.0,
+    });
+    let bytes = export_xlsx(&house, None).unwrap();
+    let mut same = house.clone();
+    let report = import_xlsx(&mut same, &bytes).unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(same.panels[0].areas, house.panels[0].areas);
+
+    // Un libro con otra área total.
+    let mut changed = house.clone();
+    changed.panels[0].areas.truncate(1);
+    changed.panels[0].areas[0].m2 = 200.0;
+    let bytes = export_xlsx(&changed, None).unwrap();
+    let mut target = house.clone();
+    let report = import_xlsx(&mut target, &bytes).unwrap();
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert_eq!(target.panels[0].areas, house.panels[0].areas);
+}

@@ -578,17 +578,27 @@ fn import_panels(project: &mut Project, sheet: &Sheet, report: &mut ImportReport
             panel.feeder.length_m = length;
         }
         if let Some(area) = area {
+            let total: f64 = panel.areas.iter().map(|a| a.m2).sum();
             match area {
-                Some(m2) if m2 > 0.0 => match panel.areas.as_mut_slice() {
-                    [only] => only.m2 = m2,
-                    _ => {
+                // Sin cambio: se conservan las áreas por tipo.
+                Some(m2) if (m2 - total).abs() < 0.01 => {}
+                Some(m2) if m2 > 0.0 => {
+                    if panel.areas.len() > 1 {
+                        report.errors.push(format!(
+                            "Tableros, fila {line}: {id} tiene varias áreas de distinto tipo; el área total no se cambió, ajústala en la aplicación"
+                        ));
+                    } else {
                         panel.areas = vec![voltforge_project::Area {
-                            description: String::new(),
-                            occupancy: None,
+                            description: panel
+                                .areas
+                                .first()
+                                .map(|a| a.description.clone())
+                                .unwrap_or_default(),
+                            occupancy: panel.areas.first().and_then(|a| a.occupancy.clone()),
                             m2,
-                        }]
+                        }];
                     }
-                },
+                }
                 _ => panel.areas.clear(),
             }
         }
