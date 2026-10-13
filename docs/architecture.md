@@ -12,13 +12,14 @@ voltforge-core          tipos del dominio, unidades, errores, validación
    ↑
 voltforge-rules         perfiles normativos: tablas, parámetros y referencias (data/)
    ↑
-voltforge-electrical    fórmulas: corriente, caída, conductor, protección, tierra, tubería
+voltforge-electrical    fórmulas: corriente, caída, conductor, protección, tierra, tubería, cortocircuito
    ↑
-voltforge-project       modelo del proyecto, cuadro de cargas, procedimiento, cálculo rápido, veredicto
+voltforge-project       modelo del proyecto, carga del artículo 220, cuadro de cargas, cortocircuito, procedimiento, cálculo rápido, veredicto
    ↑
 voltforge-diagrams      diagrama unifilar como trazos y textos; exporta SVG
    ↑
 voltforge-reports       memoria de cálculo en PDF (Typst)
+voltforge-exchange      cuadro de cargas de ida y vuelta con Excel
    ↑
 voltforge-cli           línea de comandos «voltforge»
 voltforge-app           aplicación de escritorio (egui)
@@ -34,6 +35,7 @@ Una flecha significa «depende de». Ningún crate depende de uno de arriba.
 | `voltforge-project` | core, rules, electrical | diagramas, reportes, interfaz |
 | `voltforge-diagrams` | project | egui, Typst |
 | `voltforge-reports` | project, diagrams, rules | egui |
+| `voltforge-exchange` | project, rules | egui, Typst |
 | `voltforge-cli`, `voltforge-app` | todos los anteriores | — |
 
 ## Flujo de un cálculo

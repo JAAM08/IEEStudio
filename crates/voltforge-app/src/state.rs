@@ -33,6 +33,7 @@ pub fn empty_project() -> Project {
         format_version: FORMAT_VERSION,
         name: "Proyecto nuevo".to_string(),
         profile: "nom-001-sede-2012".to_string(),
+        info: Default::default(),
         occupancy: None,
         settings: Settings::default(),
         source: Source {

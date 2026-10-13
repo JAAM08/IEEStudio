@@ -1,7 +1,7 @@
 //! VoltForge: aplicación de escritorio.
 //!
 //! Uso: `voltforge-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
-//! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID] [--captura imagen.png]`
+//! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--captura imagen.png]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 

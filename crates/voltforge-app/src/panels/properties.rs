@@ -122,6 +122,24 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Perfil normativo", |ui| {
         ui.label("NOM-001-SEDE-2012");
     });
+    section(ui, p, "Datos de la obra");
+    ui.label(muted(p, "Aparecen en la memoria; no intervienen en el cálculo.").size(11.0));
+    let info = &mut project.info;
+    for (label, value, hint) in [
+        ("Cliente", &mut info.client, "Propietario o razón social"),
+        ("Ubicación", &mut info.location, "Domicilio o municipio"),
+        ("Elaboró", &mut info.prepared_by, "Quien hizo el cálculo"),
+        ("Responsable", &mut info.responsible, "Quien revisa y firma"),
+        ("Cédula profesional", &mut info.license, "Del responsable"),
+        ("Revisión", &mut info.revision, "A, 0, 1…"),
+        ("Fecha", &mut info.date, "Vacía: la del día"),
+    ] {
+        property(ui, p, label, |ui| {
+            changed |= ui
+                .add(egui::TextEdit::singleline(value).hint_text(hint))
+                .changed();
+        });
+    }
     section(ui, p, "Inmueble");
     property(ui, p, "Tipo de inmueble", |ui| {
         changed |= occupancy_combo(ui, "inmueble", &mut project.occupancy, false, "Sin elegir");

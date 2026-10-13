@@ -13,6 +13,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 cargo run -p voltforge-cli -- calcular casa.vfp
 cargo run -p voltforge-app -- casa.vfp
+cargo run -p voltforge-cli -- excel casa.vfp        # cuadro de cargas a Excel; «importar» lo trae de vuelta
 xvfb-run -a cargo run -p voltforge-app -- --captura captura.png   # revisar la interfaz sin pantalla
 # con --espacio calculo|diagrama|documentacion, --panel rapido|unifilar|memoria|ninguno,
 # --propiedades datos|resultados|normativa y --claro

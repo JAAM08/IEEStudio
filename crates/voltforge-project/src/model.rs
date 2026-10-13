@@ -11,7 +11,7 @@ use voltforge_core::{CircuitKind, ConduitType, Material, MotorType, Size, System
 /// Versión del formato de archivo. La 2 agrega los datos de motores y
 /// motocompresores y el interruptor fijado. La 3 agrega el tipo de inmueble,
 /// las áreas de cada tablero, los contactos, el método de demanda del
-/// alimentador y los datos de cortocircuito. Lee los archivos de la 1 y la 2.
+/// alimentador, los datos de cortocircuito y los datos de la obra. Lee los archivos de la 1 y la 2.
 pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -20,6 +20,9 @@ pub struct Project {
     pub name: String,
     /// Identificador del perfil normativo, por ejemplo `nom-001-sede-2012`.
     pub profile: String,
+    /// Datos de la obra para la memoria.
+    #[serde(default)]
+    pub info: ProjectInfo,
     /// Tipo de inmueble de la Tabla 220-12 (`dwellings`, `offices`…). Decide
     /// los factores de demanda del artículo 220. `None` si no se ha elegido.
     #[serde(default)]
@@ -28,6 +31,28 @@ pub struct Project {
     pub settings: Settings,
     pub source: Source,
     pub panels: Vec<Panel>,
+}
+
+/// Datos de la obra que aparecen en la memoria. Ninguno interviene en el
+/// cálculo.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProjectInfo {
+    /// Cliente o propietario.
+    pub client: String,
+    /// Ubicación de la obra.
+    pub location: String,
+    /// Quién elaboró el cálculo.
+    pub prepared_by: String,
+    /// Responsable que revisa y firma el proyecto.
+    pub responsible: String,
+    /// Cédula profesional del responsable.
+    pub license: String,
+    /// Revisión del documento: `A`, `0`, `1`…
+    pub revision: String,
+    /// Fecha de la revisión, como se quiere ver en la memoria. Vacía usa la
+    /// fecha en que se genera.
+    pub date: String,
 }
 
 /// Criterios de diseño que aplican a todo el proyecto.

@@ -4,7 +4,7 @@ use voltforge_core::{CircuitKind, Size, System};
 
 use crate::model::{
     Area, Circuit, CompressorLoad, Demand, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel,
-    Phase, Project, Settings, Source, SourceFault, FORMAT_VERSION,
+    Phase, Project, ProjectInfo, Settings, Source, SourceFault, FORMAT_VERSION,
 };
 
 #[allow(clippy::too_many_arguments)] // constructor interno del ejemplo
@@ -93,6 +93,12 @@ pub fn house() -> Project {
         format_version: FORMAT_VERSION,
         name: "Casa habitación (ejemplo)".to_string(),
         profile: "nom-001-sede-2012".to_string(),
+        info: ProjectInfo {
+            client: "Familia Pérez".to_string(),
+            location: "Salamanca, Guanajuato".to_string(),
+            revision: "A".to_string(),
+            ..ProjectInfo::default()
+        },
         occupancy: Some("dwellings".to_string()),
         settings: Settings::default(),
         source: Source {

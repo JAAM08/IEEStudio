@@ -13,6 +13,11 @@ Uso:
   voltforge calcular <archivo> --json  entrega el resultado completo en JSON
   voltforge memoria <archivo.vfp> [salida.pdf]
                                        escribe la memoria de cálculo en PDF
+  voltforge excel <archivo.vfp> [salida.xlsx]
+                                       exporta tableros, cuadro de cargas y resultados
+  voltforge importar <archivo.vfp> <libro.xlsx>
+                                       agrega o actualiza tableros y circuitos desde
+                                       Excel y guarda el proyecto
   voltforge ayuda                      muestra esta ayuda
 ";
 
@@ -27,6 +32,14 @@ fn main() -> ExitCode {
         Some("memoria") => match args.get(1) {
             Some(path) => report(path, args.get(2).map(String::as_str)),
             None => Err("falta el archivo del proyecto".to_string()),
+        },
+        Some("excel") => match args.get(1) {
+            Some(path) => excel(path, args.get(2).map(String::as_str)),
+            None => Err("falta el archivo del proyecto".to_string()),
+        },
+        Some("importar") => match (args.get(1), args.get(2)) {
+            (Some(path), Some(book)) => import(path, book),
+            _ => Err("faltan el archivo del proyecto y el libro de Excel".to_string()),
         },
         Some("ayuda" | "--help" | "-h") | None => {
             print!("{HELP}");
@@ -80,6 +93,35 @@ fn report(path: &str, output: Option<&str>) -> Result<(), String> {
     std::fs::write(&output, pdf)
         .map_err(|e| format!("no se pudo escribir {}: {e}", output.display()))?;
     println!("Memoria de cálculo escrita en {}", output.display());
+    Ok(())
+}
+
+fn excel(path: &str, output: Option<&str>) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
+    let project = Project::from_json(&text)?;
+    let result = calculate(&project).ok();
+    let bytes = voltforge_exchange::export_xlsx(&project, result.as_ref())?;
+    let output = match output {
+        Some(output) => std::path::PathBuf::from(output),
+        None => std::path::Path::new(path).with_extension("xlsx"),
+    };
+    std::fs::write(&output, bytes)
+        .map_err(|e| format!("no se pudo escribir {}: {e}", output.display()))?;
+    println!("Cuadro de cargas escrito en {}", output.display());
+    Ok(())
+}
+
+fn import(path: &str, book: &str) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
+    let mut project = Project::from_json(&text)?;
+    let bytes = std::fs::read(book).map_err(|e| format!("no se pudo leer {book}: {e}"))?;
+    let report = voltforge_exchange::import_xlsx(&mut project, &bytes)?;
+    for error in &report.errors {
+        eprintln!("Aviso: {error}");
+    }
+    std::fs::write(path, project.to_json())
+        .map_err(|e| format!("no se pudo escribir {path}: {e}"))?;
+    println!("{}. Proyecto guardado en {path}", report.summary());
     Ok(())
 }
 

@@ -17,6 +17,7 @@ voltforge-rules = { path = "../voltforge-rules" }
 voltforge-project = { path = "../voltforge-project" }
 voltforge-diagrams = { path = "../voltforge-diagrams" }
 voltforge-reports = { path = "../voltforge-reports" }
+voltforge-exchange = { path = "../voltforge-exchange" }
 eframe = { version = "0.36", features = ["persistence"] }
 egui_extras = "0.36"
 egui_dock = { version = "0.21", features = ["serde"] }

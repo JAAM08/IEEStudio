@@ -13,8 +13,8 @@ use voltforge_diagrams::single_line;
 use voltforge_project::quick::{QuickInput, QuickResult};
 use voltforge_project::verdict::Verdict;
 use voltforge_project::{
-    insulation_name, material_name, size_label, PanelResult, Project, ProjectResult, RunResult,
-    Status, Step,
+    insulation_name, material_name, size_label, PanelResult, Project, ProjectInfo, ProjectResult,
+    RunResult, Status, Step,
 };
 use voltforge_rules::{cite_all, Profile, Rule};
 
@@ -202,17 +202,39 @@ fn steps(out: &mut String, steps: &[Step]) {
     }
 }
 
-fn signatures(out: &mut String) {
-    out.push_str(
+/// Espacio para firmas. Con los datos de la obra, los nombres ya impresos.
+fn signatures(out: &mut String, info: Option<&ProjectInfo>) {
+    let name = |text: &str| {
+        if text.trim().is_empty() {
+            String::new()
+        } else {
+            format!("#text(9.5pt, {})\\ ", q(text.trim()))
+        }
+    };
+    let (prepared, responsible) = match info {
+        Some(i) => {
+            let license = if i.license.trim().is_empty() {
+                String::new()
+            } else {
+                format!("Cédula profesional {}", i.license.trim())
+            };
+            (
+                name(&i.prepared_by),
+                format!("{}{}", name(&i.responsible), name(&license)),
+            )
+        }
+        None => (String::new(), String::new()),
+    };
+    let _ = writeln!(
+        out,
         r#"
 #v(1.6cm)
 #block(breakable: false, grid(
   columns: (1fr, 1fr),
   column-gutter: 1.5cm,
-  [#line(length: 100%, stroke: 0.5pt + tinta) #text(8.5pt, fill: gris)[Elaboró: nombre, firma y fecha]],
-  [#line(length: 100%, stroke: 0.5pt + tinta) #text(8.5pt, fill: gris)[Revisó y aprobó: nombre, cédula profesional y firma]],
-))
-"#,
+  [#line(length: 100%, stroke: 0.5pt + tinta) {prepared}#text(8.5pt, fill: gris)[Elaboró: nombre, firma y fecha]],
+  [#line(length: 100%, stroke: 0.5pt + tinta) {responsible}#text(8.5pt, fill: gris)[Revisó y aprobó: nombre, cédula profesional y firma]],
+))"#
     );
 }
 
@@ -318,22 +340,50 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     let s = &project.settings;
     let profile = Profile::by_id(&project.profile).unwrap_or(Profile::nom_001_sede_2012());
     let mut out = String::new();
+    let info = &project.info;
+    let revision = info.revision.trim();
     head(
         &mut out,
-        &format!("Memoria de cálculo · {}", project.name),
+        &if revision.is_empty() {
+            format!("Memoria de cálculo · {}", project.name)
+        } else {
+            format!("Memoria de cálculo · {} · Rev. {revision}", project.name)
+        },
         &project.profile,
     );
+    let date = if info.date.trim().is_empty() {
+        today()
+    } else {
+        info.date.trim().to_string()
+    };
 
     let _ = writeln!(
         out,
         "#text(18pt, font: \"IBM Plex Sans SmBld\", \"Memoria de cálculo eléctrico\")\n\n#text(12pt, {})\n\n#text(fill: gris, {})",
         q(&project.name),
         q(&format!(
-            "Instalación eléctrica de baja tensión calculada con la {} · {}",
+            "Instalación eléctrica de baja tensión calculada con la {} · {date}",
             project.profile.to_uppercase(),
-            today()
         ))
     );
+
+    let mut work: Vec<(&str, String)> = Vec::new();
+    for (label, value) in [
+        ("Cliente", &info.client),
+        ("Ubicación", &info.location),
+        ("Revisión", &info.revision),
+        ("Elaboró", &info.prepared_by),
+        ("Responsable", &info.responsible),
+        ("Cédula profesional", &info.license),
+    ] {
+        if !value.trim().is_empty() {
+            work.push((label, value.trim().to_string()));
+        }
+    }
+    if !work.is_empty() {
+        out.push_str("\n= Datos de la obra\n");
+        data_table(&mut out, &work);
+    }
 
     out.push_str("\n= Datos y criterios de diseño\n");
     data_table(
@@ -547,7 +597,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
         }
     }
 
-    signatures(&mut out);
+    signatures(&mut out, Some(&project.info));
     out
 }
 
@@ -559,7 +609,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
         out,
         "#text(18pt, font: \"IBM Plex Sans SmBld\", \"Hoja de cálculo de un circuito\")\n\n#text(fill: gris, {})",
         q(&format!(
-            "Corriente, protección, conductor, tubería y caída de tensión conforme a la NOM-001-SEDE-2012 · {}",
+            "Corriente, protección, conductor, tubería y caída de tensión con la NOM-001-SEDE-2012 · {}",
             today()
         ))
     );
@@ -672,7 +722,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
     }
     out.push_str("\n#text(8.5pt, fill: gris)[Supone lugar seco, carga lineal, tierra desnuda y todos los conductores en la misma tubería.]\n");
 
-    signatures(&mut out);
+    signatures(&mut out, None);
     out
 }
 

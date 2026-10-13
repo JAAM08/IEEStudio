@@ -16,4 +16,5 @@ voltforge-core = { path = "../voltforge-core" }
 voltforge-rules = { path = "../voltforge-rules" }
 voltforge-project = { path = "../voltforge-project" }
 voltforge-reports = { path = "../voltforge-reports" }
+voltforge-exchange = { path = "../voltforge-exchange" }
 serde_json = "1"

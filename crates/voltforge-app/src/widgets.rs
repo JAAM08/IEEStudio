@@ -483,3 +483,12 @@ pub fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
         }
     }
 }
+
+/// Primera letra en mayúscula.
+pub fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}

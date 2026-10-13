@@ -69,6 +69,9 @@ pub struct App {
     capture: Option<Capture>,
     /// Acción detenida por cambios sin guardar.
     pending: Option<Pending>,
+    /// Resultado de la última importación de Excel, con el proyecto de antes
+    /// para poder deshacerla.
+    imported: Option<(voltforge_exchange::ImportReport, Project)>,
     /// El usuario ya decidió cerrar; no se vuelve a preguntar.
     allow_close: bool,
     /// Cerrar la ventana al terminar este cuadro.
@@ -141,6 +144,7 @@ impl App {
             about: false,
             capture: options.capture.map(|path| Capture { path, frames: 0 }),
             pending: None,
+            imported: None,
             allow_close: false,
             quit: false,
             recent,
@@ -152,6 +156,9 @@ impl App {
             app.load(path);
         }
         if let Some(id) = &options.select {
+            if id == "proyecto" {
+                app.doc.selection = Selection::Project;
+            }
             let project = &app.doc.project;
             for (i, panel) in project.panels.iter().enumerate() {
                 if &panel.id == id {
@@ -294,6 +301,133 @@ impl App {
                 self.done = Some(format!("PDF guardado en {}", path.display()));
             }
             Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
+        }
+    }
+
+    /// Cuadro de cargas a Excel: tableros, circuitos y resultados.
+    fn export_excel(&mut self) {
+        let bytes =
+            match voltforge_exchange::export_xlsx(&self.doc.project, self.doc.result.as_ref().ok())
+            {
+                Ok(b) => b,
+                Err(e) => {
+                    self.notice = Some(e);
+                    return;
+                }
+            };
+        let stem = self.suggested_name();
+        let stem = stem.trim_end_matches(&format!(".{EXTENSION}"));
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Libro de Excel", &["xlsx"])
+            .set_file_name(format!("{stem} - cuadro de cargas.xlsx"))
+            .save_file()
+        else {
+            return;
+        };
+        match std::fs::write(&path, bytes) {
+            Ok(()) => {
+                self.notice = None;
+                self.done = Some(format!("Cuadro de cargas guardado en {}", path.display()));
+            }
+            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
+        }
+    }
+
+    /// Agrega o actualiza tableros y circuitos desde un libro de Excel.
+    fn import_excel(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Libro de Excel", &["xlsx"])
+            .pick_file()
+        else {
+            return;
+        };
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(e) => {
+                self.notice = Some(format!("No se pudo leer {}: {e}", path.display()));
+                return;
+            }
+        };
+        let before = self.doc.project.clone();
+        match voltforge_exchange::import_xlsx(&mut self.doc.project, &bytes) {
+            Ok(report) => {
+                self.notice = None;
+                if self.doc.project != before {
+                    self.doc.edited();
+                }
+                self.imported = Some((report, before));
+            }
+            Err(e) => {
+                self.doc.project = before;
+                self.notice = Some(format!("No se importó: {e}"));
+            }
+        }
+    }
+
+    fn import_window(&mut self, ctx: &egui::Context) {
+        let Some((report, _)) = &self.imported else {
+            return;
+        };
+        let p = self.shared.palette;
+        let mut close = false;
+        let mut undo = false;
+        let modal = egui::Modal::new(egui::Id::new("importacion")).show(ctx, |ui| {
+            ui.set_width(480.0);
+            ui.horizontal(|ui| {
+                let (glyph, color) = if report.errors.is_empty() {
+                    (icon::CHECK_CIRCLE, p.ok)
+                } else {
+                    (icon::WARNING, p.warn)
+                };
+                ui.label(RichText::new(glyph).size(20.0).color(color));
+                ui.label(strong("Importación del cuadro de cargas").size(15.0));
+            });
+            ui.add_space(4.0);
+            ui.label(format!(
+                "{}.",
+                crate::widgets::capitalize(&report.summary())
+            ));
+            ui.label(
+                muted(
+                    &p,
+                    "Los tableros y circuitos que no están en el libro quedaron como estaban.",
+                )
+                .size(11.0),
+            );
+            if !report.errors.is_empty() {
+                ui.add_space(6.0);
+                ui.label(strong("Filas que no se importaron"));
+                egui::ScrollArea::vertical()
+                    .max_height(180.0)
+                    .show(ui, |ui| {
+                        for e in &report.errors {
+                            ui.label(RichText::new(e).color(p.warn).size(12.0));
+                        }
+                    });
+            }
+            ui.add_space(10.0);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let ok =
+                    egui::Button::new(RichText::new("Aceptar").color(p.on_accent)).fill(p.accent);
+                if ui.add(ok).clicked() {
+                    close = true;
+                }
+                if ui.button("Deshacer la importación").clicked() {
+                    undo = true;
+                }
+            });
+        });
+        if modal.should_close() {
+            close = true;
+        }
+        if undo {
+            if let Some((_, before)) = self.imported.take() {
+                self.doc.project = before;
+                self.doc.selection = crate::state::Selection::Project;
+                self.doc.edited();
+            }
+        } else if close {
+            self.imported = None;
         }
     }
 
@@ -446,6 +580,28 @@ impl App {
                 {
                     ui.close();
                     self.export_pdf(true);
+                }
+                ui.separator();
+                if ui
+                    .button(format!(
+                        "{}  Exportar cuadro de cargas a Excel…",
+                        icon::FILE_XLS
+                    ))
+                    .on_hover_text("Tableros, circuitos y resultados en un libro .xlsx")
+                    .clicked()
+                {
+                    ui.close();
+                    self.export_excel();
+                }
+                if ui
+                    .button("     Importar cuadro de cargas de Excel…")
+                    .on_hover_text(
+                        "Agrega o actualiza tableros y circuitos por su ID. No borra nada.",
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.import_excel();
                 }
                 ui.separator();
                 if ui.button("     Abrir el proyecto de ejemplo").clicked() {
@@ -947,6 +1103,7 @@ impl eframe::App for App {
         }
         self.about_window(&ctx);
         self.confirm_window(&ctx);
+        self.import_window(&ctx);
         if self.quit {
             self.quit = false;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
