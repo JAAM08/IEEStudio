@@ -290,12 +290,7 @@ fn build(project: &Project, result: Option<&ProjectResult>) -> Result<Vec<u8>, X
                     text(sheet, r, 7, &size)?;
                     text(sheet, r, 8, &run.grounding_size.0)?;
                     if let Some(c) = &run.conduit {
-                        text(
-                            sheet,
-                            r,
-                            9,
-                            &format!("{} {} mm", c.conduit_type, c.metric_designator),
-                        )?;
+                        text(sheet, r, 9, &c.label())?;
                     }
                     number(
                         sheet,

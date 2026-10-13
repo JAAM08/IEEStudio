@@ -102,9 +102,12 @@ fn warns_about_small_parallel_and_ampacity() {
         ..QuickInput::default()
     };
     let r = quick_circuit(Profile::nom_001_sede_2012(), &input).unwrap();
-    // 8 AWG de cobre a 75 °C: 50 A · 0.80 (6 portadores) · 2 = 80 A, menos que 179.91 A.
+    // 8 AWG de cobre a 75 °C, un juego por tubo (3 portadores, sin ajuste):
+    // 50 A · 2 = 100 A, menos que 179.91 A.
     let p = r.protection.as_ref().unwrap();
-    close(p.corrected_ampacity_a, 80.0, 0.001);
+    close(p.corrected_ampacity_a, 100.0, 0.001);
+    assert_eq!(p.current_carrying_conductors, 3);
+    assert!(p.conduit.as_deref().unwrap().starts_with("2 tubos"));
     assert_eq!(p.status, Status::Fails);
     assert_eq!(r.warnings.len(), 1);
 }

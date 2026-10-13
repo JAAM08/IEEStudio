@@ -20,5 +20,6 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0012 | [Carga de los alimentadores según el artículo 220](0012-carga-articulo-220.md) | Aceptada |
 | 0013 | [Cortocircuito y capacidad interruptiva](0013-cortocircuito.md) | Aceptada |
 | 0014 | [Cuadro de cargas de ida y vuelta con Excel](0014-excel.md) | Aceptada |
+| 0015 | [Conductores en paralelo propuestos por el programa](0015-paralelos.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

@@ -311,7 +311,7 @@ fn schedule_row(out: &mut String, id: &str, item: &RunResult) {
                 run.grounding_size.0.clone(),
                 run.conduit
                     .as_ref()
-                    .map_or("—".to_string(), |c| format!("{} mm", c.metric_designator)),
+                    .map_or("—".to_string(), |c| c.short_label()),
                 format!("{}P-{:.0}", run.poles, run.breaker_a),
                 format!("{:.2}", run.drop_percent),
                 format!("{:.2}", run.cumulative_drop_percent),

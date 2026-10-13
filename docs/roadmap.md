@@ -28,6 +28,8 @@
   (110-9, 110-10; ver la decisión 0013).
 - Datos de la obra en la memoria (cliente, ubicación, revisión, responsable
   y cédula) y cuadro de cargas de ida y vuelta con Excel (decisión 0014).
+- Deshacer y rehacer (Ctrl+Z, Ctrl+Y). Conductores en paralelo propuestos
+  por el programa, un juego por tubo (decisión 0015).
 - Instalador de Windows (Inno Setup) con ícono, accesos directos y la
   extensión `.vfp`; una etiqueta `v*` publica la versión en GitHub. El
   programa abre el último proyecto usado y recuerda los recientes.
@@ -37,8 +39,7 @@
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.
 
-1. Deshacer y rehacer; paralelos automáticos dentro del proyecto; unifilar en
-   DXF; pasar un cálculo rápido al proyecto.
+1. Unifilar en DXF; pasar un cálculo rápido al proyecto.
 2. Servidor MCP para agentes.
 3. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).
    Requisito para la beta.

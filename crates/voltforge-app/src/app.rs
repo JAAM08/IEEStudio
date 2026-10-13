@@ -619,6 +619,29 @@ impl App {
             });
 
             ui.menu_button("Edición", |ui| {
+                if ui
+                    .add_enabled(
+                        self.doc.can_undo(),
+                        egui::Button::new(format!("{}  Deshacer", icon::ARROW_COUNTER_CLOCKWISE))
+                            .shortcut_text("Ctrl+Z"),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.doc.undo();
+                }
+                if ui
+                    .add_enabled(
+                        self.doc.can_redo(),
+                        egui::Button::new(format!("{}  Rehacer", icon::ARROW_CLOCKWISE))
+                            .shortcut_text("Ctrl+Y"),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.doc.redo();
+                }
+                ui.separator();
                 let panel = self.doc.panel_index();
                 if ui
                     .add_enabled(
@@ -854,6 +877,14 @@ impl App {
         }
         let typing = ctx.memory(|m| m.focused().is_some());
         if !typing {
+            // Con un campo de texto activo, Ctrl+Z deshace dentro del campo.
+            if pressed(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z)
+                || pressed(Modifiers::COMMAND, Key::Y)
+            {
+                self.doc.redo();
+            } else if pressed(Modifiers::COMMAND, Key::Z) {
+                self.doc.undo();
+            }
             if pressed(Modifiers::COMMAND, Key::D) {
                 self.doc.duplicate_circuit();
             }
@@ -1104,6 +1135,11 @@ impl eframe::App for App {
         self.about_window(&ctx);
         self.confirm_window(&ctx);
         self.import_window(&ctx);
+        // El historial registra un cambio cuando la interacción terminó.
+        let settled = !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none());
+        if settled {
+            self.doc.commit();
+        }
         if self.quit {
             self.quit = false;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);

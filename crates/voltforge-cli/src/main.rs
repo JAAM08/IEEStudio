@@ -208,7 +208,7 @@ fn print_row(item: &RunResult, feeder: bool) {
             let conduit = run
                 .conduit
                 .as_ref()
-                .map_or("-".to_string(), |c| format!("{} mm", c.metric_designator));
+                .map_or("-".to_string(), |c| c.short_label());
             println!(
                 "  {:<7}{:<26}{:>8.0}{:>8.2}{:>6.0}  {:<8}{:<7}{:<7}{:<9}{:>7.2}{:>7.2}  {}",
                 id,

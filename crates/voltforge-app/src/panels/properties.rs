@@ -198,6 +198,25 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Temp. ambiente", |ui| {
         changed |= number(ui, &mut s.ambient_c, 1.0, 0.0, 85.0, " °C");
     });
+    property(ui, p, "Calibre máximo", |ui| {
+        egui::ComboBox::from_id_salt("calibre-maximo")
+            .selected_text(size_label(&s.largest_single_size))
+            .height(300.0)
+            .show_ui(ui, |ui| {
+                for c in Profile::nom_001_sede_2012()
+                    .sizes
+                    .iter()
+                    .skip_while(|c| c.size != "1/0")
+                {
+                    let size = Size::new(&c.size);
+                    let label = size_label(&size);
+                    changed |= ui
+                        .selectable_value(&mut s.largest_single_size, size, label)
+                        .changed();
+                }
+            });
+    })
+    .on_hover_text("Calibre mayor que VoltForge propone con un conductor por fase; arriba de él propone conductores en paralelo.");
     property(ui, p, "Aporte de motores", |ui| {
         changed |= number(ui, &mut s.motor_fault_multiplier, 0.5, 0.0, 10.0, " × In");
     })
@@ -731,12 +750,32 @@ fn decisions(
     })
     .on_hover_text("VoltForge verifica el interruptor que fijes; no lo cambia.");
     property(ui, p, "Conductores por fase", |ui| {
-        let mut n = ov.conductors_per_phase.unwrap_or(1);
-        if ui.add(egui::DragValue::new(&mut n).range(1..=12)).changed() {
-            ov.conductors_per_phase = (n > 1).then_some(n);
-            changed = true;
-        }
-    });
+        let text = ov
+            .conductors_per_phase
+            .map_or("Lo propone VoltForge".to_string(), |n| n.to_string());
+        egui::ComboBox::from_id_salt(("por-fase", id))
+            .selected_text(text)
+            .show_ui(ui, |ui| {
+                changed |= ui
+                    .selectable_value(&mut ov.conductors_per_phase, None, "Lo propone VoltForge")
+                    .changed();
+                for n in 1..=8u32 {
+                    changed |= ui
+                        .selectable_value(&mut ov.conductors_per_phase, Some(n), n.to_string())
+                        .changed();
+                }
+            });
+    })
+    .on_hover_text(
+        "VoltForge propone conductores en paralelo cuando uno solo no cumple, no cabe en un tubo o rebasa el calibre máximo de los criterios.",
+    );
+    changed |= ui
+        .checkbox(
+            &mut ov.single_raceway,
+            "Paralelos en un solo tubo",
+        )
+        .on_hover_text("Por omisión cada juego de conductores en paralelo lleva su propio tubo. En un solo tubo se aplica el ajuste por agrupamiento.")
+        .changed();
     property(ui, p, "Material", |ui| {
         changed |= combo_override(
             ui,
@@ -930,10 +969,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
 
     section(ui, p, "Tubería");
     let conduit = run.conduit.as_ref().map_or("—".to_string(), |c| {
-        format!(
-            "{} {} mm ({}\")",
-            c.conduit_type, c.metric_designator, c.trade_size
-        )
+        format!("{} ({}\")", c.label(), c.trade_size)
     });
     result_row(ui, p, "Tubo", conduit, calc);
     if let Some(c) = &run.conduit {

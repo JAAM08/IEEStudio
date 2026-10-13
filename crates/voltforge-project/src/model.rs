@@ -83,6 +83,9 @@ pub struct Settings {
     /// Aportación de los motores a la corriente de cortocircuito, en veces su
     /// corriente a plena carga.
     pub motor_fault_multiplier: f64,
+    /// Calibre mayor que el programa propone para un solo conductor por fase;
+    /// arriba de él propone conductores en paralelo.
+    pub largest_single_size: Size,
 }
 
 impl Default for Settings {
@@ -101,6 +104,7 @@ impl Default for Settings {
             include_iec_ratings: false,
             imbalance_warning_percent: 5.0,
             motor_fault_multiplier: 4.0,
+            largest_single_size: Size::new("500"),
         }
     }
 }
@@ -331,6 +335,10 @@ pub struct Overrides {
     /// Interruptor fijado. El programa lo verifica, no lo cambia.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub breaker_a: Option<f64>,
+    /// Con conductores en paralelo, todos los juegos van en un solo tubo. Por
+    /// omisión cada juego lleva su tubo.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub single_raceway: bool,
 }
 
 fn yes() -> bool {

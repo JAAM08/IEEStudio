@@ -26,7 +26,16 @@ pub struct Doc {
     pub selection: Selection,
     /// Cambia cada vez que el resultado cambia; la vista previa lo compara.
     pub revision: u64,
+    /// Estados anteriores para deshacer, el más reciente al final.
+    undo: Vec<Project>,
+    /// Estados deshechos para rehacer.
+    redo: Vec<Project>,
+    /// Último estado registrado en el historial.
+    committed: Project,
 }
+
+/// Pasos que guarda el historial.
+const HISTORY: usize = 100;
 
 pub fn empty_project() -> Project {
     Project {
@@ -68,12 +77,15 @@ fn new_panel(id: &str, name: &str, parent: Option<String>) -> Panel {
 impl Doc {
     pub fn new(project: Project, path: Option<PathBuf>) -> Self {
         let mut doc = Doc {
+            committed: project.clone(),
             project,
             path,
             dirty: false,
             result: Err(String::new()),
             selection: Selection::Project,
             revision: 0,
+            undo: Vec::new(),
+            redo: Vec::new(),
         };
         doc.recalculate();
         if !doc.project.panels.is_empty() {
@@ -86,6 +98,47 @@ impl Doc {
         self.result = calculate(&self.project);
         self.revision += 1;
         self.clamp_selection();
+    }
+
+    /// Registra en el historial el cambio pendiente, si lo hay. Se llama
+    /// cuando la interacción terminó (sin botón presionado ni campo con el
+    /// cursor), para que arrastrar un número o escribir un nombre sea un solo
+    /// paso.
+    pub fn commit(&mut self) {
+        if self.project != self.committed {
+            let previous = std::mem::replace(&mut self.committed, self.project.clone());
+            self.undo.push(previous);
+            if self.undo.len() > HISTORY {
+                self.undo.remove(0);
+            }
+            self.redo.clear();
+        }
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty() || self.project != self.committed
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    pub fn undo(&mut self) {
+        self.commit();
+        if let Some(previous) = self.undo.pop() {
+            self.redo
+                .push(std::mem::replace(&mut self.project, previous));
+            self.committed = self.project.clone();
+            self.edited();
+        }
+    }
+
+    pub fn redo(&mut self) {
+        if let Some(next) = self.redo.pop() {
+            self.undo.push(std::mem::replace(&mut self.project, next));
+            self.committed = self.project.clone();
+            self.edited();
+        }
     }
 
     /// Marca un cambio del usuario: recalcula y deja el proyecto sin guardar.
@@ -352,6 +405,44 @@ impl Doc {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn undo_and_redo_whole_steps() {
+        let mut doc = Doc::new(voltforge_project::example::house(), None);
+        let original = doc.project.clone();
+        assert!(!doc.can_undo());
+        // Varios cambios antes de registrar son un solo paso.
+        doc.project.name = "A".into();
+        doc.project.name = "AB".into();
+        doc.commit();
+        doc.add_circuit(0);
+        doc.commit();
+        let with_circuit = doc.project.clone();
+        doc.undo();
+        assert_eq!(doc.project.name, "AB");
+        assert_eq!(
+            doc.project.panels[0].circuits.len(),
+            original.panels[0].circuits.len()
+        );
+        doc.undo();
+        assert_eq!(doc.project, original);
+        assert!(!doc.can_undo());
+        doc.redo();
+        doc.redo();
+        assert_eq!(doc.project, with_circuit);
+        assert!(!doc.can_redo());
+        // Un cambio nuevo borra lo que se podía rehacer.
+        doc.undo();
+        doc.project.name = "C".into();
+        doc.commit();
+        assert!(!doc.can_redo());
+        // Un cambio sin registrar también se deshace.
+        doc.project.name = "D".into();
+        assert!(doc.can_undo());
+        doc.undo();
+        assert_eq!(doc.project.name, "C");
+    }
+
     use super::*;
 
     fn three_levels() -> Doc {

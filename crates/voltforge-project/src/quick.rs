@@ -177,16 +177,17 @@ fn drop_input(input: &QuickInput, current_a: f64) -> VoltageDropInput {
     }
 }
 
-/// Conductores portadores de corriente con `n` conductores por fase. El neutro
+/// Conductores portadores de corriente en cada tubo. Con conductores en
+/// paralelo cada juego lleva su tubo, así que se cuenta un juego. El neutro
 /// cuenta en un circuito de una fase y en uno de dos fases de un sistema en
 /// estrella; en uno de tres fases con carga lineal no cuenta.
-fn current_carrying(input: &QuickInput, n: u32) -> u32 {
+fn current_carrying(input: &QuickInput, _n: u32) -> u32 {
     let neutral_counts = match input.kind {
         CircuitKind::LineToNeutral => true,
         CircuitKind::LineToLine => input.has_neutral && is_wye(&input.system),
         CircuitKind::ThreePhase => false,
     };
-    poles(input.kind) * n + if neutral_counts { n } else { 0 }
+    poles(input.kind) + u32::from(neutral_counts)
 }
 
 /// Datos para evaluar ampacidad y protección con `n` conductores por fase.
@@ -283,10 +284,11 @@ fn protection(
         grounding: grounding_size.as_ref().map(|g| (g, input.material)),
     });
 
-    // Tubería: fases y neutro del calibre elegido, más la tierra desnuda.
+    // Tubería: fases y neutro del calibre elegido, más la tierra desnuda. Con
+    // paralelos, un juego completo por tubo.
     let has_neutral = input.kind == CircuitKind::LineToNeutral || input.has_neutral;
     let mut groups = vec![ConductorGroup {
-        count: (poles(input.kind) + u32::from(has_neutral)) * n,
+        count: poles(input.kind) + u32::from(has_neutral),
         size: input.size.clone(),
         covering: Covering::Insulated(input.insulation.dimension_group()),
     }];
@@ -307,11 +309,25 @@ fn protection(
     )
     .ok()
     .map(|c| {
-        steps.push(conduit_step(profile, &c, input.conduit, false));
-        format!(
+        let mut step = conduit_step(profile, &c, input.conduit, false);
+        if n > 1 {
+            step.substitution = format!("{n} tubos: {}", step.substitution);
+            if let Some(note) = &mut step.note {
+                note.push_str(&format!(
+                    " Un juego completo por tubo, con su propio conductor de puesta a tierra: {n} tubos iguales."
+                ));
+            }
+        }
+        steps.push(step);
+        let one = format!(
             "{} de {} mm ({}\")",
             input.conduit, c.conduit.metric_designator, c.conduit.trade_size
-        )
+        );
+        if n > 1 {
+            format!("{n} tubos {one}")
+        } else {
+            one
+        }
     });
 
     let meets_ampacity = check.meets_ampacity();

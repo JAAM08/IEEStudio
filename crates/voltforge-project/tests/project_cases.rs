@@ -623,3 +623,46 @@ fn bus_fault_adds_the_feeder_impedance() {
     close(result.source_fault_ka.unwrap(), 5.66314);
     close(panel.fault_ka.unwrap(), 2.76722);
 }
+
+/// Un alimentador de 446.13 A: un solo conductor sería de 1500 kcmil. El
+/// programa propone dos por fase, un juego por tubo; cada juego lleva tres
+/// portadores y no se ajusta por agrupamiento. Con 557.67 A de diseño y
+/// 600 A de interruptor, dos de 300 kcmil (285 A a 75 °C) dan 570 A.
+#[test]
+fn large_feeders_go_parallel() {
+    let mut project = motor_panel();
+    let circuit = &mut project.panels[0].circuits[2];
+    circuit.load.power_w = 170_000.0;
+    circuit.load.kind = LoadKind::General;
+    circuit.load.continuous = true;
+    project.panels[0].circuits.truncate(3);
+    project.panels[0].circuits.drain(0..2);
+    project.panels[0].feeder.length_m = 5.0;
+    project.panels[0].areas.clear();
+    let result = calculate(&project).unwrap();
+    let panel = &result.panels[0];
+    let feeder = panel.feeder.run.as_ref().unwrap();
+    close(feeder.design_a, 557.67);
+    close(feeder.breaker_a, 600.0);
+    assert_eq!(feeder.conductors_per_phase, 2);
+    assert!(feeder.parallel_auto);
+    assert_eq!(feeder.size, Size::new("300"));
+    assert_eq!(feeder.current_carrying_conductors, 3);
+    assert_eq!(feeder.conduit.as_ref().unwrap().count, 2);
+    assert!(feeder
+        .steps
+        .iter()
+        .any(|s| s.title == "Conductores en paralelo"));
+    // El circuito de 446 A también va en paralelo.
+    let c = panel.circuits[0].run.as_ref().unwrap();
+    assert!(c.conductors_per_phase >= 2);
+
+    // Todos los juegos en un solo tubo: seis portadores, factor de 0.80.
+    project.panels[0].feeder.overrides.single_raceway = true;
+    project.panels[0].feeder.overrides.conductors_per_phase = Some(2);
+    let result = calculate(&project).unwrap();
+    let feeder = result.panels[0].feeder.run.as_ref().unwrap();
+    assert_eq!(feeder.current_carrying_conductors, 6);
+    assert_eq!(feeder.conduit.as_ref().unwrap().count, 1);
+    assert!(!feeder.parallel_auto);
+}

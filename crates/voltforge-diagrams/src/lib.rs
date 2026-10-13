@@ -192,9 +192,10 @@ fn run_lines(
     let Some(run) = &item.run else {
         return vec![("No evaluado".to_string(), Font::Regular, Ink::NotEvaluated)];
     };
-    let conduit = run.conduit.as_ref().map_or("tubo —".to_string(), |c| {
-        format!("{} {} mm", c.conduit_type, c.metric_designator)
-    });
+    let conduit = run
+        .conduit
+        .as_ref()
+        .map_or("tubo —".to_string(), |c| c.label());
     vec![
         (
             format!("{}P-{:.0} A", run.poles, run.breaker_a),

@@ -209,7 +209,7 @@ fn cell(col: Col, row: &Row) -> String {
         Col::Ground => run.map_or_else(dash, |r| r.grounding_size.0.clone()),
         Col::Conduit => run
             .and_then(|r| r.conduit.as_ref())
-            .map_or_else(dash, |c| format!("{} mm", c.metric_designator)),
+            .map_or_else(dash, |c| c.short_label()),
         Col::Breaker => run.map_or_else(dash, |r| format!("{}P-{:.0}", r.poles, r.breaker_a)),
         Col::Ampacity => run.map_or_else(dash, |r| format!("{:.1}", r.allowable_ampacity_a)),
         Col::Drop => run.map_or_else(dash, |r| format!("{:.2}", r.drop_percent)),

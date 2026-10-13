@@ -91,11 +91,36 @@ fn overall(checks: &[Check]) -> Status {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ConduitChoice {
+    /// Número de tubos iguales: uno por juego de conductores en paralelo.
+    pub count: u32,
     pub conduit_type: String,
     pub metric_designator: u32,
     pub trade_size: String,
     pub fill_percent: f64,
     pub conductor_area_mm2: f64,
+}
+
+impl ConduitChoice {
+    /// Tamaño para tablas angostas: `16 mm`, o `2×78 mm` con varios tubos.
+    pub fn short_label(&self) -> String {
+        if self.count > 1 {
+            format!("{}×{} mm", self.count, self.metric_designator)
+        } else {
+            format!("{} mm", self.metric_designator)
+        }
+    }
+
+    /// Tipo y tamaño: `EMT 16 mm`, o `2 × EMT 78 mm` con varios tubos.
+    pub fn label(&self) -> String {
+        if self.count > 1 {
+            format!(
+                "{} × {} {} mm",
+                self.count, self.conduit_type, self.metric_designator
+            )
+        } else {
+            format!("{} {} mm", self.conduit_type, self.metric_designator)
+        }
+    }
 }
 
 /// Valores calculados de un tramo: circuito derivado o alimentador.
@@ -118,6 +143,8 @@ pub struct Run {
     pub conductors_per_phase: u32,
     /// Conductores de fase y neutro en el tramo, sin el de puesta a tierra.
     pub conductor_count: u32,
+    /// Los conductores en paralelo los propuso el programa.
+    pub parallel_auto: bool,
     pub current_carrying_conductors: u32,
     pub allowable_ampacity_a: f64,
     pub grounding_size: Size,
@@ -309,11 +336,62 @@ fn governing_label(g: Governing) -> &'static str {
     }
 }
 
+/// Conductores por fase que se prueban al buscar paralelos.
+const MAX_PARALLEL: u32 = 8;
+
+/// Dimensiona un tramo. Si el usuario no fijó el calibre ni los conductores
+/// por fase y un solo conductor no sirve (ninguno cumple, no cabe en ningún
+/// tubo o rebasa el calibre máximo de los criterios), propone el menor número
+/// de conductores en paralelo que sí.
 fn size_run(
     profile: &Profile,
     settings: &Settings,
     system: &System,
     spec: &RunSpec,
+) -> Result<(Run, Vec<Check>), Error> {
+    let ov = spec.overrides;
+    if ov.conductors_per_phase.is_some() || ov.size.is_some() {
+        let n = ov.conductors_per_phase.unwrap_or(1);
+        return size_run_n(profile, settings, system, spec, n, None);
+    }
+    let limit = profile.size_rank(&settings.largest_single_size).ok();
+    let too_big =
+        |run: &Run| limit.is_some_and(|l| profile.size_rank(&run.size).is_ok_and(|r| r > l));
+    let single = size_run_n(profile, settings, system, spec, 1, None);
+    let reason = match &single {
+        Ok((run, _)) if run.recommended_size.is_none() => {
+            "ningún calibre cumple con un conductor por fase".to_string()
+        }
+        Ok((run, _)) if too_big(run) => format!(
+            "un solo conductor sería de {}, mayor que el máximo de {} de los criterios del proyecto",
+            crate::procedure::size_label(&run.size),
+            crate::procedure::size_label(&settings.largest_single_size)
+        ),
+        Ok((run, _)) if run.conduit.is_none() => {
+            "con un conductor por fase no cabe en ningún tubo".to_string()
+        }
+        Ok(_) => return single,
+        Err(_) => "ningún calibre cumple con un conductor por fase".to_string(),
+    };
+    for n in 2..=MAX_PARALLEL {
+        if let Ok((run, checks)) = size_run_n(profile, settings, system, spec, n, Some(&reason)) {
+            if run.recommended_size.is_some() && run.conduit.is_some() && !too_big(&run) {
+                return Ok((run, checks));
+            }
+        }
+    }
+    single
+}
+
+/// Dimensiona un tramo con `n` conductores por fase. `parallel_reason` explica
+/// por qué el programa propuso los paralelos.
+fn size_run_n(
+    profile: &Profile,
+    settings: &Settings,
+    system: &System,
+    spec: &RunSpec,
+    n: u32,
+    parallel_reason: Option<&str>,
 ) -> Result<(Run, Vec<Check>), Error> {
     let ov = spec.overrides;
     let given = spec.given.as_ref();
@@ -332,7 +410,10 @@ fn size_run(
         }
     };
     let motor_protection = given.is_some_and(|g| g.motor_protection);
-    let n = ov.conductors_per_phase.unwrap_or(1);
+    // Con paralelos, un juego completo por tubo salvo que el usuario diga
+    // lo contrario: el agrupamiento y la tubería se calculan por tubo.
+    let raceways = if n > 1 && !ov.single_raceway { n } else { 1 };
+    let sets_per_raceway = n / raceways;
     let material = ov.material.unwrap_or(settings.material);
     let insulation = ov.insulation.unwrap_or(settings.insulation);
     let conduit_type = ov.conduit.unwrap_or(settings.conduit);
@@ -345,8 +426,8 @@ fn size_run(
             CircuitKind::LineToLine => is_wye(system),
             CircuitKind::ThreePhase => ov.nonlinear,
         };
-    let phase_conductors = poles(spec.kind) * n;
-    let neutral_conductors = if has_neutral { n } else { 0 };
+    let phase_conductors = poles(spec.kind) * sets_per_raceway;
+    let neutral_conductors = if has_neutral { sets_per_raceway } else { 0 };
     let current_carrying_conductors = phase_conductors
         + if neutral_counts {
             neutral_conductors
@@ -434,6 +515,18 @@ fn size_run(
             nominal_a,
         )],
     };
+    if let Some(reason) = parallel_reason {
+        steps.push(Step {
+            title: "Conductores en paralelo".into(),
+            formula: None,
+            substitution: format!("{n} conductores por fase"),
+            note: Some(format!(
+                "Propuesto por VoltForge: {reason}. Se permiten desde {} AWG; un juego completo por tubo.",
+                profile.parameters.smallest_parallel_size
+            )),
+            references: vec![profile.reference(Rule::Parallel)],
+        });
+    }
     steps.extend(conductor_steps(&ConductorData {
         profile,
         continuous_a,
@@ -560,19 +653,35 @@ fn size_run(
         },
     ) {
         Ok(c) => {
-            steps.push(conduit_step(profile, &c, conduit_type, ov.nipple));
+            let mut step = conduit_step(profile, &c, conduit_type, ov.nipple);
+            if raceways > 1 {
+                step.substitution = format!("{raceways} tubos: {}", step.substitution);
+                if let Some(note) = &mut step.note {
+                    note.push_str(&format!(
+                        " Un juego completo por tubo, con su propio conductor de puesta a tierra (250-122(f)): {raceways} tubos iguales."
+                    ));
+                }
+            }
+            steps.push(step);
             checks.push(
                 check(
                     "Tubería",
                     true,
                     format!(
-                        "{conduit_type} de {} mm, ocupación de {:.1} %",
-                        c.conduit.metric_designator, c.fill_percent
+                        "{}{conduit_type} de {} mm, ocupación de {:.1} %",
+                        if raceways > 1 {
+                            format!("{raceways} × ")
+                        } else {
+                            String::new()
+                        },
+                        c.conduit.metric_designator,
+                        c.fill_percent
                     ),
                 )
                 .cite(profile, &[Rule::ConduitFill, Rule::ConduitDimensions]),
             );
             Some(ConduitChoice {
+                count: raceways,
                 conduit_type: conduit_type.to_string(),
                 metric_designator: c.conduit.metric_designator,
                 trade_size: c.conduit.trade_size.clone(),
@@ -624,7 +733,8 @@ fn size_run(
             .ok()
             .map(|r| governing_label(r.governing).to_string()),
         conductors_per_phase: n,
-        conductor_count: phase_conductors + neutral_conductors,
+        conductor_count: (phase_conductors + neutral_conductors) * raceways,
+        parallel_auto: parallel_reason.is_some(),
         current_carrying_conductors,
         allowable_ampacity_a: conductor.allowable_ampacity_a,
         grounding_size,

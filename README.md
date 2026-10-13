@@ -19,7 +19,7 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Corriente de diseño | 125 % de la carga continua más 100 % de la no continua |
 | Caída de tensión | Por impedancia con la Tabla 9, conductores en paralelo, ajuste opcional de resistencia por temperatura y comprobación con la fórmula exacta |
 | Longitud máxima | Longitud con la que un tramo cumple un límite de caída |
-| Conductor | Menor calibre que cumple terminales, temperatura ambiente, agrupamiento, protección y, si se pide, un límite de caída de tensión; indica qué criterio lo determinó |
+| Conductor | Menor calibre que cumple terminales, temperatura ambiente, agrupamiento, protección y, si se pide, un límite de caída de tensión; indica qué criterio lo determinó. Si uno solo no sirve, propone conductores en paralelo, un juego por tubo |
 | Interruptor | Capacidad normalizada inmediata superior a la corriente de diseño, o el que fije el usuario, verificado |
 | Motores | Corriente por las tablas 430-248 y 430-250, conductor al 125 %, interruptor por la Tabla 430-52, relevador de sobrecarga y alimentadores con el 25 % del motor mayor (430-24) |
 | Carga del alimentador | Artículo 220: tipo de inmueble y áreas de cada tablero, carga mínima de alumbrado por m² (Tabla 220-12), 180 VA por salida de contacto, factores de demanda de alumbrado (220-42), contactos (220-44), aparatos fijos de vivienda (220-53) y equipo de cocina (220-56), con el detalle de cada grupo |
