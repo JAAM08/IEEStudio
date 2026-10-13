@@ -529,7 +529,7 @@ fn recommendations(
                     title: format!("{count} de {} por fase", size_label(&size)),
                     value: format!("{percent:.2} %"),
                     detail: format!(
-                        "Conductores en paralelo; el agrupamiento se calculó con todos en la misma tubería. La norma permite paralelo a partir de {}.",
+                        "Conductores en paralelo, un juego completo por tubo. La norma permite paralelo a partir de {}.",
                         size_label(&profile.parameters.smallest_parallel_size)
                     ),
                     apply: Some((size, count)),
@@ -567,4 +567,53 @@ fn recommendations(
         apply: None,
     });
     list
+}
+
+impl QuickInput {
+    /// El circuito del cálculo rápido como circuito de un proyecto con los
+    /// criterios `settings`. El calibre que se verificó aquí pasa como
+    /// fijado; el material, el aislamiento y el tubo, solo si difieren de los
+    /// del proyecto. Una carga capturada en amperes pasa a watts con la
+    /// tensión de este sistema.
+    pub fn to_circuit(&self, id: &str, settings: &crate::Settings) -> crate::Circuit {
+        let power_w = if self.load_in_amperes {
+            let volts = self.kind.reference_voltage(&self.system).unwrap_or(0.0);
+            self.current_a * volts * crate::calc::phase_multiplier(self.kind) * self.power_factor
+        } else {
+            self.power_w
+        };
+        let (kind, motor) = match &self.motor {
+            Some(m) => (crate::LoadKind::Motor, Some(m.clone())),
+            None => (crate::LoadKind::General, None),
+        };
+        crate::Circuit {
+            id: id.to_string(),
+            name: match &self.motor {
+                Some(m) => format!("Motor de {} hp", crate::hp_label(&m.hp)),
+                None => "Circuito del cálculo rápido".to_string(),
+            },
+            kind: self.kind,
+            phases: vec![],
+            load: crate::Load {
+                power_w,
+                power_factor: self.power_factor,
+                continuous: self.continuous && self.motor.is_none(),
+                kind,
+                outlets: None,
+                motor,
+                compressor: None,
+            },
+            length_m: self.length_m,
+            has_neutral: self.has_neutral,
+            overrides: crate::Overrides {
+                size: Some(self.size.clone()),
+                conductors_per_phase: (self.conductors_per_phase > 1)
+                    .then_some(self.conductors_per_phase),
+                material: (self.material != settings.material).then_some(self.material),
+                insulation: (self.insulation != settings.insulation).then_some(self.insulation),
+                conduit: (self.conduit != settings.conduit).then_some(self.conduit),
+                ..crate::Overrides::default()
+            },
+        }
+    }
 }

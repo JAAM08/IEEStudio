@@ -13,6 +13,8 @@ Uso:
   voltforge calcular <archivo> --json  entrega el resultado completo en JSON
   voltforge memoria <archivo.vfp> [salida.pdf]
                                        escribe la memoria de cálculo en PDF
+  voltforge dxf <archivo.vfp> [salida.dxf]
+                                       exporta el diagrama unifilar a DXF
   voltforge excel <archivo.vfp> [salida.xlsx]
                                        exporta tableros, cuadro de cargas y resultados
   voltforge importar <archivo.vfp> <libro.xlsx>
@@ -31,6 +33,10 @@ fn main() -> ExitCode {
         },
         Some("memoria") => match args.get(1) {
             Some(path) => report(path, args.get(2).map(String::as_str)),
+            None => Err("falta el archivo del proyecto".to_string()),
+        },
+        Some("dxf") => match args.get(1) {
+            Some(path) => dxf(path, args.get(2).map(String::as_str)),
             None => Err("falta el archivo del proyecto".to_string()),
         },
         Some("excel") => match args.get(1) {
@@ -93,6 +99,21 @@ fn report(path: &str, output: Option<&str>) -> Result<(), String> {
     std::fs::write(&output, pdf)
         .map_err(|e| format!("no se pudo escribir {}: {e}", output.display()))?;
     println!("Memoria de cálculo escrita en {}", output.display());
+    Ok(())
+}
+
+fn dxf(path: &str, output: Option<&str>) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
+    let project = Project::from_json(&text)?;
+    let result = calculate(&project)?;
+    let bytes = voltforge_diagrams::single_line(&project, &result).to_dxf();
+    let output = match output {
+        Some(output) => std::path::PathBuf::from(output),
+        None => std::path::Path::new(path).with_extension("dxf"),
+    };
+    std::fs::write(&output, bytes)
+        .map_err(|e| format!("no se pudo escribir {}: {e}", output.display()))?;
+    println!("Diagrama unifilar escrito en {}", output.display());
     Ok(())
 }
 

@@ -535,4 +535,185 @@ impl Diagram {
         out.push_str("</svg>\n");
         out
     }
+
+    /// El diagrama en DXF (formato R12, el que abren todos los programas de
+    /// CAD): líneas y textos en capas, una unidad por punto del diagrama,
+    /// pensada como milímetros. Los textos van en Windows-1252; un carácter
+    /// fuera de esa página va como `\U+XXXX`.
+    pub fn to_dxf(&self) -> Vec<u8> {
+        let mut out = String::new();
+        let h = self.height;
+        let pair = |out: &mut String, code: u32, value: &str| {
+            let _ = writeln!(out, "{code:>3}\n{value}");
+        };
+        let layer = |ink: Ink, width: f64| -> (&'static str, i32) {
+            match ink {
+                Ink::Complies => ("VF-CUMPLE", 3),
+                Ink::Fails => ("VF-NO-CUMPLE", 1),
+                Ink::NotEvaluated => ("VF-SIN-EVALUAR", 40),
+                Ink::Accent => ("VF-TABLEROS", 30),
+                Ink::Muted => ("VF-NOTAS", 8),
+                Ink::Text if width >= 3.0 => ("VF-BARRAS", 7),
+                Ink::Text => ("VF-TRAZOS", 7),
+            }
+        };
+        let layers = [
+            ("VF-TRAZOS", 7),
+            ("VF-BARRAS", 7),
+            ("VF-TABLEROS", 30),
+            ("VF-NOTAS", 8),
+            ("VF-CUMPLE", 3),
+            ("VF-NO-CUMPLE", 1),
+            ("VF-SIN-EVALUAR", 40),
+        ];
+        // Encabezado: versión, página de códigos y extensión del dibujo.
+        for (code, value) in [
+            (0, "SECTION"),
+            (2, "HEADER"),
+            (9, "$ACADVER"),
+            (1, "AC1009"),
+        ] {
+            pair(&mut out, code, value);
+        }
+        pair(&mut out, 9, "$DWGCODEPAGE");
+        pair(&mut out, 3, "ANSI_1252");
+        pair(&mut out, 9, "$EXTMIN");
+        pair(&mut out, 10, "0");
+        pair(&mut out, 20, "0");
+        pair(&mut out, 9, "$EXTMAX");
+        pair(&mut out, 10, &format!("{:.3}", self.width));
+        pair(&mut out, 20, &format!("{h:.3}"));
+        pair(&mut out, 0, "ENDSEC");
+        // Capas.
+        for (code, value) in [(0, "SECTION"), (2, "TABLES"), (0, "TABLE"), (2, "LAYER")] {
+            pair(&mut out, code, value);
+        }
+        pair(&mut out, 70, &layers.len().to_string());
+        for (name, color) in layers {
+            pair(&mut out, 0, "LAYER");
+            pair(&mut out, 2, name);
+            pair(&mut out, 70, "0");
+            pair(&mut out, 62, &color.to_string());
+            pair(&mut out, 6, "CONTINUOUS");
+        }
+        pair(&mut out, 0, "ENDTAB");
+        pair(&mut out, 0, "ENDSEC");
+
+        pair(&mut out, 0, "SECTION");
+        pair(&mut out, 2, "ENTITIES");
+        let line = |out: &mut String, layer: &str, a: (f64, f64), b: (f64, f64)| {
+            pair(out, 0, "LINE");
+            pair(out, 8, layer);
+            pair(out, 10, &format!("{:.3}", a.0));
+            pair(out, 20, &format!("{:.3}", h - a.1));
+            pair(out, 11, &format!("{:.3}", b.0));
+            pair(out, 21, &format!("{:.3}", h - b.1));
+        };
+        for element in &self.elements {
+            match element {
+                Element::Path { points, width, ink } => {
+                    let (name, _) = layer(*ink, *width);
+                    for w in points.windows(2) {
+                        line(&mut out, name, w[0], w[1]);
+                    }
+                }
+                Element::Rect { min, size, ink } => {
+                    let (name, _) = layer(*ink, 1.0);
+                    let (x0, y0) = *min;
+                    let (x1, y1) = (x0 + size.0, y0 + size.1);
+                    let corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)];
+                    for w in corners.windows(2) {
+                        line(&mut out, name, w[0], w[1]);
+                    }
+                }
+                Element::Text {
+                    pos,
+                    text,
+                    size,
+                    ink,
+                    anchor,
+                    ..
+                } => {
+                    let (name, _) = layer(*ink, 1.0);
+                    let x = format!("{:.3}", pos.0);
+                    let y = format!("{:.3}", h - pos.1);
+                    pair(&mut out, 0, "TEXT");
+                    pair(&mut out, 8, name);
+                    pair(&mut out, 10, &x);
+                    pair(&mut out, 20, &y);
+                    // La altura de las mayúsculas es cerca del 70 % del tamaño
+                    // de la letra.
+                    pair(&mut out, 40, &format!("{:.3}", size * 0.7));
+                    pair(&mut out, 1, &dxf_text(text));
+                    let justify = match anchor {
+                        Anchor::Start => 0,
+                        Anchor::Middle => 1,
+                        Anchor::End => 2,
+                    };
+                    if justify != 0 {
+                        pair(&mut out, 72, &justify.to_string());
+                        pair(&mut out, 11, &x);
+                        pair(&mut out, 21, &y);
+                    }
+                }
+            }
+        }
+        pair(&mut out, 0, "ENDSEC");
+        pair(&mut out, 0, "EOF");
+        out.chars().map(|c| cp1252(c).unwrap_or(b'?')).collect()
+    }
+}
+
+/// Caracteres de Windows-1252 entre 0x80 y 0x9F, que no coinciden con Unicode.
+const CP1252_EXTRA: [(char, u8); 27] = [
+    ('€', 0x80),
+    ('‚', 0x82),
+    ('ƒ', 0x83),
+    ('„', 0x84),
+    ('…', 0x85),
+    ('†', 0x86),
+    ('‡', 0x87),
+    ('ˆ', 0x88),
+    ('‰', 0x89),
+    ('Š', 0x8A),
+    ('‹', 0x8B),
+    ('Œ', 0x8C),
+    ('Ž', 0x8E),
+    ('‘', 0x91),
+    ('’', 0x92),
+    ('“', 0x93),
+    ('”', 0x94),
+    ('•', 0x95),
+    ('–', 0x96),
+    ('—', 0x97),
+    ('˜', 0x98),
+    ('™', 0x99),
+    ('š', 0x9A),
+    ('›', 0x9B),
+    ('œ', 0x9C),
+    ('ž', 0x9E),
+    ('Ÿ', 0x9F),
+];
+
+/// Byte de Windows-1252 de un carácter, si lo tiene.
+fn cp1252(c: char) -> Option<u8> {
+    let code = u32::from(c);
+    if code < 0x80 || (0xA0..=0xFF).contains(&code) {
+        return u8::try_from(code).ok();
+    }
+    CP1252_EXTRA.iter().find(|(x, _)| *x == c).map(|(_, b)| *b)
+}
+
+/// Texto para DXF: lo que no está en Windows-1252 va como `\U+XXXX`, que
+/// entienden AutoCAD y los programas compatibles.
+fn dxf_text(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            if cp1252(c).is_some() && !c.is_control() {
+                c.to_string()
+            } else {
+                format!("\\U+{:04X}", u32::from(c))
+            }
+        })
+        .collect()
 }

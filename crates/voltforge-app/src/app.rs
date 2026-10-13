@@ -304,6 +304,56 @@ impl App {
         }
     }
 
+    /// Agrega el circuito del cálculo rápido al tablero seleccionado.
+    fn quick_to_project(&mut self, input: &voltforge_project::quick::QuickInput) {
+        let Some(panel) = self.doc.panel_index() else {
+            self.notice = Some("El proyecto no tiene tableros: agrega uno primero.".into());
+            return;
+        };
+        let id = self.doc.free_circuit_id(panel);
+        let circuit = input.to_circuit(&id, &self.doc.project.settings);
+        let panel_id = self.doc.project.panels[panel].id.clone();
+        self.doc.project.panels[panel].circuits.push(circuit);
+        let count = self.doc.project.panels[panel].circuits.len();
+        self.doc.selection = Selection::Circuit(panel, count - 1);
+        self.doc.edited();
+        workspace::open(&mut self.dock, Tab::Schedule);
+        self.notice = None;
+        self.done = Some(if input.system != self.doc.project.source.system {
+            format!("Circuito {id} agregado a {panel_id}. Ojo: el cálculo rápido usaba otro sistema; en el proyecto se calcula con el del proyecto.")
+        } else {
+            format!("Circuito {id} agregado a {panel_id}, con el calibre fijado")
+        });
+    }
+
+    /// Diagrama unifilar en DXF, para seguir dibujando en CAD.
+    fn export_dxf(&mut self) {
+        let result = match &self.doc.result {
+            Ok(r) => r,
+            Err(e) => {
+                self.notice = Some(format!("No se pudo generar el unifilar: {e}"));
+                return;
+            }
+        };
+        let bytes = voltforge_diagrams::single_line(&self.doc.project, result).to_dxf();
+        let stem = self.suggested_name();
+        let stem = stem.trim_end_matches(&format!(".{EXTENSION}"));
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Dibujo DXF", &["dxf"])
+            .set_file_name(format!("{stem} - unifilar.dxf"))
+            .save_file()
+        else {
+            return;
+        };
+        match std::fs::write(&path, bytes) {
+            Ok(()) => {
+                self.notice = None;
+                self.done = Some(format!("Unifilar guardado en {}", path.display()));
+            }
+            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
+        }
+    }
+
     /// Cuadro de cargas a Excel: tableros, circuitos y resultados.
     fn export_excel(&mut self) {
         let bytes =
@@ -580,6 +630,16 @@ impl App {
                 {
                     ui.close();
                     self.export_pdf(true);
+                }
+                if ui
+                    .button("     Exportar unifilar a DXF…")
+                    .on_hover_text(
+                        "Líneas y textos en capas, para abrirlo en AutoCAD u otro programa de CAD",
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.export_dxf();
                 }
                 ui.separator();
                 if ui
@@ -1135,6 +1195,9 @@ impl eframe::App for App {
         self.about_window(&ctx);
         self.confirm_window(&ctx);
         self.import_window(&ctx);
+        if let Some(input) = self.shared.quick.take_request() {
+            self.quick_to_project(&input);
+        }
         // El historial registra un cambio cuando la interacción terminó.
         let settled = !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none());
         if settled {

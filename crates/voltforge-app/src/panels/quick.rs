@@ -16,13 +16,19 @@ use voltforge_rules::Profile;
 pub struct QuickView {
     input: QuickInput,
     result: Result<QuickResult, String>,
+    /// El usuario pidió pasar el circuito al proyecto abierto.
+    send: bool,
 }
 
 impl Default for QuickView {
     fn default() -> Self {
         let input = QuickInput::default();
         let result = quick_circuit(Profile::nom_001_sede_2012(), &input);
-        QuickView { input, result }
+        QuickView {
+            input,
+            result,
+            send: false,
+        }
     }
 }
 
@@ -45,6 +51,11 @@ impl QuickView {
         voltforge_reports::quick_pdf(&self.input, result)
     }
 
+    /// Datos del circuito, si el usuario pidió pasarlo al proyecto. Una sola vez.
+    pub fn take_request(&mut self) -> Option<QuickInput> {
+        std::mem::take(&mut self.send).then(|| self.input.clone())
+    }
+
     /// Veredicto del cálculo actual, si se pudo calcular.
     pub fn verdict(&self) -> Option<voltforge_project::verdict::Verdict> {
         self.result.as_ref().ok().map(|r| r.verdict())
@@ -63,13 +74,29 @@ impl QuickView {
         egui::Panel::top("rapido-aviso")
             .frame(egui::Frame::new().fill(p.raise).inner_margin(egui::Margin::symmetric(10, 5)))
             .show(ui, |ui| {
-                ui.label(
-                    RichText::new(format!(
-                        "{} Herramienta fuera del proyecto: este cálculo no cambia ni se guarda en el proyecto abierto.",
-                        egui_phosphor::regular::INFO
-                    ))
-                    .color(p.ink2),
-                );
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} Herramienta fuera del proyecto: no cambia el proyecto abierto, salvo que agregues el circuito con el botón.",
+                            egui_phosphor::regular::INFO
+                        ))
+                        .color(p.ink2),
+                    );
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui
+                            .button(format!(
+                                "{}  Agregar al proyecto",
+                                egui_phosphor::regular::ARROW_SQUARE_IN
+                            ))
+                            .on_hover_text(
+                                "Agrega este circuito al tablero seleccionado, con el calibre que verificaste aquí como fijado.",
+                            )
+                            .clicked()
+                        {
+                            self.send = true;
+                        }
+                    });
+                });
             });
         egui::Panel::bottom("rapido-estado")
             .frame(
@@ -516,7 +543,7 @@ impl QuickView {
         ui.label(muted(
             "Este cálculo revisa corriente, interruptor, ampacidad con sus factores, \
              puesta a tierra, tubería y caída de tensión. Supone lugar seco, carga \
-             lineal, tierra desnuda y todos los conductores en la misma tubería.",
+             lineal, tierra desnuda y, con conductores en paralelo, un juego por tubo.",
         ));
 
         match apply {

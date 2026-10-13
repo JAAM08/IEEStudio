@@ -212,12 +212,18 @@ impl Doc {
         parts
     }
 
-    pub fn add_circuit(&mut self, panel: usize) {
-        let circuits = &mut self.project.panels[panel].circuits;
-        let id = (1..)
+    /// Primer identificador `C-NN` libre en un tablero.
+    pub fn free_circuit_id(&self, panel: usize) -> String {
+        let circuits = &self.project.panels[panel].circuits;
+        (1..)
             .map(|n| format!("C-{n:02}"))
             .find(|id| circuits.iter().all(|c| &c.id != id))
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    pub fn add_circuit(&mut self, panel: usize) {
+        let id = self.free_circuit_id(panel);
+        let circuits = &mut self.project.panels[panel].circuits;
         circuits.push(Circuit {
             id,
             name: "Circuito nuevo".to_string(),

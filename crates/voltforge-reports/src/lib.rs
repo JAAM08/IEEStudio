@@ -720,7 +720,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             q(&rec.detail)
         );
     }
-    out.push_str("\n#text(8.5pt, fill: gris)[Supone lugar seco, carga lineal, tierra desnuda y todos los conductores en la misma tubería.]\n");
+    out.push_str("\n#text(8.5pt, fill: gris)[Supone lugar seco, carga lineal, tierra desnuda y, con conductores en paralelo, un juego por tubo.]\n");
 
     signatures(&mut out, None);
     out

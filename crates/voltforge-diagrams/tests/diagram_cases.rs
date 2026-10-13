@@ -116,3 +116,36 @@ fn single_line_diagram_covers_every_run() {
         std::fs::write(format!("{dir}/nave.json"), nave.to_json()).unwrap();
     }
 }
+
+/// El DXF lleva las mismas líneas y textos que el diagrama, con el eje Y
+/// hacia arriba, en Windows-1252.
+#[test]
+fn dxf_has_every_line_and_text() {
+    let project = voltforge_project::example::house();
+    let result = voltforge_project::calculate(&project).unwrap();
+    let diagram = voltforge_diagrams::single_line(&project, &result);
+    let dxf = diagram.to_dxf();
+    // Windows-1252: «á» es un byte, no dos.
+    assert!(dxf.contains(&0xE1) || dxf.contains(&0xF3) || dxf.iter().all(|b| *b < 0x80));
+    let text: String = dxf.iter().map(|&b| char::from(b)).collect();
+    assert!(text.starts_with("  0\nSECTION\n  2\nHEADER"));
+    assert!(text.trim_end().ends_with("EOF"));
+    let texts = diagram
+        .elements
+        .iter()
+        .filter(|e| matches!(e, voltforge_diagrams::Element::Text { .. }))
+        .count();
+    assert_eq!(text.matches("\n  0\nTEXT\n").count(), texts);
+    let segments: usize = diagram
+        .elements
+        .iter()
+        .map(|e| match e {
+            voltforge_diagrams::Element::Path { points, .. } => points.len() - 1,
+            voltforge_diagrams::Element::Rect { .. } => 4,
+            voltforge_diagrams::Element::Text { .. } => 0,
+        })
+        .sum();
+    assert_eq!(text.matches("\n  0\nLINE\n").count(), segments);
+    // Los caracteres fuera de Windows-1252 van escapados.
+    assert!(!text.contains('Σ'));
+}

@@ -206,3 +206,27 @@ fn quick_motor_follows_article_430() {
     assert_eq!(r.protection.as_ref().unwrap().status, Status::Fails);
     assert!(r.recommendations.iter().any(|x| x.title == "Subir a 6 AWG"));
 }
+
+/// Un cálculo rápido pasa al proyecto con sus datos y el calibre fijado.
+#[test]
+fn quick_circuit_goes_to_the_project() {
+    let settings = voltforge_project::Settings::default();
+    let input = QuickInput::default();
+    let c = input.to_circuit("C-09", &settings);
+    assert_eq!(c.id, "C-09");
+    assert_eq!(c.kind, input.kind);
+    close(c.load.power_w, 61_700.0, 1e-9);
+    assert_eq!(c.overrides.size, Some(Size::new("3/0")));
+    assert_eq!(c.overrides.conductors_per_phase, None);
+    assert_eq!(c.overrides.material, None);
+    // Capturado en amperes: 100 A a 220 V en tres fases con fp 0.9 son
+    // √3 · 220 · 100 · 0.9 = 34 294.6 W.
+    let amps = QuickInput {
+        load_in_amperes: true,
+        conductors_per_phase: 2,
+        ..QuickInput::default()
+    };
+    let c = amps.to_circuit("C-10", &settings);
+    close(c.load.power_w, 34_294.6, 0.1);
+    assert_eq!(c.overrides.conductors_per_phase, Some(2));
+}
