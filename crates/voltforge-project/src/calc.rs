@@ -13,6 +13,7 @@ use voltforge_electrical::sizing::{
 };
 use voltforge_electrical::voltage_drop::{voltage_drop, VoltageDropInput};
 
+use crate::demand::{feeder_demand, outlet_check, DemandLine, Groups};
 use crate::model::{Overrides, Panel, Phase, Project, Settings};
 use crate::motors::{motor_circuit, MotorCircuit};
 use crate::procedure::{
@@ -141,8 +142,13 @@ pub struct PanelResult {
     pub name: String,
     /// Carga conectada, incluidos los tableros que alimenta.
     pub connected_w: f64,
+    /// Factor de demanda resultante: carga calculada entre conectada.
     pub demand_factor: f64,
     pub demanded_w: f64,
+    /// Carga calculada del alimentador, en VA (artículo 220).
+    pub demanded_va: f64,
+    /// Renglones de la carga calculada: grupo, conectada, factor y calculada.
+    pub demand: Vec<DemandLine>,
     pub power_factor: f64,
     /// Carga conectada por fase, en VA: A, B y C.
     pub phase_va: [f64; 3],
@@ -659,10 +665,9 @@ struct LargestMotor {
 #[derive(Debug, Clone, Default)]
 struct PanelLoad {
     connected_w: f64,
-    /// Potencia aparente de la carga continua: la corriente es proporcional
-    /// a ella, no a los watts, cuando los factores de potencia difieren.
-    continuous_va: f64,
     apparent_va: f64,
+    /// Carga por grupo del artículo 220, en VA.
+    groups: Groups,
     phase_va: [f64; 3],
     phases_assigned: bool,
     largest_motor: Option<LargestMotor>,
@@ -748,31 +753,27 @@ impl<'a> Context<'a> {
             phases_assigned: true,
             ..PanelLoad::default()
         };
+        load.groups.areas = panel.areas.clone();
         for (k, c) in panel.circuits.iter().enumerate() {
             let CircuitLoad { power_w, va } = self.circuit_load(index, k);
             load.connected_w += power_w;
             load.apparent_va += va;
-            match &self.motors[index][k] {
-                // Los motores no son carga continua: su 125 % lo da 430-24.
-                Some(Ok(m)) => {
-                    let candidate = LargestMotor {
-                        va: m.va,
-                        breaker_va: m.va * m.breaker_max_a / m.current_a,
-                        label: format!("{} ({})", m.label, c.id),
-                        panel: panel.id.clone(),
-                    };
-                    if load
-                        .largest_motor
-                        .as_ref()
-                        .map_or(true, |l| candidate.va > l.va)
-                    {
-                        load.largest_motor = Some(candidate);
-                    }
-                }
-                _ => {
-                    if c.load.continuous {
-                        load.continuous_va += va;
-                    }
+            let is_motor = matches!(self.motors[index][k], Some(Ok(_)));
+            load.groups
+                .add(c.load.kind, is_motor, va, c.load.continuous);
+            if let Some(Ok(m)) = &self.motors[index][k] {
+                let candidate = LargestMotor {
+                    va: m.va,
+                    breaker_va: m.va * m.breaker_max_a / m.current_a,
+                    label: format!("{} ({})", m.label, c.id),
+                    panel: panel.id.clone(),
+                };
+                if load
+                    .largest_motor
+                    .as_ref()
+                    .map_or(true, |l| candidate.va > l.va)
+                {
+                    load.largest_motor = Some(candidate);
                 }
             }
             let expected = poles(c.kind) as usize;
@@ -797,8 +798,8 @@ impl<'a> Context<'a> {
         {
             let sub = self.aggregate(child);
             load.connected_w += sub.connected_w;
-            load.continuous_va += sub.continuous_va;
             load.apparent_va += sub.apparent_va;
+            load.groups.merge(&sub.groups);
             for i in 0..3 {
                 load.phase_va[i] += sub.phase_va[i];
             }
@@ -825,9 +826,17 @@ impl<'a> Context<'a> {
         } else {
             1.0
         };
-        let demanded_w = load.connected_w * panel.feeder.demand_factor;
-        let continuous_fraction = if load.apparent_va > 0.0 {
-            load.continuous_va / load.apparent_va
+        let demand = feeder_demand(
+            self.profile,
+            project.occupancy.as_deref(),
+            panel.feeder.demand,
+            &load.groups,
+        );
+        // La corriente sale de la potencia aparente calculada; los watts se
+        // obtienen con el factor de potencia de la carga conectada.
+        let demanded_w = demand.demanded_va * power_factor;
+        let continuous_fraction = if demand.demanded_va > 0.0 {
+            (demand.continuous_va / demand.demanded_va).min(1.0)
         } else {
             0.0
         };
@@ -851,7 +860,7 @@ impl<'a> Context<'a> {
             _ => None,
         };
         let feeder = if load.connected_w > 0.0 {
-            let outcome = size_run(
+            let mut outcome = size_run(
                 self.profile,
                 settings,
                 system,
@@ -879,7 +888,16 @@ impl<'a> Context<'a> {
                     ));
                 }
             }
-            run_result(&panel.id, "Alimentador", demanded_w, outcome, vec![])
+            if let Ok((run, _)) = &mut outcome {
+                run.steps.splice(0..0, demand.steps.iter().cloned());
+            }
+            run_result(
+                &panel.id,
+                "Alimentador",
+                demanded_w,
+                outcome,
+                vec![demand.check.clone()],
+            )
         } else {
             run_result(
                 &panel.id,
@@ -930,7 +948,7 @@ impl<'a> Context<'a> {
                         given,
                     },
                 );
-                let extra = match motor {
+                let mut extra = match motor {
                     Some(Ok(m)) => m.checks,
                     Some(Err(e)) => vec![Check {
                         name: "Datos del equipo".to_string(),
@@ -940,6 +958,7 @@ impl<'a> Context<'a> {
                     }],
                     None => vec![],
                 };
+                extra.extend(outlet_check(self.profile, project.occupancy.as_deref(), c));
                 let load_w = self.circuit_load(index, k).power_w;
                 run_result(&c.id, &c.name, load_w, outcome, extra)
             })
@@ -969,8 +988,14 @@ impl<'a> Context<'a> {
             id: panel.id.clone(),
             name: panel.name.clone(),
             connected_w: load.connected_w,
-            demand_factor: panel.feeder.demand_factor,
+            demand_factor: if load.connected_w > 0.0 {
+                demanded_w / load.connected_w
+            } else {
+                1.0
+            },
             demanded_w,
+            demanded_va: demand.demanded_va,
+            demand: demand.lines,
             power_factor,
             phase_va: load.phase_va,
             imbalance_percent,

@@ -22,7 +22,12 @@ de cálculo.
 | `table_430_250_three_phase_motors.csv` | Tabla 430-250, motores trifásicos de inducción de jaula de ardilla y de rotor devanado (115 a 575 V). No incluye la columna de 2300 V (media tensión) ni la de motores síncronos de factor de potencia unitario |
 | `motor_voltage_columns.csv` | Qué columna de las tablas 430-248 y 430-250 corresponde a cada tensión del sistema, según el texto de cada tabla («de 110 a 120 volts, 220 a 240 volts…»). La columna de 127 V es propia de la NOM |
 | `table_430_52_motor_protection.csv` | Tabla 430-52, ajuste máximo de la protección contra cortocircuito del circuito del motor, en porciento de su corriente a plena carga |
-| `profile.csv` | Datos de la norma (código, título, edición, URL) y parámetros: 125 % de carga continua (210-19(a)(1)), terminales de 60 °C hasta 100 A (110-14(c)), valor inmediato superior hasta 800 A (240-4(b)), calibres mínimos, atascamiento (Tabla 1, nota 2) y niples (notas de las tablas, nota 4), y los factores de motores (430-22, 430-24, 430-32, 430-52) y de motocompresores (440-22, 440-32) |
+| `table_220_12_lighting_load.csv` | Tabla 220-12, carga mínima de alumbrado general por tipo de inmueble, en VA/m². `dwelling` marca la vivienda (220-14(j)); `area_only`, las áreas que solo existen dentro de otro inmueble (pasillos, lugares de reunión, bodegas) |
+| `table_220_42_lighting_demand.csv` | Tabla 220-42, factores de demanda del alumbrado por escalones. Un tipo de inmueble sin filas va al 100 % («todos los demás») |
+| `table_220_44_receptacle_demand.csv` | Tabla 220-44, factores de demanda de contactos fuera de vivienda |
+| `table_220_56_kitchen_demand.csv` | Tabla 220-56, factores de demanda de equipos de cocina fuera de vivienda |
+| `section_220_14_k_office_receptacles.csv` | Sección 220-14(k), carga mínima de contactos en bancos y oficinas |
+| `profile.csv` | Datos de la norma (código, título, edición, URL) y parámetros: 125 % de carga continua (210-19(a)(1)), terminales de 60 °C hasta 100 A (110-14(c)), valor inmediato superior hasta 800 A (240-4(b)), calibres mínimos, atascamiento (Tabla 1, nota 2) y niples (notas de las tablas, nota 4), y los factores de motores (430-22, 430-24, 430-32, 430-52), de motocompresores (440-22, 440-32), la carga por salida de contacto (220-14(i)) y el factor de aparatos fijos de vivienda (220-53) |
 | `references.csv` | Cláusula de cada regla del motor, con una descripción propia (no es texto de la norma) |
 
 ## Cómo se capturaron

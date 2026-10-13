@@ -1,0 +1,22 @@
+occupancy,label,va_per_m2,dwelling,area_only
+banks,Bancos,39,false,false
+boarding_houses,Casas de huéspedes,17,false,false
+clubs,Clubes,22,false,false
+armories_auditoriums,Cuarteles y auditorios,11,false,false
+storage_warehouses,Depósitos (almacenamiento),3,false,false
+offices,Edificios de oficinas,39,false,false
+industrial_commercial,Edificios industriales y comerciales (lugares de almacenamiento),22,false,false
+schools,Escuelas,33,false,false
+parking_garages,Estacionamientos comerciales,6,false,false
+hospitals,Hospitales,22,false,false
+hotels,"Hoteles y moteles, incluidos apartamentos sin cocineta",22,false,false
+churches,Iglesias,11,false,false
+courtrooms,Juzgados,22,false,false
+storage_spaces,Lugares de almacenamiento,3,false,false
+barber_shops,Peluquerías y salones de belleza,33,false,false
+restaurants,Restaurantes,22,false,false
+stores,Tiendas,33,false,false
+dwellings,Unidades de vivienda,33,true,false
+halls_corridors,"Vestíbulos, pasillos, closets, escaleras",6,false,true
+assembly_halls,Lugares de reunión y auditorios,11,false,true
+storage_rooms,Bodegas,3,false,true

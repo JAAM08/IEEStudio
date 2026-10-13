@@ -1,0 +1,12 @@
+id,description,occupancy,area_m2,lighting_va,receptacles_va,appliances_va,kitchen_va,other_va,expected_demanded_va,source,reviewed_by
+FL-01,"Casa de 120 m²: alumbrado y contactos juntos en la Tabla 220-42",dwellings,120,2000,4000,,,,4050,"Cálculo a mano: 3000 × 100 % + 3000 × 35 %",
+FL-02,"Casa de 150 m² con poca carga capturada: manda la mínima de 33 VA/m²",dwellings,150,1500,1500,,,,3682.5,"Cálculo a mano: 4950 VA mínimos; 3000 × 100 % + 1950 × 35 %",
+FL-03,"Oficina de 200 m²: alumbrado mínimo de 39 VA/m² y contactos con la Tabla 220-44",offices,200,4000,14000,,,,19800,"Cálculo a mano: 7800 + 10000 + 4000 × 50 %",
+FL-04,"Oficina de 500 m² con pocos contactos: mínima de 11 VA/m² (220-14(k))",offices,500,25000,3000,,,,30500,"Cálculo a mano: 25000 (mínima 19500) + 5500",
+FL-05,"Tienda de 300 m²",stores,300,12000,25000,,,,29500,"Cálculo a mano: 12000 + 10000 + 15000 × 50 %",
+FL-06,"Hotel de 1000 m²: Tabla 220-42 en tres escalones",hotels,1000,30000,,,,,14000,"Cálculo a mano: 20000 × 50 % + 10000 × 40 %",
+FL-07,"Hospital de 3000 m²",hospitals,3000,70000,,,,,24000,"Cálculo a mano: 50000 × 40 % + 20000 × 20 %",
+FL-08,"Almacén de 2000 m²",storage_warehouses,2000,20000,,,,,16250,"Cálculo a mano: 12500 × 100 % + 7500 × 50 %",
+FL-09,"Casa de 60 m² con cuatro aparatos fijos: 75 % (220-53)",dwellings,60,1000,1000,1200;1200;1200;1200,,,5600,"Cálculo a mano: 2000 (mínima 1980) + 4800 × 75 %",
+FL-10,"Restaurante: la Tabla 220-56 no baja de los dos equipos mayores",restaurants,200,5000,,,10000;8000;1000;1000;1000;1000,,23000,"Cálculo a mano: 5000 (mínima 4400) + máx(22000 × 65 %, 18000)",
+FL-11,"Otras cargas al 100 %, sin área",stores,,,,,,15000,15000,"Cálculo a mano",

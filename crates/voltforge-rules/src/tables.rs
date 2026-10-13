@@ -155,6 +155,40 @@ pub struct MotorProtectionRow {
     pub inverse_time_breaker: f64,
 }
 
+/// Fila de la Tabla 220-12: tipo de inmueble o de área y su carga mínima de
+/// alumbrado general.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Occupancy {
+    /// Identificador que se guarda en el proyecto: `dwellings`, `offices`…
+    pub id: String,
+    pub label: String,
+    pub va_per_m2: f64,
+    /// Unidad de vivienda: los contactos van con el alumbrado (220-14(j)).
+    pub dwelling: bool,
+    /// Área dentro de otro inmueble (pasillos, bodegas…), no un tipo de
+    /// inmueble por sí misma.
+    pub area_only: bool,
+}
+
+/// Escalón de una tabla de factores de demanda: el porciento se aplica a la
+/// parte de la carga entre el escalón anterior y `up_to_va`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DemandTier {
+    /// Tipo de inmueble al que aplica; vacío si la tabla no distingue.
+    pub occupancy: String,
+    /// Límite superior del escalón. `None` en el último.
+    pub up_to_va: Option<f64>,
+    pub percent: f64,
+}
+
+/// Fila de la Tabla 220-56.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KitchenDemandRow {
+    pub units_min: u32,
+    pub units_max: Option<u32>,
+    pub percent: f64,
+}
+
 /// Perfil normativo: el conjunto de tablas con el que se calcula.
 #[derive(Debug)]
 pub struct Profile {
@@ -180,6 +214,16 @@ pub struct Profile {
     pub motor_voltage_columns: Vec<MotorVoltageColumn>,
     /// Tabla 430-52.
     pub motor_protection: Vec<MotorProtectionRow>,
+    /// Tabla 220-12.
+    pub occupancies: Vec<Occupancy>,
+    /// Tabla 220-42. Un tipo de inmueble sin filas va al 100 %.
+    pub lighting_demand: Vec<DemandTier>,
+    /// Tabla 220-44.
+    pub receptacle_demand: Vec<DemandTier>,
+    /// 220-14(k): carga mínima de contactos por m², por tipo de inmueble.
+    pub office_receptacles: Vec<(String, f64)>,
+    /// Tabla 220-56.
+    pub kitchen_demand: Vec<KitchenDemandRow>,
     /// Norma de la que salen las tablas.
     pub document: NormativeDocument,
     /// Factores, límites y calibres mínimos del perfil.
@@ -284,6 +328,9 @@ impl Profile {
                 compressor_protection_factor: number("compressor_protection_factor"),
                 compressor_protection_max_factor: number("compressor_protection_max_factor"),
                 compressor_minimum_protection_a: number("compressor_minimum_protection_a"),
+                receptacle_outlet_va: number("receptacle_outlet_va"),
+                appliance_demand_factor: number("appliance_demand_factor"),
+                appliance_demand_min_count: number("appliance_demand_min_count") as u32,
             };
             let motor_row = |columns: &'static [&'static str]| {
                 move |r: &csv::Row| MotorCurrentRow {
@@ -419,6 +466,47 @@ impl Profile {
                         dual_element_fuse: r.get("dual_element_fuse"),
                         instantaneous_breaker: r.get("instantaneous_breaker"),
                         inverse_time_breaker: r.get("inverse_time_breaker"),
+                    }
+                ),
+                occupancies: table!("nom-001-sede-2012", "table_220_12_lighting_load.csv", |r| {
+                    Occupancy {
+                        id: r.text("occupancy"),
+                        label: r.text("label"),
+                        va_per_m2: r.get("va_per_m2"),
+                        dwelling: r.get("dwelling"),
+                        area_only: r.get("area_only"),
+                    }
+                }),
+                lighting_demand: table!(
+                    "nom-001-sede-2012",
+                    "table_220_42_lighting_demand.csv",
+                    |r| DemandTier {
+                        occupancy: r.text("occupancy"),
+                        up_to_va: r.opt("up_to_va"),
+                        percent: r.get("percent"),
+                    }
+                ),
+                receptacle_demand: table!(
+                    "nom-001-sede-2012",
+                    "table_220_44_receptacle_demand.csv",
+                    |r| DemandTier {
+                        occupancy: String::new(),
+                        up_to_va: r.opt("up_to_va"),
+                        percent: r.get("percent"),
+                    }
+                ),
+                office_receptacles: table!(
+                    "nom-001-sede-2012",
+                    "section_220_14_k_office_receptacles.csv",
+                    |r| (r.text("occupancy"), r.get("va_per_m2"))
+                ),
+                kitchen_demand: table!(
+                    "nom-001-sede-2012",
+                    "table_220_56_kitchen_demand.csv",
+                    |r| KitchenDemandRow {
+                        units_min: r.get("units_min"),
+                        units_max: r.opt("units_max"),
+                        percent: r.get("percent"),
                     }
                 ),
                 small_conductor_limits: table!(
@@ -576,6 +664,36 @@ impl Profile {
             .map_or(1.0, |r| r.factor)
     }
 
+    /// Tipo de inmueble o de área de la Tabla 220-12.
+    pub fn occupancy(&self, id: &str) -> Option<&Occupancy> {
+        self.occupancies.iter().find(|o| o.id == id)
+    }
+
+    /// Escalones de la Tabla 220-42 de un tipo de inmueble. Vacío si va al
+    /// 100 % («todos los demás»).
+    pub fn lighting_demand_tiers(&self, occupancy: &str) -> Vec<&DemandTier> {
+        self.lighting_demand
+            .iter()
+            .filter(|t| t.occupancy == occupancy)
+            .collect()
+    }
+
+    /// Carga mínima de contactos por m² de 220-14(k), si el inmueble la tiene.
+    pub fn office_receptacle_va_per_m2(&self, occupancy: &str) -> Option<f64> {
+        self.office_receptacles
+            .iter()
+            .find(|(o, _)| o == occupancy)
+            .map(|(_, v)| *v)
+    }
+
+    /// Factor de la Tabla 220-56 para un número de equipos de cocina.
+    pub fn kitchen_demand_percent(&self, units: u32) -> Option<f64> {
+        self.kitchen_demand
+            .iter()
+            .find(|r| units >= r.units_min && r.units_max.map_or(true, |max| units <= max))
+            .map(|r| r.percent)
+    }
+
     /// Filas de la Tabla 4 para un tipo de tubo, de menor a mayor.
     pub fn conduit_rows(&self, conduit: ConduitType) -> impl Iterator<Item = &ConduitRow> {
         self.conduits
@@ -664,6 +782,67 @@ mod tests {
             (1.75, 2.25)
         ); // 440-22(a)
         assert_eq!(p.compressor_minimum_protection_a, 15.0);
+    }
+
+    /// Pruebas normativas del artículo 220: valores de las tablas 220-12,
+    /// 220-42, 220-44 y 220-56 y de las secciones 220-14 y 220-53.
+    #[test]
+    fn article_220_matches_the_2012_edition() {
+        let profile = Profile::nom_001_sede_2012();
+        let unit = |id: &str| profile.occupancy(id).map(|o| o.va_per_m2);
+        assert_eq!(unit("dwellings"), Some(33.0)); // Tabla 220-12
+        assert_eq!(unit("offices"), Some(39.0));
+        assert_eq!(unit("banks"), Some(39.0));
+        assert_eq!(unit("storage_warehouses"), Some(3.0));
+        assert_eq!(unit("parking_garages"), Some(6.0));
+        assert_eq!(unit("boarding_houses"), Some(17.0));
+        assert_eq!(unit("halls_corridors"), Some(6.0));
+        assert_eq!(profile.occupancies.len(), 21);
+        assert!(profile.occupancy("dwellings").is_some_and(|o| o.dwelling));
+        assert_eq!(profile.occupancies.iter().filter(|o| o.dwelling).count(), 1);
+        let tiers = |id: &str| -> Vec<(Option<f64>, f64)> {
+            profile
+                .lighting_demand_tiers(id)
+                .iter()
+                .map(|t| (t.up_to_va, t.percent))
+                .collect()
+        };
+        // Tabla 220-42
+        assert_eq!(
+            tiers("dwellings"),
+            vec![(Some(3000.0), 100.0), (Some(120000.0), 35.0), (None, 25.0)]
+        );
+        assert_eq!(
+            tiers("hotels"),
+            vec![(Some(20000.0), 50.0), (Some(100000.0), 40.0), (None, 30.0)]
+        );
+        assert_eq!(
+            tiers("hospitals"),
+            vec![(Some(50000.0), 40.0), (None, 20.0)]
+        );
+        assert_eq!(
+            tiers("storage_warehouses"),
+            vec![(Some(12500.0), 100.0), (None, 50.0)]
+        );
+        assert!(tiers("offices").is_empty());
+        // Tabla 220-44
+        let r: Vec<_> = profile
+            .receptacle_demand
+            .iter()
+            .map(|t| (t.up_to_va, t.percent))
+            .collect();
+        assert_eq!(r, vec![(Some(10000.0), 100.0), (None, 50.0)]);
+        // Tabla 220-56
+        assert_eq!(profile.kitchen_demand_percent(2), Some(100.0));
+        assert_eq!(profile.kitchen_demand_percent(3), Some(90.0));
+        assert_eq!(profile.kitchen_demand_percent(5), Some(70.0));
+        assert_eq!(profile.kitchen_demand_percent(12), Some(65.0));
+        // 220-14(i), 220-14(k) y 220-53
+        assert_eq!(profile.parameters.receptacle_outlet_va, 180.0);
+        assert_eq!(profile.office_receptacle_va_per_m2("offices"), Some(11.0));
+        assert_eq!(profile.office_receptacle_va_per_m2("stores"), None);
+        assert_eq!(profile.parameters.appliance_demand_factor, 0.75);
+        assert_eq!(profile.parameters.appliance_demand_min_count, 4);
     }
 
     #[test]

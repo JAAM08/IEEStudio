@@ -18,10 +18,12 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 length_m: 40.0,
-                demand_factor: 0.8,
+                demand: voltforge_project::Demand::Custom(0.8),
+                demand_factor: None,
                 has_neutral: true,
                 overrides: Overrides::default(),
             },
+            areas: vec![],
             circuits: vec![],
         },
         Panel {
@@ -31,10 +33,12 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 length_m: 60.0,
-                demand_factor: 1.0,
+                demand: voltforge_project::Demand::Article220,
+                demand_factor: None,
                 has_neutral: false,
                 overrides: Overrides::default(),
             },
+            areas: vec![],
             circuits: vec![Circuit {
                 id: "F-01".to_string(),
                 name: "Horno".to_string(),
@@ -45,6 +49,7 @@ fn industrial() -> Project {
                     power_factor: 1.0,
                     continuous: true,
                     kind: LoadKind::General,
+                    outlets: None,
                     motor: None,
                     compressor: None,
                 },

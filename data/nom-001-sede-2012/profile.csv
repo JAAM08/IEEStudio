@@ -22,3 +22,6 @@ compressor_conductor_factor,1.25
 compressor_protection_factor,1.75
 compressor_protection_max_factor,2.25
 compressor_minimum_protection_a,15
+receptacle_outlet_va,180
+appliance_demand_factor,0.75
+appliance_demand_min_count,4

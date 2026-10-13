@@ -3,8 +3,8 @@
 
 use voltforge_core::{CircuitKind, Size, System};
 use voltforge_project::{
-    calculate, example, Circuit, Feeder, Load, LoadKind, Overrides, Panel, Project, RunResult,
-    Status,
+    calculate, example, Area, Circuit, Demand, Feeder, Load, LoadKind, Overrides, Panel, Project,
+    RunResult, Status,
 };
 
 fn close(actual: f64, expected: f64) {
@@ -41,19 +41,33 @@ fn example_house_load_schedule() {
     close(panel.imbalance_percent.unwrap(), 29.52);
     assert_eq!(result.warnings.len(), 1);
 
-    // Alimentador (430-24): 9436.97 VA / (√3 · 220) = 24.77 A, de los que
-    // 2000 VA / 381.05 = 5.25 A son continuos. El motor mayor es el
-    // minisplit: 2640 / 381.05 = 6.93 A, que suma su 25 %.
-    // Id = 1.25 · 5.25 + 19.52 + 0.25 · 6.93 = 27.81 A → 30 A, 10 AWG.
+    // Carga del alimentador (artículo 220, vivienda). Alumbrado y contactos:
+    // 1333.33 + 666.67 + 2000 + 1666.67 = 5666.67 VA, más que la mínima de
+    // 33 VA/m² × 120 m² = 3960 VA. Tabla 220-42: 3000 al 100 % y 2666.67 al
+    // 35 % = 3933.33 VA. Motores y compresor al 100 %: 2640 + 1130.3 VA.
+    close(panel.demanded_va, 3933.33 + 3770.3);
+    assert_eq!(panel.demand.len(), 2);
+    // 7703.63 VA / (√3 · 220) = 20.22 A. Continuo: el alumbrado, 2000 de
+    // 5666.67 VA del grupo: 3933.33 · 0.3529 = 1388.24 VA = 3.64 A. El
+    // compresor es el motor mayor: 2640 / 381.05 = 6.93 A.
+    // Id = 1.25 · 3.64 + 16.57 + 0.25 · 6.93 = 22.86 A → 25 A, 10 AWG
+    // (12 AWG lleva 20 A a 60 °C).
     let feeder = panel.feeder.run.as_ref().unwrap();
-    close(feeder.nominal_a, 24.77);
-    close(feeder.design_a, 27.81);
-    close(feeder.breaker_a, 30.0);
+    close(feeder.nominal_a, 20.22);
+    close(feeder.design_a, 22.86);
+    close(feeder.breaker_a, 25.0);
     assert_eq!(feeder.size, Size::new("10"));
     assert_eq!(feeder.poles, 3);
     assert_eq!(feeder.current_carrying_conductors, 3);
-    close(feeder.drop_percent, 0.83);
+    close(feeder.drop_percent, 0.68);
     assert_eq!(feeder.conduit.as_ref().unwrap().metric_designator, 16);
+    let load = panel
+        .feeder
+        .checks
+        .iter()
+        .find(|c| c.name == "Carga del alimentador")
+        .unwrap();
+    assert_eq!(load.status, Status::Complies);
     assert_eq!(panel.feeder.status, Status::Complies);
 
     // C-01: 10.5 A continuos, 15 A, 14 AWG, 2.76 %; acumulada con el alimentador.
@@ -62,7 +76,7 @@ fn example_house_load_schedule() {
     close(run.breaker_a, 15.0);
     assert_eq!(run.size, Size::new("14"));
     close(run.drop_percent, 2.76);
-    close(run.cumulative_drop_percent, 2.76 + 0.83);
+    close(run.cumulative_drop_percent, 2.76 + 0.68);
     assert_eq!(c01.status, Status::Complies);
 
     // C-02: sube de 12 a 10 AWG por caída de tensión; la tierra sube con él.
@@ -132,7 +146,7 @@ fn project_round_trips_through_json() {
     close(p.settings.total_drop_limit_percent, 5.0);
     assert!(Project::from_json("{").is_err());
     assert!(
-        Project::from_json(&json.replace("\"format_version\": 2", "\"format_version\": 99"))
+        Project::from_json(&json.replace("\"format_version\": 3", "\"format_version\": 99"))
             .is_err()
     );
 }
@@ -140,6 +154,7 @@ fn project_round_trips_through_json() {
 fn industrial() -> Project {
     let mut project = example::house();
     project.name = "Nave".to_string();
+    project.occupancy = Some("industrial_commercial".to_string());
     project.source.system = System::WYE_480_277;
     project.panels = vec![
         Panel {
@@ -149,10 +164,12 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 length_m: 40.0,
-                demand_factor: 0.8,
+                demand: Demand::Custom(0.8),
+                demand_factor: None,
                 has_neutral: true,
                 overrides: Overrides::default(),
             },
+            areas: vec![],
             circuits: vec![],
         },
         Panel {
@@ -162,10 +179,12 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 length_m: 60.0,
-                demand_factor: 1.0,
+                demand: Demand::Article220,
+                demand_factor: None,
                 has_neutral: false,
                 overrides: Overrides::default(),
             },
+            areas: vec![],
             circuits: vec![Circuit {
                 id: "F-01".to_string(),
                 name: "Horno".to_string(),
@@ -176,6 +195,7 @@ fn industrial() -> Project {
                     power_factor: 1.0,
                     continuous: true,
                     kind: LoadKind::General,
+                    outlets: None,
                     motor: None,
                     compressor: None,
                 },
@@ -262,18 +282,25 @@ fn every_run_carries_its_procedure() {
     let panel = &result.panels[0];
     for item in std::iter::once(&panel.feeder).chain(&panel.circuits) {
         let run = item.run.as_ref().unwrap();
-        assert_eq!(run.steps.len(), 12, "{}", item.id);
+        // El alimentador empieza con su carga según el artículo 220.
+        let skip = run
+            .steps
+            .iter()
+            .take_while(|s| s.title.starts_with("Carga"))
+            .count();
+        let steps = &run.steps[skip..];
+        assert_eq!(steps.len(), 12, "{}", item.id);
         assert!(
             [
                 "Corriente nominal",
                 "Corriente del motor",
                 "Corriente del compresor"
             ]
-            .contains(&run.steps[0].title.as_str()),
+            .contains(&steps[0].title.as_str()),
             "{}",
             item.id
         );
-        assert_eq!(run.steps[11].title, "Caída acumulada desde la fuente");
+        assert_eq!(steps[11].title, "Caída acumulada desde la fuente");
     }
     // C-02: 1800 W a 127 V con fp 0.90: I = 1800 / (127 · 0.9) = 15.75 A.
     let c02 = panel.circuits[1].run.as_ref().unwrap();
@@ -335,6 +362,7 @@ fn motor_circuit(id: &str, hp: &str, length_m: f64) -> Circuit {
             power_factor: 0.85,
             continuous: false,
             kind: LoadKind::Motor,
+            outlets: None,
             motor: Some(voltforge_project::MotorLoad {
                 hp: hp.to_string(),
                 motor_type: Default::default(),
@@ -353,6 +381,8 @@ fn motor_circuit(id: &str, hp: &str, length_m: f64) -> Circuit {
 /// alumbrado continuo trifásico (7.87 A).
 fn motor_panel() -> Project {
     let mut project = example::house();
+    // 22 VA/m² × 100 m² = 2200 VA de alumbrado mínimo: manda el capturado.
+    project.occupancy = Some("industrial_commercial".to_string());
     let lighting = Circuit {
         id: "A-01".to_string(),
         name: "Alumbrado".to_string(),
@@ -363,6 +393,7 @@ fn motor_panel() -> Project {
             power_factor: 1.0,
             continuous: true,
             kind: LoadKind::Lighting,
+            outlets: None,
             motor: None,
             compressor: None,
         },
@@ -377,10 +408,16 @@ fn motor_panel() -> Project {
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
             length_m: 10.0,
-            demand_factor: 1.0,
+            demand: Demand::Article220,
+            demand_factor: None,
             has_neutral: false,
             overrides: Overrides::default(),
         },
+        areas: vec![Area {
+            description: "Nave".to_string(),
+            occupancy: None,
+            m2: 100.0,
+        }],
         circuits: vec![
             motor_circuit("M-10", "10", 10.0),
             motor_circuit("M-15", "15", 10.0),

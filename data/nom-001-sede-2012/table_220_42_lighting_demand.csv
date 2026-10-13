@@ -1,0 +1,13 @@
+occupancy,up_to_va,percent
+storage_warehouses,12500,100
+storage_warehouses,,50
+storage_spaces,12500,100
+storage_spaces,,50
+hospitals,50000,40
+hospitals,,20
+hotels,20000,50
+hotels,100000,40
+hotels,,30
+dwellings,3000,100
+dwellings,120000,35
+dwellings,,25

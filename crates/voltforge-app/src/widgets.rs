@@ -51,12 +51,36 @@ pub const CONDUITS: [(&str, ConduitType); 5] = [
     ("PVC cédula 80", ConduitType::Pvc80),
 ];
 
-pub const LOAD_KINDS: [(&str, LoadKind); 4] = [
+pub const LOAD_KINDS: [(&str, LoadKind); 7] = [
     ("General", LoadKind::General),
     ("Alumbrado", LoadKind::Lighting),
+    ("Contactos", LoadKind::Receptacles),
+    ("Aparato fijo", LoadKind::Appliance),
+    ("Equipo de cocina", LoadKind::KitchenEquipment),
     ("Motor", LoadKind::Motor),
     ("Aire acondicionado", LoadKind::AirConditioning),
 ];
+
+/// Qué hace cada tipo de carga en el alimentador, para la ayuda emergente.
+pub fn load_kind_hint(kind: LoadKind) -> &'static str {
+    match kind {
+        LoadKind::General => "Otras cargas: van al 100 % en el alimentador.",
+        LoadKind::Lighting => {
+            "Alumbrado general: carga mínima por m² (Tabla 220-12) y factores de la Tabla 220-42."
+        }
+        LoadKind::Receptacles => {
+            "Contactos de uso general: 180 VA por salida (220-14(i)) y Tabla 220-44. En vivienda van con el alumbrado."
+        }
+        LoadKind::Appliance => {
+            "Aparato fijo (calentador de agua, lavavajillas…), no estufa, secadora, calefacción ni aire acondicionado: en vivienda, 75 % con cuatro o más (220-53)."
+        }
+        LoadKind::KitchenEquipment => {
+            "Equipo de cocina comercial: factores de la Tabla 220-56, sin bajar de los dos equipos mayores."
+        }
+        LoadKind::Motor => "Motor: corriente de las tablas 430-248 y 430-250.",
+        LoadKind::AirConditioning => "Aire acondicionado o refrigeración: datos de placa (artículo 440).",
+    }
+}
 
 pub fn label_of<T: PartialEq + Copy>(options: &[(&'static str, T)], value: T) -> &'static str {
     options
@@ -338,7 +362,9 @@ pub fn fixed_label(ui: &mut egui::Ui, p: &Palette, label: &str) {
 
 /// Grupo del procedimiento al que pertenece un paso.
 fn step_group(title: &str) -> &'static str {
-    if title.starts_with("Corriente") {
+    if title.starts_with("Carga") {
+        "Carga (artículo 220)"
+    } else if title.starts_with("Corriente") {
         "Corriente"
     } else if title.starts_with("Interruptor") || title.starts_with("Relevador") {
         "Protección"

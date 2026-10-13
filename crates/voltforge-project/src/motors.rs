@@ -96,7 +96,7 @@ pub(crate) fn motor_circuit(
                 "faltan los datos de placa del equipo: corriente de carga nominal, o ampacidad mínima y protección máxima".into(),
             )),
         }),
-        LoadKind::General | LoadKind::Lighting => None,
+        _ => None,
     }
 }
 

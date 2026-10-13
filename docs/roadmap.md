@@ -21,6 +21,9 @@
   conductor, interruptor, sobrecarga, placa de equipos de aire acondicionado y
   alimentadores con motores (ver la decisión 0011). También en el cálculo
   rápido. Interruptor fijado por el usuario en cualquier tramo.
+- Carga de los alimentadores según el artículo 220: tipo de inmueble, áreas
+  por tablero, mínimas de alumbrado y de contactos, y factores de demanda por
+  grupo (ver la decisión 0012).
 - Instalador de Windows (Inno Setup) con ícono, accesos directos y la
   extensión `.vfp`; una etiqueta `v*` publica la versión en GitHub. El
   programa abre el último proyecto usado y recuerda los recientes.
@@ -30,17 +33,17 @@
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.
 
-1. Cálculo de la carga según el artículo 220: alumbrado por m², contactos,
-   factores de demanda.
-2. Cortocircuito y capacidad interruptiva (110-9 y 110-10).
-3. Datos del proyecto en la memoria (cliente, ubicación, responsable, cédula,
+1. Cortocircuito y capacidad interruptiva (110-9 y 110-10).
+2. Datos del proyecto en la memoria (cliente, ubicación, responsable, cédula,
    revisión) e importar y exportar el cuadro de cargas en Excel.
-4. Transformador y acometida en media tensión (artículo 450); conductor del
+3. Transformador y acometida en media tensión (artículo 450); conductor del
    electrodo de puesta a tierra (250-66); balanceo automático de fases;
    paralelos automáticos dentro del proyecto; deshacer y rehacer; unifilar en
-   DXF; pasar un cálculo rápido al proyecto.
-5. Servidor MCP para agentes.
-6. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).
+   DXF; pasar un cálculo rápido al proyecto; lo que falta del artículo 220
+   (estufas y secadoras, calefacción, neutro del alimentador, métodos
+   opcionales).
+4. Servidor MCP para agentes.
+5. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).
    Requisito para la beta.
 
 ## Fuera del alcance de la versión 0.1

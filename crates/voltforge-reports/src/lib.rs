@@ -242,6 +242,37 @@ fn verdict_table(out: &mut String, verdict: &Verdict, code: &str) {
     out.push_str(")\n");
 }
 
+/// Carga del alimentador por grupo, según el artículo 220.
+fn demand_table(out: &mut String, panel: &voltforge_project::PanelResult) {
+    if panel.demand.is_empty() {
+        return;
+    }
+    out.push_str("#table(columns: (4.4cm, 2.1cm, 1fr, 2.1cm), stroke: (x, y) => (bottom: 0.5pt + linea), inset: (x: 0pt, y: 4pt), align: (left, right, left, right),\n");
+    out.push_str("  text(fill: gris, size: 8pt)[Carga del alimentador], text(fill: gris, size: 8pt)[Conectada VA], text(fill: gris, size: 8pt)[#h(8pt)Factor de demanda], text(fill: gris, size: 8pt)[Calculada VA],\n");
+    for line in &panel.demand {
+        let cite = cite_all(&line.references).map_or(String::new(), |c| format!(" · {c}"));
+        let _ = writeln!(
+            out,
+            "  {}, {}, [#h(8pt)#text(size: 8pt, {})#text(size: 7pt, fill: gris, {})], {},",
+            q(&line.label),
+            q(&format!("{:.0}", line.connected_va)),
+            q(&line.detail),
+            q(&cite),
+            q(&format!("{:.0}", line.demanded_va)),
+        );
+    }
+    let _ = writeln!(
+        out,
+        "  text(font: \"IBM Plex Sans SmBld\", \"Total\"), {}, [], text(font: \"IBM Plex Sans SmBld\", {}),",
+        q(&format!(
+            "{:.0}",
+            panel.demand.iter().map(|l| l.connected_va).sum::<f64>()
+        )),
+        q(&format!("{:.0}", panel.demanded_va)),
+    );
+    out.push_str(")\n");
+}
+
 fn schedule_row(out: &mut String, id: &str, item: &RunResult) {
     let cells: Vec<String> = match &item.run {
         Some(run) => {
@@ -298,7 +329,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
         "#text(18pt, font: \"IBM Plex Sans SmBld\", \"Memoria de cálculo eléctrico\")\n\n#text(12pt, {})\n\n#text(fill: gris, {})",
         q(&project.name),
         q(&format!(
-            "Instalación eléctrica de baja tensión conforme a la {} · {}",
+            "Instalación eléctrica de baja tensión calculada con la {} · {}",
             project.profile.to_uppercase(),
             today()
         ))
@@ -315,6 +346,16 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                     project.source.name,
                     system_label(&project.source.system)
                 ),
+            ),
+            (
+                "Tipo de inmueble",
+                project
+                    .occupancy
+                    .as_deref()
+                    .and_then(|id| profile.occupancy(id))
+                    .map_or("Sin elegir".to_string(), |o| {
+                        format!("{} ({} VA/m², Tabla 220-12)", o.label, o.va_per_m2)
+                    }),
             ),
             ("Conductor", capitalize(material_name(s.material))),
             ("Aislamiento", insulation_name(s.insulation).to_string()),
@@ -395,10 +436,11 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             out,
             "#text(fill: gris, {})",
             q(&format!(
-                "Carga conectada de {:.0} W, factor de demanda {:.2}, carga demandada de {:.0} W, factor de potencia {:.2}.{balance}",
-                panel.connected_w, panel.demand_factor, panel.demanded_w, panel.power_factor
+                "Carga conectada de {:.0} W y carga calculada del alimentador de {:.0} VA ({:.0} W, factor resultante {:.2}), factor de potencia {:.2}.{balance}",
+                panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
             ))
         );
+        demand_table(&mut out, panel);
         out.push_str("#cuadro(\n");
         for (id, item) in panel_runs(panel) {
             schedule_row(&mut out, &id, item);

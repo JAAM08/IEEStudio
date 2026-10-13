@@ -19,6 +19,7 @@ use crate::widgets::{label_of, muted, status_color, status_text, strong, worst, 
 pub enum Col {
     Id,
     Name,
+    Kind,
     Connection,
     Phases,
     Load,
@@ -37,9 +38,10 @@ pub enum Col {
 }
 
 impl Col {
-    pub const ALL: [Col; 17] = [
+    pub const ALL: [Col; 18] = [
         Col::Id,
         Col::Name,
+        Col::Kind,
         Col::Connection,
         Col::Phases,
         Col::Load,
@@ -61,6 +63,7 @@ impl Col {
         match self {
             Col::Id => "ID",
             Col::Name => "Descripción",
+            Col::Kind => "Tipo",
             Col::Connection => "Conexión",
             Col::Phases => "Fases",
             Col::Load => "Carga W",
@@ -84,6 +87,7 @@ impl Col {
         match self {
             Col::Id => "Identificador",
             Col::Name => "Descripción",
+            Col::Kind => "Tipo de carga",
             Col::Connection => "Conexión",
             Col::Phases => "Fases asignadas",
             Col::Load => "Carga, W",
@@ -121,6 +125,7 @@ impl Col {
             Col::Id => 44.0,
             Col::Name => 150.0,
             Col::Status => 84.0,
+            Col::Kind => 74.0,
             Col::Connection | Col::Conduit | Col::Breaker => 58.0,
             Col::Size => 56.0,
             Col::Load | Col::Ampacity => 52.0,
@@ -142,7 +147,11 @@ impl Default for Columns {
                 .filter(|c| {
                     !matches!(
                         c,
-                        Col::Connection | Col::PowerFactor | Col::Design | Col::Ampacity
+                        Col::Kind
+                            | Col::Connection
+                            | Col::PowerFactor
+                            | Col::Design
+                            | Col::Ampacity
                     )
                 })
                 .collect(),
@@ -162,6 +171,7 @@ struct Row<'a> {
     selection: Selection,
     id: String,
     name: String,
+    kind: &'static str,
     connection: &'static str,
     phases: String,
     power_factor: Option<f64>,
@@ -175,6 +185,7 @@ fn cell(col: Col, row: &Row) -> String {
     match col {
         Col::Id => row.id.clone(),
         Col::Name => row.name.clone(),
+        Col::Kind => row.kind.to_string(),
         Col::Connection => row.connection.to_string(),
         Col::Phases => row.phases.clone(),
         Col::Load => format!("{:.0}", row.item.load_w),
@@ -376,6 +387,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         selection: Selection::Feeder(panel_index),
         id: "ALIM".to_string(),
         name: format!("Alimentador de {}", panel.id),
+        kind: "Alimentador",
         connection: label_of(&KINDS, panel.kind),
         phases: "—".to_string(),
         power_factor: Some(result.power_factor),
@@ -387,6 +399,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             selection: Selection::Circuit(panel_index, i),
             id: circuit.id.clone(),
             name: circuit.name.clone(),
+            kind: circuit.load.kind.label(),
             connection: label_of(&KINDS, circuit.kind),
             phases: circuit
                 .phases
@@ -569,7 +582,31 @@ fn summary_strip(ui: &mut egui::Ui, p: &Palette, r: &voltforge_project::PanelRes
             ui.add_space(14.0);
         };
         figure(ui, "CONECTADA", format!("{:.0} W", r.connected_w));
-        figure(ui, "DEMANDADA", format!("{:.0} W", r.demanded_w));
+        let detail = r
+            .demand
+            .iter()
+            .map(|l| {
+                format!(
+                    "{}: {:.0} → {:.0} VA",
+                    l.label, l.connected_va, l.demanded_va
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        ui.vertical(|ui| {
+            ui.label(RichText::new("CALCULADA").size(10.5).color(p.ink3));
+            ui.label(
+                RichText::new(format!("{:.0} VA", r.demanded_va))
+                    .monospace()
+                    .size(14.0),
+            );
+        })
+        .response
+        .on_hover_text(format!(
+            "Carga del alimentador según el artículo 220 (factor resultante {:.2}):\n{detail}",
+            r.demand_factor
+        ));
+        ui.add_space(14.0);
         if let Some(run) = &r.feeder.run {
             figure(ui, "CORRIENTE ALIM.", format!("{:.2} A", run.nominal_a));
         }

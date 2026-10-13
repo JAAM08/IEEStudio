@@ -3,8 +3,8 @@
 use voltforge_core::{CircuitKind, Size, System};
 
 use crate::model::{
-    Circuit, CompressorLoad, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel, Phase, Project,
-    Settings, Source, FORMAT_VERSION,
+    Area, Circuit, CompressorLoad, Demand, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel,
+    Phase, Project, Settings, Source, FORMAT_VERSION,
 };
 
 #[allow(clippy::too_many_arguments)] // constructor interno del ejemplo
@@ -28,6 +28,7 @@ fn circuit(
             power_factor: 0.9,
             continuous,
             kind: load_kind,
+            outlets: None,
             motor: None,
             compressor: None,
         },
@@ -40,7 +41,7 @@ fn circuit(
 /// Casa habitación con acometida 3F-4H 220Y/127 V.
 pub fn house() -> Project {
     use CircuitKind::{LineToLine, LineToNeutral};
-    use LoadKind::{AirConditioning, General, Lighting, Motor};
+    use LoadKind::{AirConditioning, Lighting, Motor, Receptacles};
     let mut living_room = circuit(
         "C-04",
         "Contactos sala",
@@ -48,7 +49,7 @@ pub fn house() -> Project {
         &[Phase::C],
         1500.0,
         false,
-        General,
+        Receptacles,
         35.0,
     );
     // Calibre fijado por el usuario, para mostrar un circuito que no cumple.
@@ -92,6 +93,7 @@ pub fn house() -> Project {
         format_version: FORMAT_VERSION,
         name: "Casa habitación (ejemplo)".to_string(),
         profile: "nom-001-sede-2012".to_string(),
+        occupancy: Some("dwellings".to_string()),
         settings: Settings::default(),
         source: Source {
             name: "Acometida".to_string(),
@@ -104,10 +106,16 @@ pub fn house() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 length_m: 12.0,
-                demand_factor: 1.0,
+                demand: Demand::Article220,
+                demand_factor: None,
                 has_neutral: true,
                 overrides: Overrides::default(),
             },
+            areas: vec![Area {
+                description: "Planta baja y planta alta".to_string(),
+                occupancy: None,
+                m2: 120.0,
+            }],
             circuits: vec![
                 circuit(
                     "C-01",
@@ -126,7 +134,7 @@ pub fn house() -> Project {
                     &[Phase::B],
                     1800.0,
                     false,
-                    General,
+                    Receptacles,
                     22.0,
                 ),
                 air,

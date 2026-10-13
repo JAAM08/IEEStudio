@@ -9,9 +9,10 @@ use voltforge_core::Insulation;
 use voltforge_core::{CircuitKind, ConduitType, Material, MotorType, Size, System};
 
 /// Versión del formato de archivo. La 2 agrega los datos de motores y
-/// motocompresores y el interruptor fijado; lee sin cambios los archivos de
-/// la 1.
-pub const FORMAT_VERSION: u32 = 2;
+/// motocompresores y el interruptor fijado. La 3 agrega el tipo de inmueble,
+/// las áreas de cada tablero, los contactos y el método de demanda del
+/// alimentador. Lee los archivos de la 1 y la 2.
+pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Project {
@@ -19,6 +20,10 @@ pub struct Project {
     pub name: String,
     /// Identificador del perfil normativo, por ejemplo `nom-001-sede-2012`.
     pub profile: String,
+    /// Tipo de inmueble de la Tabla 220-12 (`dwellings`, `offices`…). Decide
+    /// los factores de demanda del artículo 220. `None` si no se ha elegido.
+    #[serde(default)]
+    pub occupancy: Option<String>,
     #[serde(default)]
     pub settings: Settings,
     pub source: Source,
@@ -97,16 +102,48 @@ pub struct Panel {
     /// Conexión del alimentador: una, dos o tres fases.
     pub kind: CircuitKind,
     pub feeder: Feeder,
+    /// Áreas que atiende este tablero con sus propios circuitos, para la
+    /// carga mínima de alumbrado (220-12). Las de sus subtableros se suman.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub areas: Vec<Area>,
     #[serde(default)]
     pub circuits: Vec<Circuit>,
+}
+
+/// Superficie de piso que atiende un tablero.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Area {
+    #[serde(default)]
+    pub description: String,
+    /// Tipo de área de la Tabla 220-12. `None` toma el tipo de inmueble del
+    /// proyecto.
+    #[serde(default)]
+    pub occupancy: Option<String>,
+    pub m2: f64,
+}
+
+/// Cómo se obtiene la carga del alimentador a partir de la conectada.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub enum Demand {
+    /// Factores de demanda del artículo 220 según el tipo de inmueble.
+    #[default]
+    Article220,
+    /// Toda la carga al 100 %, sin factores.
+    Full,
+    /// Factor propio del usuario sobre toda la carga. La norma no lo respalda
+    /// por sí mismo: queda «no evaluado» si reduce la carga.
+    Custom(f64),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Feeder {
     pub length_m: f64,
-    /// Factor de demanda que se aplica a la carga conectada del tablero.
-    #[serde(default = "one")]
-    pub demand_factor: f64,
+    #[serde(default)]
+    pub demand: Demand,
+    /// Factor de demanda de los archivos de formato 1 y 2. Al leerlos se
+    /// convierte en `demand`; ya no se escribe.
+    #[serde(default, skip_serializing)]
+    pub demand_factor: Option<f64>,
     /// El alimentador lleva neutro.
     #[serde(default = "yes")]
     pub has_neutral: bool,
@@ -141,6 +178,9 @@ pub struct Load {
     pub continuous: bool,
     #[serde(default)]
     pub kind: LoadKind,
+    /// Número de salidas de contacto, si `kind` es `Receptacles` (220-14(i)).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outlets: Option<u32>,
     /// Datos del motor, si `kind` es `Motor`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub motor: Option<MotorLoad>,
@@ -184,11 +224,35 @@ pub struct CompressorLoad {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LoadKind {
+    /// Otras cargas: van al 100 % en el alimentador.
     #[default]
     General,
+    /// Alumbrado general (220-12, 220-42).
     Lighting,
+    /// Contactos de uso general (220-14(i), 220-44).
+    Receptacles,
+    /// Aparato fijo que no es estufa, secadora, calefacción ni aire
+    /// acondicionado: calentador de agua, lavavajillas… (220-53).
+    Appliance,
+    /// Equipo de cocina comercial (220-56).
+    KitchenEquipment,
     Motor,
     AirConditioning,
+}
+
+impl LoadKind {
+    /// Nombre para mostrar.
+    pub fn label(self) -> &'static str {
+        match self {
+            LoadKind::General => "General",
+            LoadKind::Lighting => "Alumbrado",
+            LoadKind::Receptacles => "Contactos",
+            LoadKind::Appliance => "Aparato fijo",
+            LoadKind::KitchenEquipment => "Equipo de cocina",
+            LoadKind::Motor => "Motor",
+            LoadKind::AirConditioning => "Aire acondicionado",
+        }
+    }
 }
 
 /// Decisiones del usuario que sustituyen lo que el programa propondría.
@@ -213,10 +277,6 @@ pub struct Overrides {
     pub breaker_a: Option<f64>,
 }
 
-fn one() -> f64 {
-    1.0
-}
-
 fn yes() -> bool {
     true
 }
@@ -224,13 +284,23 @@ fn yes() -> bool {
 impl Project {
     /// Lee un proyecto desde JSON.
     pub fn from_json(text: &str) -> Result<Project, String> {
-        let project: Project =
+        let mut project: Project =
             serde_json::from_str(text).map_err(|e| format!("archivo de proyecto inválido: {e}"))?;
         if project.format_version > FORMAT_VERSION {
             return Err(format!(
                 "el archivo usa el formato {}, más nuevo que el que este programa entiende ({FORMAT_VERSION})",
                 project.format_version
             ));
+        }
+        // Formatos 1 y 2: el factor de demanda era un número sobre toda la
+        // carga, 1 por omisión. Uno distinto de 1 se conserva como factor
+        // propio; el 1 pasa al método del artículo 220.
+        for panel in &mut project.panels {
+            if let Some(factor) = panel.feeder.demand_factor.take() {
+                if (factor - 1.0).abs() > 1e-9 {
+                    panel.feeder.demand = Demand::Custom(factor);
+                }
+            }
         }
         Ok(project)
     }
@@ -242,5 +312,32 @@ impl Project {
             ..self.clone()
         };
         serde_json::to_string_pretty(&current).expect("el modelo siempre se puede serializar")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_demand_factors_are_migrated() {
+        let mut project = crate::example::house();
+        project.panels[0].feeder.demand = Demand::Article220;
+        let json = project
+            .to_json()
+            .replace("\"demand\": \"Article220\"", "\"demand_factor\": 0.8");
+        assert!(json.contains("demand_factor"));
+        let read = Project::from_json(&json).unwrap();
+        assert_eq!(read.panels[0].feeder.demand, Demand::Custom(0.8));
+        let json = json.replace("0.8", "1.0");
+        let read = Project::from_json(&json).unwrap();
+        assert_eq!(read.panels[0].feeder.demand, Demand::Article220);
+        assert!(!read.to_json().contains("demand_factor"));
+    }
+
+    #[test]
+    fn projects_round_trip() {
+        let project = crate::example::house();
+        assert_eq!(Project::from_json(&project.to_json()).unwrap(), project);
     }
 }

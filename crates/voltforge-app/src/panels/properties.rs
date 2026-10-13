@@ -6,7 +6,8 @@ use eframe::egui::{self, RichText};
 use egui_phosphor::regular as icon;
 use voltforge_core::{CircuitKind, Size};
 use voltforge_project::{
-    size_label, CompressorLoad, LoadKind, MotorLoad, Overrides, Phase, RunResult, Status,
+    size_label, Area, CompressorLoad, Demand, LoadKind, MotorLoad, Overrides, Phase, RunResult,
+    Status,
 };
 use voltforge_rules::{cite_all, Profile, Rule};
 
@@ -14,9 +15,9 @@ use super::Shared;
 use crate::state::{Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{
-    combo, combo_override, motor_hp_combo, muted, number, optional_number, property, section,
-    source_badge, status_text, strong, Source, CONDUITS, INSULATIONS, KINDS, LOAD_KINDS, MATERIALS,
-    MOTOR_TYPES, SYSTEMS,
+    combo, combo_override, load_kind_hint, motor_hp_combo, muted, number, optional_number,
+    property, section, source_badge, status_text, strong, Source, CONDUITS, INSULATIONS, KINDS,
+    LOAD_KINDS, MATERIALS, MOTOR_TYPES, SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -121,6 +122,22 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Perfil normativo", |ui| {
         ui.label("NOM-001-SEDE-2012");
     });
+    section(ui, p, "Inmueble");
+    property(ui, p, "Tipo de inmueble", |ui| {
+        changed |= occupancy_combo(ui, "inmueble", &mut project.occupancy, false, "Sin elegir");
+    })
+    .on_hover_text(
+        "Tabla 220-12. Decide la carga mínima de alumbrado por m² y los factores de demanda de los alimentadores (artículo 220).",
+    );
+    if project.occupancy.is_none() {
+        ui.label(
+            muted(
+                p,
+                "Sin el tipo de inmueble, los alimentadores con alumbrado o contactos quedan sin evaluar.",
+            )
+            .size(11.0),
+        );
+    }
     section(ui, p, "Suministro");
     property(ui, p, "Nombre", |ui| {
         changed |= ui.text_edit_singleline(&mut project.source.name).changed();
@@ -185,6 +202,14 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
     let settings = doc.project.settings.clone();
     let id_problem = doc.panel_id_problem(i);
     let old_id = doc.project.panels[i].id.clone();
+    let building = doc
+        .project
+        .occupancy
+        .as_deref()
+        .and_then(|id| Profile::nom_001_sede_2012().occupancy(id))
+        .map_or("Del inmueble".to_string(), |o| {
+            format!("{} · proyecto", o.label)
+        });
     let mut renamed = false;
     section(ui, p, "Tablero");
     property(ui, p, "ID", |ui| {
@@ -229,13 +254,132 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
     property(ui, p, "Longitud", |ui| {
         changed |= number(ui, &mut panel.feeder.length_m, 0.5, 0.0, 5000.0, " m");
     });
-    property(ui, p, "Factor de demanda", |ui| {
-        changed |= number(ui, &mut panel.feeder.demand_factor, 0.01, 0.05, 1.0, "");
-    });
     changed |= ui
         .checkbox(&mut panel.feeder.has_neutral, "Lleva neutro")
         .changed();
+
+    section(ui, p, "Carga del alimentador");
+    property(ui, p, "Factor de demanda", |ui| {
+        let text = match panel.feeder.demand {
+            Demand::Article220 => "Artículo 220",
+            Demand::Full => "Sin factores (100 %)",
+            Demand::Custom(_) => "Factor propio",
+        };
+        egui::ComboBox::from_id_salt("demanda")
+            .selected_text(text)
+            .show_ui(ui, |ui| {
+                changed |= ui
+                    .selectable_value(&mut panel.feeder.demand, Demand::Article220, "Artículo 220")
+                    .on_hover_text(
+                        "Factores de las tablas 220-42, 220-44 y 220-56 y de 220-53, según el tipo de inmueble.",
+                    )
+                    .changed();
+                changed |= ui
+                    .selectable_value(&mut panel.feeder.demand, Demand::Full, "Sin factores (100 %)")
+                    .on_hover_text(
+                        "Toda la carga al 100 %. Por ejemplo, áreas de hospital u hotel donde se usa todo el alumbrado a la vez.",
+                    )
+                    .changed();
+                let custom = matches!(panel.feeder.demand, Demand::Custom(_));
+                if ui.selectable_label(custom, "Factor propio").clicked() && !custom {
+                    panel.feeder.demand = Demand::Custom(1.0);
+                    changed = true;
+                }
+            });
+    });
+    if let Demand::Custom(f) = &mut panel.feeder.demand {
+        property(ui, p, "Factor", |ui| {
+            changed |= number(ui, f, 0.01, 0.05, 1.0, "");
+        });
+        ui.label(
+            muted(
+                p,
+                "Un factor propio menor que 1 deja el alimentador sin evaluar: el artículo 220 no lo respalda por sí mismo.",
+            )
+            .size(11.0),
+        );
+    }
+
+    section(ui, p, "Áreas que atiende");
+    ui.label(
+        muted(
+            p,
+            "Superficie de piso que alimentan los circuitos de este tablero, para la carga mínima de alumbrado (220-12). Las de sus subtableros se suman solas.",
+        )
+        .size(11.0),
+    );
+    let mut remove = None;
+    for (k, area) in panel.areas.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            changed |= ui
+                .add(
+                    egui::TextEdit::singleline(&mut area.description)
+                        .hint_text("Descripción")
+                        .desired_width(120.0),
+                )
+                .changed();
+            changed |= number(ui, &mut area.m2, 1.0, 0.0, 1.0e6, " m²");
+            if ui
+                .small_button(icon::TRASH)
+                .on_hover_text("Quitar el área")
+                .clicked()
+            {
+                remove = Some(k);
+            }
+        });
+        property(ui, p, "Tipo", |ui| {
+            changed |= occupancy_combo(ui, ("area", k), &mut area.occupancy, true, &building);
+        });
+        ui.add_space(4.0);
+    }
+    if let Some(k) = remove {
+        panel.areas.remove(k);
+        changed = true;
+    }
+    if ui.button(format!("{} Agregar área", icon::PLUS)).clicked() {
+        panel.areas.push(Area {
+            description: String::new(),
+            occupancy: None,
+            m2: 100.0,
+        });
+        changed = true;
+    }
     changed |= decisions(ui, p, &mut panel.feeder.overrides, "alim", &settings);
+    changed
+}
+
+/// Tipo de inmueble o de área de la Tabla 220-12. `none` es el texto de la
+/// opción vacía: «Sin elegir» o el tipo del proyecto.
+fn occupancy_combo(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: &mut Option<String>,
+    areas: bool,
+    none: &str,
+) -> bool {
+    let profile = Profile::nom_001_sede_2012();
+    let mut changed = false;
+    let text = value
+        .as_deref()
+        .and_then(|v| profile.occupancy(v))
+        .map_or(none.to_string(), |o| o.label.clone());
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(text)
+        .width((ui.available_width() - 8.0).clamp(120.0, 190.0))
+        .truncate()
+        .height(360.0)
+        .show_ui(ui, |ui| {
+            changed |= ui.selectable_value(value, None, none).changed();
+            for o in profile.occupancies.iter().filter(|o| areas || !o.area_only) {
+                changed |= ui
+                    .selectable_value(
+                        value,
+                        Some(o.id.clone()),
+                        format!("{} · {} VA/m²", o.label, o.va_per_m2),
+                    )
+                    .changed();
+            }
+        });
     changed
 }
 
@@ -281,7 +425,27 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
                 _ => {}
             }
         }
-    });
+    })
+    .on_hover_text(load_kind_hint(circuit.load.kind));
+    if circuit.load.kind == LoadKind::Receptacles {
+        let unit = Profile::nom_001_sede_2012().parameters.receptacle_outlet_va;
+        property(ui, p, "Salidas", |ui| {
+            let mut n = circuit.load.outlets.unwrap_or(0);
+            if ui
+                .add(egui::DragValue::new(&mut n).range(0..=500).suffix(" contactos"))
+                .changed()
+            {
+                circuit.load.outlets = (n > 0).then_some(n);
+                if n > 0 {
+                    circuit.load.power_w = unit * f64::from(n) * circuit.load.power_factor;
+                }
+                changed = true;
+            }
+        })
+        .on_hover_text(format!(
+            "Cada salida se calcula con {unit:.0} VA (220-14(i)). Al cambiar el número se recalcula la potencia; puedes capturar una mayor."
+        ));
+    }
     let equipment = matches!(
         (
             circuit.load.kind,
@@ -593,6 +757,11 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
         )
         .size(11.0),
     );
+    if let Selection::Feeder(i) = doc.selection {
+        if let Some(panel) = doc.panel_result(i).cloned() {
+            demand_results(ui, p, &panel);
+        }
+    }
     let Some(run) = &item.run else {
         section(ui, p, "Sin resultado");
         for check in &item.checks {
@@ -741,6 +910,45 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
         return true;
     }
     false
+}
+
+/// Carga del alimentador por grupo: de lo conectado a lo calculado.
+fn demand_results(ui: &mut egui::Ui, p: &Palette, panel: &voltforge_project::PanelResult) {
+    if panel.demand.is_empty() {
+        return;
+    }
+    section(ui, p, "Carga (artículo 220)");
+    for line in &panel.demand {
+        ui.horizontal(|ui| {
+            ui.add(egui::Label::new(strong(&line.label)).truncate());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(RichText::new(format!("{:.0} VA", line.demanded_va)).monospace());
+            });
+        });
+        ui.label(muted(p, &line.detail).size(11.0));
+        ui.add_space(2.0);
+    }
+    result_row(
+        ui,
+        p,
+        "Conectada",
+        format!("{:.0} W", panel.connected_w),
+        Source::Calculated,
+    );
+    result_row(
+        ui,
+        p,
+        "Calculada",
+        format!("{:.0} VA · {:.0} W", panel.demanded_va, panel.demanded_w),
+        Source::Calculated,
+    );
+    result_row(
+        ui,
+        p,
+        "Factor resultante",
+        format!("{:.2}", panel.demand_factor),
+        Source::Calculated,
+    );
 }
 
 fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {

@@ -98,10 +98,19 @@ pub enum Rule {
     CompressorProtection,
     EquipmentNameplate,
     BreakerRating,
+    LightingLoad,
+    ReceptacleOutletLoad,
+    DwellingReceptacles,
+    OfficeReceptacleLoad,
+    FeederLoad,
+    LightingDemand,
+    ReceptacleDemand,
+    ApplianceDemand,
+    KitchenDemand,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 35] = [
+    pub const ALL: [Rule; 44] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -137,6 +146,15 @@ impl Rule {
         Rule::CompressorProtection,
         Rule::EquipmentNameplate,
         Rule::BreakerRating,
+        Rule::LightingLoad,
+        Rule::ReceptacleOutletLoad,
+        Rule::DwellingReceptacles,
+        Rule::OfficeReceptacleLoad,
+        Rule::FeederLoad,
+        Rule::LightingDemand,
+        Rule::ReceptacleDemand,
+        Rule::ApplianceDemand,
+        Rule::KitchenDemand,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -177,6 +195,15 @@ impl Rule {
             Rule::CompressorProtection => "compressor_protection",
             Rule::EquipmentNameplate => "equipment_nameplate",
             Rule::BreakerRating => "breaker_rating",
+            Rule::LightingLoad => "lighting_load",
+            Rule::ReceptacleOutletLoad => "receptacle_outlet_load",
+            Rule::DwellingReceptacles => "dwelling_receptacles",
+            Rule::OfficeReceptacleLoad => "office_receptacle_load",
+            Rule::FeederLoad => "feeder_load",
+            Rule::LightingDemand => "lighting_demand",
+            Rule::ReceptacleDemand => "receptacle_demand",
+            Rule::ApplianceDemand => "appliance_demand",
+            Rule::KitchenDemand => "kitchen_demand",
         }
     }
 }
@@ -221,6 +248,12 @@ pub struct Parameters {
     pub compressor_protection_max_factor: f64,
     /// No se exige una protección menor que esta (440-22(a), excepción).
     pub compressor_minimum_protection_a: f64,
+    /// Carga mínima de cada salida de contacto, en VA (220-14(i)).
+    pub receptacle_outlet_va: f64,
+    /// Factor de los aparatos fijos de una vivienda (220-53) y número mínimo
+    /// de aparatos en el alimentador para aplicarlo.
+    pub appliance_demand_factor: f64,
+    pub appliance_demand_min_count: u32,
 }
 
 /// Datos de la norma de un perfil.

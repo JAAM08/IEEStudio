@@ -33,6 +33,7 @@ pub fn empty_project() -> Project {
         format_version: FORMAT_VERSION,
         name: "Proyecto nuevo".to_string(),
         profile: "nom-001-sede-2012".to_string(),
+        occupancy: None,
         settings: Settings::default(),
         source: Source {
             name: "Acometida".to_string(),
@@ -50,10 +51,12 @@ fn new_panel(id: &str, name: &str, parent: Option<String>) -> Panel {
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
             length_m: 10.0,
-            demand_factor: 1.0,
+            demand: Default::default(),
+            demand_factor: None,
             has_neutral: true,
             overrides: Overrides::default(),
         },
+        areas: vec![],
         circuits: vec![],
     }
 }
@@ -168,6 +171,7 @@ impl Doc {
                 power_factor: 0.9,
                 continuous: false,
                 kind: LoadKind::General,
+                outlets: None,
                 motor: None,
                 compressor: None,
             },

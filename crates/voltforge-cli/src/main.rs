@@ -105,9 +105,15 @@ fn print_report(result: &ProjectResult) {
 fn print_panel(panel: &PanelResult) {
     println!("\n{}", panel.name);
     println!(
-        "  Carga conectada {:.0} W, demanda {:.0} W (factor {:.2}), fp {:.2}",
-        panel.connected_w, panel.demanded_w, panel.demand_factor, panel.power_factor
+        "  Carga conectada {:.0} W, calculada {:.0} VA = {:.0} W (factor resultante {:.2}), fp {:.2}",
+        panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
     );
+    for line in &panel.demand {
+        println!(
+            "    {:<30} {:>10.0} VA → {:>10.0} VA  {}",
+            line.label, line.connected_va, line.demanded_va, line.detail
+        );
+    }
     let [a, b, c] = panel.phase_va;
     match panel.imbalance_percent {
         Some(imbalance) => {
