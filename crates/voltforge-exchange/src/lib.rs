@@ -730,6 +730,9 @@ fn apply_row(
     match c.load.kind {
         LoadKind::Motor => {
             let hp = sheet.get(row, "Motor hp").map(str::trim).unwrap_or("");
+            if hp.is_empty() && c.load.motor.is_none() {
+                return Err("falta la potencia del motor en la columna «Motor hp»".into());
+            }
             let plate =
                 optional_number(sheet.get(row, "Corriente de placa A"), "corriente de placa")?;
             let motor = c.load.motor.get_or_insert_with(|| MotorLoad {

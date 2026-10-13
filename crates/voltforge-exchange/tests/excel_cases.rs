@@ -57,7 +57,7 @@ fn a_hand_written_sheet_is_imported_with_its_errors() {
     let mut book = Workbook::new();
     let sheet = book.add_worksheet();
     sheet.set_name(CIRCUITS_SHEET).unwrap();
-    let rows: [[&str; 6]; 5] = [
+    let rows: [[&str; 7]; 6] = [
         [
             "ID",
             "Tablero",
@@ -65,11 +65,13 @@ fn a_hand_written_sheet_is_imported_with_its_errors() {
             "Tipo de carga",
             "Conexión",
             "Fases",
+            "Motor hp",
         ],
-        ["L-1", "TA", "1500", "Alumbrado", "1F", "a"],
-        ["M-1", "TA", "", "Motor", "3F", "ABC"],
-        ["X-1", "TA", "mil", "General", "1 fase", "B"],
-        ["X-2", "TA", "100", "Calefactor", "1 fase", "B"],
+        ["L-1", "TA", "1500", "Alumbrado", "1F", "a", ""],
+        ["M-1", "TA", "", "Motor", "3F", "ABC", "7-1/2"],
+        ["X-1", "TA", "mil", "General", "1 fase", "B", ""],
+        ["X-2", "TA", "100", "Calefactor", "1 fase", "B", ""],
+        ["M-2", "TA", "", "Motor", "3F", "ABC", ""],
     ];
     for (r, row) in rows.iter().enumerate() {
         for (c, value) in row.iter().enumerate() {
@@ -80,14 +82,15 @@ fn a_hand_written_sheet_is_imported_with_its_errors() {
     let mut project = empty_like(&example::house());
     let report = import_xlsx(&mut project, &bytes).unwrap();
     assert_eq!(report.circuits_added, 2);
-    assert_eq!(report.errors.len(), 2, "{:?}", report.errors);
+    assert_eq!(report.errors.len(), 3, "{:?}", report.errors);
     assert!(report.errors[0].contains("fila 4") && report.errors[0].contains("mil"));
     assert!(report.errors[1].contains("Calefactor"));
+    assert!(report.errors[2].contains("Motor hp"));
     let panel = &project.panels[0];
     assert_eq!(panel.circuits[0].load.kind, LoadKind::Lighting);
     assert_eq!(panel.circuits[0].load.power_w, 1500.0);
     assert_eq!(panel.circuits[1].load.kind, LoadKind::Motor);
-    assert!(panel.circuits[1].load.motor.is_some());
+    assert_eq!(panel.circuits[1].load.motor.as_ref().unwrap().hp, "7-1/2");
     assert!(report.summary().contains("2 circuitos nuevos"));
 }
 
