@@ -14,12 +14,16 @@ use voltforge_electrical::sizing::{
 use voltforge_electrical::voltage_drop::{voltage_drop, VoltageDropInput};
 
 use crate::demand::{feeder_demand, outlet_check, DemandLine, Groups};
+use crate::fault::{
+    bus_step, interrupting_check, missing_source, source_fault, unknown, SourceFault, Upstream,
+};
 use crate::model::{Overrides, Panel, Phase, Project, Settings};
 use crate::motors::{motor_circuit, MotorCircuit};
 use crate::procedure::{
     conductor_steps, conduit_step, cumulative_step, current_step, drop_steps, ConductorData, Step,
 };
 use crate::verdict::Verdict;
+use voltforge_electrical::short_circuit::{conductor_impedance, fault_current_a};
 use voltforge_rules::{Profile, Rule, RuleReference};
 
 /// Resultado de una comprobación o de un elemento completo.
@@ -122,6 +126,11 @@ pub struct Run {
     pub drop_percent: f64,
     /// Caída acumulada desde la fuente hasta el final de este tramo.
     pub cumulative_drop_percent: f64,
+    /// Corriente de cortocircuito disponible en las terminales de línea de su
+    /// interruptor, en kA. `None` si no se calculó.
+    pub fault_ka: Option<f64>,
+    /// Capacidad interruptiva del interruptor, en kA, si se capturó.
+    pub interrupting_ka: Option<f64>,
     /// Procedimiento paso a paso de este tramo.
     pub steps: Vec<Step>,
 }
@@ -149,6 +158,8 @@ pub struct PanelResult {
     pub demanded_va: f64,
     /// Renglones de la carga calculada: grupo, conectada, factor y calculada.
     pub demand: Vec<DemandLine>,
+    /// Corriente de cortocircuito en las barras del tablero, en kA.
+    pub fault_ka: Option<f64>,
     pub power_factor: f64,
     /// Carga conectada por fase, en VA: A, B y C.
     pub phase_va: [f64; 3],
@@ -168,6 +179,11 @@ pub struct ProjectResult {
     pub not_evaluated: usize,
     /// Avisos que no cambian el estado de ningún elemento.
     pub warnings: Vec<String>,
+    /// Corriente de cortocircuito de la fuente, en kA, con la aportación de
+    /// los motores.
+    pub source_fault_ka: Option<f64>,
+    /// Aportación de los motores a la falla, en kA.
+    pub motor_fault_ka: Option<f64>,
     /// Cálculo, verificación normativa y aprobación profesional, por separado.
     pub verdict: Verdict,
 }
@@ -616,6 +632,8 @@ fn size_run(
         drop_v: drop.drop_v,
         drop_percent: drop.drop_percent,
         cumulative_drop_percent,
+        fault_ka: None,
+        interrupting_ka: None,
         steps,
     };
     Ok((run, checks))
@@ -689,6 +707,7 @@ struct Context<'a> {
     loads: Vec<PanelLoad>,
     results: Vec<Option<PanelResult>>,
     warnings: Vec<String>,
+    source_fault: Option<Result<SourceFault, String>>,
 }
 
 fn validate(project: &Project) -> Result<(), String> {
@@ -814,7 +833,7 @@ impl<'a> Context<'a> {
         load
     }
 
-    fn compute(&mut self, index: usize, upstream_drop_percent: f64) {
+    fn compute(&mut self, index: usize, upstream_drop_percent: f64, upstream: Upstream) {
         let project = self.project;
         let panel: &Panel = &project.panels[index];
         let settings = &project.settings;
@@ -859,6 +878,31 @@ impl<'a> Context<'a> {
             }
             _ => None,
         };
+        // Capacidad interruptiva del interruptor del alimentador, con la falla
+        // del punto de donde sale.
+        let feeder_fault_check = match &upstream {
+            Upstream::NoData => panel.parent.is_none().then(|| missing_source(self.profile)),
+            Upstream::Unknown(reason) => {
+                Some(interrupting_check(self.profile, Err(reason.clone()), None))
+            }
+            Upstream::Known {
+                fault_a,
+                rating_ka,
+                place,
+                ..
+            } => Some(interrupting_check(
+                self.profile,
+                Ok((*fault_a, place)),
+                panel.feeder.interrupting_ka.or(*rating_ka),
+            )),
+        };
+        let source = self.source_fault.as_ref().and_then(|s| s.as_ref().ok());
+        let mut bus = match &upstream {
+            Upstream::Known { .. } => {
+                Upstream::Unknown("no se calculó el alimentador del tablero".into())
+            }
+            other => other.clone(),
+        };
         let feeder = if load.connected_w > 0.0 {
             let mut outcome = size_run(
                 self.profile,
@@ -890,14 +934,67 @@ impl<'a> Context<'a> {
             }
             if let Ok((run, _)) = &mut outcome {
                 run.steps.splice(0..0, demand.steps.iter().cloned());
+                if let (
+                    Upstream::Known {
+                        impedance, fault_a, ..
+                    },
+                    Some(src),
+                ) = (&upstream, source)
+                {
+                    run.fault_ka = Some(fault_a / 1000.0);
+                    run.interrupting_ka = panel.feeder.interrupting_ka.or(match &upstream {
+                        Upstream::Known { rating_ka, .. } => *rating_ka,
+                        _ => None,
+                    });
+                    let ov = &panel.feeder.overrides;
+                    let material = ov.material.unwrap_or(settings.material);
+                    let raceway = ov.conduit.unwrap_or(settings.conduit).raceway_material();
+                    bus = match conductor_impedance(
+                        self.profile,
+                        &run.size,
+                        material,
+                        raceway,
+                        run.length_m,
+                        run.conductors_per_phase,
+                    ) {
+                        Ok(zc) => {
+                            let total = impedance.plus(zc.scaled(src.basis.loop_factor));
+                            let bus_a = fault_current_a(&src.basis, total) + src.motor_a;
+                            if panel.parent.is_none() {
+                                run.steps.extend(src.steps.iter().cloned());
+                            }
+                            let description = format!(
+                                "{} m de {}{}",
+                                crate::procedure::plain(run.length_m),
+                                if run.conductors_per_phase > 1 {
+                                    format!("{} × ", run.conductors_per_phase)
+                                } else {
+                                    String::new()
+                                },
+                                crate::procedure::size_label(&run.size)
+                            );
+                            run.steps.push(bus_step(
+                                self.profile,
+                                src,
+                                zc,
+                                total,
+                                bus_a,
+                                &description,
+                            ));
+                            Upstream::Known {
+                                impedance: total,
+                                fault_a: bus_a,
+                                rating_ka: panel.interrupting_ka,
+                                place: panel.name.clone(),
+                            }
+                        }
+                        Err(e) => unknown(&e),
+                    };
+                }
             }
-            run_result(
-                &panel.id,
-                "Alimentador",
-                demanded_w,
-                outcome,
-                vec![demand.check.clone()],
-            )
+            let mut extra = vec![demand.check.clone()];
+            extra.extend(feeder_fault_check);
+            run_result(&panel.id, "Alimentador", demanded_w, outcome, extra)
         } else {
             run_result(
                 &panel.id,
@@ -930,7 +1027,7 @@ impl<'a> Context<'a> {
                     }),
                     _ => None,
                 };
-                let outcome = size_run(
+                let mut outcome = size_run(
                     self.profile,
                     settings,
                     system,
@@ -959,6 +1056,23 @@ impl<'a> Context<'a> {
                     None => vec![],
                 };
                 extra.extend(outlet_check(self.profile, project.occupancy.as_deref(), c));
+                match &bus {
+                    Upstream::NoData => {}
+                    Upstream::Unknown(reason) => {
+                        extra.push(interrupting_check(self.profile, Err(reason.clone()), None))
+                    }
+                    Upstream::Known { fault_a, place, .. } => {
+                        if let Ok((run, _)) = &mut outcome {
+                            run.fault_ka = Some(fault_a / 1000.0);
+                            run.interrupting_ka = panel.interrupting_ka;
+                        }
+                        extra.push(interrupting_check(
+                            self.profile,
+                            Ok((*fault_a, place)),
+                            panel.interrupting_ka,
+                        ));
+                    }
+                }
                 let load_w = self.circuit_load(index, k).power_w;
                 run_result(&c.id, &c.name, load_w, outcome, extra)
             })
@@ -996,6 +1110,10 @@ impl<'a> Context<'a> {
             demanded_w,
             demanded_va: demand.demanded_va,
             demand: demand.lines,
+            fault_ka: match &bus {
+                Upstream::Known { fault_a, .. } => Some(fault_a / 1000.0),
+                _ => None,
+            },
             power_factor,
             phase_va: load.phase_va,
             imbalance_percent,
@@ -1008,7 +1126,7 @@ impl<'a> Context<'a> {
             .cloned()
             .unwrap_or_default()
         {
-            self.compute(child, panel_drop_percent);
+            self.compute(child, panel_drop_percent, bus.clone());
         }
     }
 }
@@ -1032,7 +1150,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         }
     }
     let count = project.panels.len();
-    let motors = project
+    let motors: Vec<Vec<Option<Result<MotorCircuit, Error>>>> = project
         .panels
         .iter()
         .map(|p| {
@@ -1042,6 +1160,31 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
                 .collect()
         })
         .collect();
+    let motors_va: f64 = motors
+        .iter()
+        .flatten()
+        .filter_map(|m| m.as_ref()?.as_ref().ok())
+        .map(|m| m.va)
+        .sum();
+    let source = source_fault(project, motors_va);
+    let source_fault_ka = source
+        .as_ref()
+        .and_then(|s| s.as_ref().ok())
+        .map(|s| (s.available_a + s.motor_a) / 1000.0);
+    let motor_fault_ka = source
+        .as_ref()
+        .and_then(|s| s.as_ref().ok())
+        .map(|s| s.motor_a / 1000.0);
+    let root_upstream = match &source {
+        None => Upstream::NoData,
+        Some(Err(reason)) => Upstream::Unknown(reason.clone()),
+        Some(Ok(s)) => Upstream::Known {
+            impedance: s.impedance,
+            fault_a: s.available_a + s.motor_a,
+            rating_ka: None,
+            place: project.source.name.clone(),
+        },
+    };
     let mut ctx = Context {
         project,
         profile,
@@ -1050,10 +1193,11 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         loads: vec![PanelLoad::default(); count],
         results: vec![None; count],
         warnings: Vec::new(),
+        source_fault: source,
     };
     for &root in &roots {
         ctx.aggregate(root);
-        ctx.compute(root, 0.0);
+        ctx.compute(root, 0.0, root_upstream.clone());
     }
 
     let panels: Vec<PanelResult> = ctx.results.into_iter().flatten().collect();
@@ -1082,6 +1226,8 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         not_evaluated: tally(Status::NotEvaluated),
         panels,
         warnings: ctx.warnings,
+        source_fault_ka,
+        motor_fault_ka,
         verdict,
     })
 }

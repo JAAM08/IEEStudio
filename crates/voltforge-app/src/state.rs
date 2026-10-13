@@ -38,6 +38,7 @@ pub fn empty_project() -> Project {
         source: Source {
             name: "Acometida".to_string(),
             system: System::WYE_220_127,
+            fault: Default::default(),
         },
         panels: vec![new_panel("TG-1", "Tablero general", None)],
     }
@@ -54,8 +55,10 @@ fn new_panel(id: &str, name: &str, parent: Option<String>) -> Panel {
             demand: Default::default(),
             demand_factor: None,
             has_neutral: true,
+            interrupting_ka: None,
             overrides: Overrides::default(),
         },
+        interrupting_ka: None,
         areas: vec![],
         circuits: vec![],
     }

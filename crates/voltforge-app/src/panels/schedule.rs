@@ -34,11 +34,12 @@ pub enum Col {
     Ampacity,
     Drop,
     Cumulative,
+    Fault,
     Status,
 }
 
 impl Col {
-    pub const ALL: [Col; 18] = [
+    pub const ALL: [Col; 19] = [
         Col::Id,
         Col::Name,
         Col::Kind,
@@ -56,6 +57,7 @@ impl Col {
         Col::Ampacity,
         Col::Drop,
         Col::Cumulative,
+        Col::Fault,
         Col::Status,
     ];
 
@@ -78,6 +80,7 @@ impl Col {
             Col::Ampacity => "Amp. A",
             Col::Drop => "e %",
             Col::Cumulative => "Σe %",
+            Col::Fault => "Icc kA",
             Col::Status => "Estado",
         }
     }
@@ -102,6 +105,7 @@ impl Col {
             Col::Ampacity => "Ampacidad permitida, A",
             Col::Drop => "Caída del tramo, %",
             Col::Cumulative => "Caída acumulada, %",
+            Col::Fault => "Cortocircuito en las terminales del interruptor, kA",
             Col::Status => "Estado",
         }
     }
@@ -117,6 +121,7 @@ impl Col {
                 | Col::Ampacity
                 | Col::Drop
                 | Col::Cumulative
+                | Col::Fault
         )
     }
 
@@ -148,6 +153,7 @@ impl Default for Columns {
                     !matches!(
                         c,
                         Col::Kind
+                            | Col::Fault
                             | Col::Connection
                             | Col::PowerFactor
                             | Col::Design
@@ -208,6 +214,9 @@ fn cell(col: Col, row: &Row) -> String {
         Col::Ampacity => run.map_or_else(dash, |r| format!("{:.1}", r.allowable_ampacity_a)),
         Col::Drop => run.map_or_else(dash, |r| format!("{:.2}", r.drop_percent)),
         Col::Cumulative => run.map_or_else(dash, |r| format!("{:.2}", r.cumulative_drop_percent)),
+        Col::Fault => run
+            .and_then(|r| r.fault_ka)
+            .map_or_else(dash, |k| format!("{k:.2}")),
         Col::Status => String::new(),
     }
 }

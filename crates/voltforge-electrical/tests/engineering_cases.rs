@@ -399,3 +399,78 @@ fn motor_cases() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+#[test]
+fn short_circuit_cases() {
+    use voltforge_electrical::short_circuit::{
+        conductor_impedance, fault_basis, fault_current_a, source_impedance, transformer_fault_a,
+    };
+    let text = fixture("short_circuit.csv");
+    let mut failures = Vec::new();
+    let rows = parse("short_circuit.csv", &text, |r| {
+        let id = r.text("id");
+        let system = match r.text("system").as_str() {
+            "wye_220_127" => System::WYE_220_127,
+            "wye_480_277" => System::WYE_480_277,
+            "single_127" => System::SINGLE_127,
+            "split_240_120" => System::SPLIT_240_120,
+            other => panic!("sistema desconocido: {other}"),
+        };
+        let source_a = match r.opt::<f64>("available_ka") {
+            Some(ka) => ka * 1000.0,
+            None => transformer_fault_a(
+                &system,
+                r.get("transformer_kva"),
+                r.get("transformer_impedance_percent"),
+            )
+            .unwrap(),
+        };
+        let basis = fault_basis(&system).unwrap();
+        let zs = source_impedance(&basis, source_a).unwrap();
+        let raceway = match r.text("raceway").as_str() {
+            "steel" => RacewayMaterial::Steel,
+            "pvc" => RacewayMaterial::Pvc,
+            "aluminum" => RacewayMaterial::Aluminum,
+            other => panic!("canalización desconocida: {other}"),
+        };
+        let zc = conductor_impedance(
+            nom(),
+            &Size::new(&r.text("size")),
+            material(&r.text("material")),
+            raceway,
+            r.get("length_m"),
+            r.get("conductors_per_phase"),
+        )
+        .unwrap();
+        let fault = fault_current_a(&basis, zs.plus(zc.scaled(basis.loop_factor)));
+        let tolerance: f64 = r.get("tolerance");
+        (
+            id,
+            source_a / 1000.0,
+            fault / 1000.0,
+            r.opt::<f64>("expected_source_ka"),
+            r.opt::<f64>("expected_fault_ka"),
+            tolerance,
+        )
+    });
+    assert!(rows.len() >= 5);
+    for (id, source, fault, expected_source, expected_fault, tolerance) in rows {
+        compare(
+            &mut failures,
+            &id,
+            "Icc fuente kA",
+            expected_source,
+            source,
+            tolerance,
+        );
+        compare(
+            &mut failures,
+            &id,
+            "Icc kA",
+            expected_fault,
+            fault,
+            tolerance,
+        );
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

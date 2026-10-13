@@ -107,10 +107,11 @@ pub enum Rule {
     ReceptacleDemand,
     ApplianceDemand,
     KitchenDemand,
+    InterruptingRating,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 44] = [
+    pub const ALL: [Rule; 45] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -155,6 +156,7 @@ impl Rule {
         Rule::ReceptacleDemand,
         Rule::ApplianceDemand,
         Rule::KitchenDemand,
+        Rule::InterruptingRating,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -204,6 +206,7 @@ impl Rule {
             Rule::ReceptacleDemand => "receptacle_demand",
             Rule::ApplianceDemand => "appliance_demand",
             Rule::KitchenDemand => "kitchen_demand",
+            Rule::InterruptingRating => "interrupting_rating",
         }
     }
 }

@@ -24,6 +24,7 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Motores | Corriente por las tablas 430-248 y 430-250, conductor al 125 %, interruptor por la Tabla 430-52, relevador de sobrecarga y alimentadores con el 25 % del motor mayor (430-24) |
 | Carga del alimentador | Artículo 220: tipo de inmueble y áreas de cada tablero, carga mínima de alumbrado por m² (Tabla 220-12), 180 VA por salida de contacto, factores de demanda de alumbrado (220-42), contactos (220-44), aparatos fijos de vivienda (220-53) y equipo de cocina (220-56), con el detalle de cada grupo |
 | Aire acondicionado | Con la ampacidad mínima y la protección máxima de la placa, o con la corriente de carga nominal del compresor (artículo 440) |
+| Cortocircuito | Corriente de falla en cada tablero por el método de impedancias, desde el dato de la compañía o el transformador, con aportación de motores; capacidad interruptiva de cada interruptor (110-9) |
 | Puesta a tierra | Tabla 250-122, con el incremento proporcional cuando el conductor de fase se sobredimensiona |
 | Tubería conduit | EMT, IMC, RMC y PVC cédula 40 y 80; ocupación de 53, 31 y 40 % según el número de conductores, niples al 60 % y verificación de atascamiento |
 

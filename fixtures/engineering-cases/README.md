@@ -11,6 +11,7 @@ los ejecutan todos.
 | `conductor_sizing.csv` | Corriente de diseño, interruptor, calibre, ampacidad permitida y puesta a tierra |
 | `conduit.csv` | Área de conductores, ocupación permitida y tamaño del tubo |
 | `motors.csv` | Corriente de motores y motocompresores, conductor, interruptor y calibre |
+| `short_circuit.csv` | Corriente de cortocircuito de la fuente y al final de un tramo, por el método de impedancias |
 | `feeder_load.csv` | Carga del alimentador según el artículo 220: mínimas por área y factores de demanda. Las cargas de varios circuitos se separan con `;`. Los ejecuta `voltforge-project` (`tests/engineering_cases.rs`) |
 
 Columnas comunes:

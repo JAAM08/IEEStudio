@@ -364,6 +364,8 @@ pub fn fixed_label(ui: &mut egui::Ui, p: &Palette, label: &str) {
 fn step_group(title: &str) -> &'static str {
     if title.starts_with("Carga") {
         "Carga (artículo 220)"
+    } else if title.starts_with("Cortocircuito") {
+        "Cortocircuito"
     } else if title.starts_with("Corriente") {
         "Corriente"
     } else if title.starts_with("Interruptor") || title.starts_with("Relevador") {

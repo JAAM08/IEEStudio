@@ -281,11 +281,18 @@ fn draw_panel(
     painter.line((x0 + 10.0, bus_y), (bus_end, bus_y), 4.0);
     painter.text(
         (bus_end, bus_y - 8.0),
-        format!(
-            "{} · {:.0} W",
-            shorten(&panel.name, 30),
-            panel_result.demanded_w
-        ),
+        match panel_result.fault_ka {
+            Some(ka) => format!(
+                "{} · {:.0} W · Icc {ka:.2} kA",
+                shorten(&panel.name, 30),
+                panel_result.demanded_w
+            ),
+            None => format!(
+                "{} · {:.0} W",
+                shorten(&panel.name, 30),
+                panel_result.demanded_w
+            ),
+        },
         Font::Bold,
         Ink::Accent,
         Anchor::End,

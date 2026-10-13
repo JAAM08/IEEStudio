@@ -357,6 +357,28 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                         format!("{} ({} VA/m², Tabla 220-12)", o.label, o.va_per_m2)
                     }),
             ),
+            ("Cortocircuito de la fuente", {
+                let motors = result
+                    .motor_fault_ka
+                    .filter(|m| *m > 0.0)
+                    .map_or(String::new(), |m| {
+                        format!(", más {:.2} kA de aportación de motores", m)
+                    });
+                match (result.source_fault_ka, &project.source.fault) {
+                        (Some(ka), f) if f.available_ka.is_some() => format!(
+                            "{ka:.2} kA: {} kA disponibles (dato de la compañía suministradora){motors}",
+                            f.available_ka.unwrap_or_default()
+                        ),
+                        (Some(ka), f) => format!(
+                            "{ka:.2} kA: transformador de {} kVA con {} % de impedancia{motors}",
+                            f.transformer_kva.unwrap_or_default(),
+                            f.transformer_impedance_percent.unwrap_or_default()
+                        ),
+                        (None, _) => {
+                            "Sin datos: no se verificó la capacidad interruptiva".to_string()
+                        }
+                    }
+            }),
             ("Conductor", capitalize(material_name(s.material))),
             ("Aislamiento", insulation_name(s.insulation).to_string()),
             ("Canalización", s.conduit.to_string()),
@@ -426,6 +448,9 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     for panel in &result.panels {
         let _ = writeln!(out, "\n== Cuadro de cargas · #{};", q(&panel.name));
         let [a, b, c] = panel.phase_va;
+        let fault = panel.fault_ka.map_or(String::new(), |ka| {
+            format!(" Corriente de cortocircuito en barras: {ka:.2} kA.")
+        });
         let balance = match panel.imbalance_percent {
             Some(i) => format!(
                 " Carga por fase: A {a:.0} VA, B {b:.0} VA, C {c:.0} VA; desbalance de {i:.1} %."
@@ -436,7 +461,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             out,
             "#text(fill: gris, {})",
             q(&format!(
-                "Carga conectada de {:.0} W y carga calculada del alimentador de {:.0} VA ({:.0} W, factor resultante {:.2}), factor de potencia {:.2}.{balance}",
+                "Carga conectada de {:.0} W y carga calculada del alimentador de {:.0} VA ({:.0} W, factor resultante {:.2}), factor de potencia {:.2}.{balance}{fault}",
                 panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
             ))
         );

@@ -4,7 +4,7 @@
 use voltforge_core::{CircuitKind, Size, System};
 use voltforge_project::{
     calculate, example, Area, Circuit, Demand, Feeder, Load, LoadKind, Overrides, Panel, Project,
-    RunResult, Status,
+    RunResult, SourceFault, Status,
 };
 
 fn close(actual: f64, expected: f64) {
@@ -167,8 +167,10 @@ fn industrial() -> Project {
                 demand: Demand::Custom(0.8),
                 demand_factor: None,
                 has_neutral: true,
+                interrupting_ka: None,
                 overrides: Overrides::default(),
             },
+            interrupting_ka: None,
             areas: vec![],
             circuits: vec![],
         },
@@ -182,8 +184,10 @@ fn industrial() -> Project {
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: false,
+                interrupting_ka: None,
                 overrides: Overrides::default(),
             },
+            interrupting_ka: None,
             areas: vec![],
             circuits: vec![Circuit {
                 id: "F-01".to_string(),
@@ -264,6 +268,9 @@ fn a_case_the_tables_do_not_cover_is_not_evaluated() {
     // Un circuito trifásico en un servicio de una fase no se puede calcular.
     let mut project = example::house();
     project.source.system = System::SINGLE_127;
+    // Sin datos de cortocircuito: aquí solo interesa el caso que no cubren
+    // las tablas.
+    project.source.fault = Default::default();
     let result = calculate(&project).unwrap();
     let panel = &result.panels[0];
     assert_eq!(panel.feeder.status, Status::NotEvaluated);
@@ -282,13 +289,13 @@ fn every_run_carries_its_procedure() {
     let panel = &result.panels[0];
     for item in std::iter::once(&panel.feeder).chain(&panel.circuits) {
         let run = item.run.as_ref().unwrap();
-        // El alimentador empieza con su carga según el artículo 220.
-        let skip = run
+        // El alimentador empieza con su carga según el artículo 220 y
+        // termina con el cortocircuito.
+        let steps: Vec<_> = run
             .steps
             .iter()
-            .take_while(|s| s.title.starts_with("Carga"))
-            .count();
-        let steps = &run.steps[skip..];
+            .filter(|s| !s.title.starts_with("Carga") && !s.title.starts_with("Cortocircuito"))
+            .collect();
         assert_eq!(steps.len(), 12, "{}", item.id);
         assert!(
             [
@@ -411,8 +418,10 @@ fn motor_panel() -> Project {
             demand: Demand::Article220,
             demand_factor: None,
             has_neutral: false,
+            interrupting_ka: Some(10.0),
             overrides: Overrides::default(),
         },
+        interrupting_ka: Some(10.0),
         areas: vec![Area {
             description: "Nave".to_string(),
             occupancy: None,
@@ -535,4 +544,82 @@ fn a_motor_without_data_is_not_evaluated() {
     let result = calculate(&project).unwrap();
     let m10 = circuit(&result.panels[0].circuits, "M-10");
     assert_eq!(m10.status, Status::NotEvaluated);
+}
+
+/// 110-9: cada interruptor se compara con la corriente de falla en sus
+/// terminales de línea: el del alimentador, con la del punto de donde sale; los
+/// de los circuitos, con la de su tablero.
+#[test]
+fn interrupting_rating_follows_the_fault_downstream() {
+    let mut project = industrial();
+    project.source.fault = SourceFault {
+        available_ka: Some(25.0),
+        ..SourceFault::default()
+    };
+    project.panels[0].feeder.interrupting_ka = Some(35.0);
+    project.panels[0].interrupting_ka = Some(22.0);
+    let result = calculate(&project).unwrap();
+    close(result.source_fault_ka.unwrap(), 25.0);
+    let general = result.panels.iter().find(|p| p.id == "TGN").unwrap();
+    let force = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
+    let g = general.fault_ka.unwrap();
+    let f = force.fault_ka.unwrap();
+    assert!(g < 25.0 && f < g, "{g} {f}");
+    let rating = |item: &RunResult| {
+        item.checks
+            .iter()
+            .find(|c| c.name == "Capacidad interruptiva")
+            .unwrap()
+            .clone()
+    };
+    // El general sale de la fuente con 25 kA: 35 kA cumple.
+    assert_eq!(rating(&general.feeder).status, Status::Complies);
+    close(general.feeder.run.as_ref().unwrap().fault_ka.unwrap(), 25.0);
+    // El de fuerza sale del general: toma sus 22 kA.
+    assert_eq!(rating(&force.feeder).status, Status::Complies);
+    close(force.feeder.run.as_ref().unwrap().fault_ka.unwrap(), g);
+    // Los circuitos del tablero de fuerza no tienen capacidad capturada.
+    let oven = circuit(&force.circuits, "F-01");
+    assert_eq!(rating(oven).status, Status::NotEvaluated);
+    assert!(rating(oven).detail.contains("falta la capacidad"));
+
+    // Con interruptores de menos capacidad que la falla del tablero general,
+    // el alimentador de fuerza no cumple.
+    project.panels[0].interrupting_ka = Some(g / 2.0);
+    project.panels[1].interrupting_ka = Some(65.0);
+    let result = calculate(&project).unwrap();
+    let force = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
+    assert_eq!(rating(&force.feeder).status, Status::Fails);
+    assert_eq!(
+        rating(circuit(&force.circuits, "F-01")).status,
+        Status::Complies
+    );
+
+    // Sin datos de la fuente solo el alimentador principal lo señala.
+    project.source.fault = SourceFault::default();
+    let result = calculate(&project).unwrap();
+    let general = result.panels.iter().find(|p| p.id == "TGN").unwrap();
+    let force = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
+    assert_eq!(rating(&general.feeder).status, Status::NotEvaluated);
+    assert!(force
+        .feeder
+        .checks
+        .iter()
+        .all(|c| c.name != "Capacidad interruptiva"));
+    assert!(result.source_fault_ka.is_none());
+}
+
+/// La corriente en el tablero sale de la impedancia de la fuente más la del
+/// alimentador, con la resistencia a 25 °C, más la aportación de motores.
+#[test]
+fn bus_fault_adds_the_feeder_impedance() {
+    let result = calculate(&example::house()).unwrap();
+    let panel = &result.panels[0];
+    // Fuente: 75 kVA, 3.5 %, 220 V: 5623.54 A; Zf = j 127.017 / 5623.54.
+    // Alimentador: 12 m de 10 AWG en acero, R = 3.9 Ω/km a 75 °C
+    // (3.2702 a 25 °C), X = 0.207 Ω/km: 0.039242 + j 0.002484 Ω.
+    // Icc = 127.017 / |0.039242 + j 0.025071| = 2727.5 A, más 4 veces la
+    // corriente de los motores: 4 · 3770.3 / (3 · 127.017) = 39.6 A.
+    close(result.source_fault_ka.unwrap(), 5.66314);
+    close(panel.fault_ka.unwrap(), 2.76722);
 }

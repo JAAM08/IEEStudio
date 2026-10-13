@@ -24,6 +24,8 @@
 - Carga de los alimentadores según el artículo 220: tipo de inmueble, áreas
   por tablero, mínimas de alumbrado y de contactos, y factores de demanda por
   grupo (ver la decisión 0012).
+- Cortocircuito en cada tablero y capacidad interruptiva de cada interruptor
+  (110-9, 110-10; ver la decisión 0013).
 - Instalador de Windows (Inno Setup) con ícono, accesos directos y la
   extensión `.vfp`; una etiqueta `v*` publica la versión en GitHub. El
   programa abre el último proyecto usado y recuerda los recientes.
@@ -33,21 +35,19 @@
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.
 
-1. Cortocircuito y capacidad interruptiva (110-9 y 110-10).
-2. Datos del proyecto en la memoria (cliente, ubicación, responsable, cédula,
+1. Datos del proyecto en la memoria (cliente, ubicación, responsable, cédula,
    revisión) e importar y exportar el cuadro de cargas en Excel.
-3. Transformador y acometida en media tensión (artículo 450); conductor del
-   electrodo de puesta a tierra (250-66); balanceo automático de fases;
-   paralelos automáticos dentro del proyecto; deshacer y rehacer; unifilar en
-   DXF; pasar un cálculo rápido al proyecto; lo que falta del artículo 220
-   (estufas y secadoras, calefacción, neutro del alimentador, métodos
-   opcionales).
-4. Servidor MCP para agentes.
-5. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).
+2. Deshacer y rehacer; paralelos automáticos dentro del proyecto; unifilar en
+   DXF; pasar un cálculo rápido al proyecto.
+3. Servidor MCP para agentes.
+4. Revisión de los casos de `fixtures/` por un ingeniero (`reviewed_by`).
    Requisito para la beta.
 
-## Fuera del alcance de la versión 0.1
+## Después de la 1.0
 
-Cortocircuito y capacidad interruptiva,
-coordinación, transformador y media tensión, charola, sistema fotovoltaico,
-sistemas de tierra y otros perfiles normativos.
+Transformador y acometida en media tensión (artículo 450); conductor del
+electrodo de puesta a tierra (250-66); balanceo automático de fases; lo que
+falta del artículo 220 (estufas y secadoras, calefacción, neutro del
+alimentador, métodos opcionales); falla de fase a tierra; coordinación de
+protecciones; charola; sistemas fotovoltaicos; sistemas de tierra y otros
+perfiles normativos.

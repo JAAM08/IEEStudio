@@ -145,6 +145,26 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Sistema", |ui| {
         changed |= combo(ui, "sistema", &mut project.source.system, &SYSTEMS);
     });
+    section(ui, p, "Cortocircuito de la fuente");
+    ui.label(
+        muted(
+            p,
+            "La corriente disponible que da la compañía suministradora o, si no la tienes, los datos del transformador.",
+        )
+        .size(11.0),
+    );
+    let fault = &mut project.source.fault;
+    property(ui, p, "Icc disponible", |ui| {
+        changed |= optional_number(ui, &mut fault.available_ka, 10.0, " kA");
+    })
+    .on_hover_text("Corriente de cortocircuito simétrica en el punto de conexión. Si la capturas, manda sobre el transformador.");
+    property(ui, p, "Transformador", |ui| {
+        changed |= optional_number(ui, &mut fault.transformer_kva, 75.0, " kVA");
+    });
+    property(ui, p, "Impedancia", |ui| {
+        changed |= optional_number(ui, &mut fault.transformer_impedance_percent, 3.5, " %");
+    })
+    .on_hover_text("Impedancia de placa del transformador. Se toma el primario como fuente infinita: da la corriente mayor.");
 
     let s = &mut project.settings;
     section(ui, p, "Criterios de diseño");
@@ -160,6 +180,10 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Temp. ambiente", |ui| {
         changed |= number(ui, &mut s.ambient_c, 1.0, 0.0, 85.0, " °C");
     });
+    property(ui, p, "Aporte de motores", |ui| {
+        changed |= number(ui, &mut s.motor_fault_multiplier, 0.5, 0.0, 10.0, " × In");
+    })
+    .on_hover_text("Los motores alimentan la falla con varias veces su corriente a plena carga. Se suma la de todos los motores en cada tablero, del lado seguro.");
     property(ui, p, "Conductor", |ui| {
         changed |= combo(ui, "material", &mut s.material, &MATERIALS);
     });
@@ -228,6 +252,10 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
     property(ui, p, "Nombre", |ui| {
         changed |= ui.text_edit_singleline(&mut panel.name).changed();
     });
+    property(ui, p, "Cap. interruptiva", |ui| {
+        changed |= optional_number(ui, &mut panel.interrupting_ka, 10.0, " kA");
+    })
+    .on_hover_text("De los interruptores de este tablero: los de sus circuitos y los de los alimentadores de sus subtableros (110-9).");
     property(ui, p, "Se alimenta de", |ui| {
         let current = panel.parent.clone().unwrap_or_else(|| source_name.clone());
         egui::ComboBox::from_id_salt("padre")
@@ -257,6 +285,14 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
     changed |= ui
         .checkbox(&mut panel.feeder.has_neutral, "Lleva neutro")
         .changed();
+    property(ui, p, "Cap. interruptiva", |ui| {
+        changed |= optional_number(ui, &mut panel.feeder.interrupting_ka, 10.0, " kA");
+    })
+    .on_hover_text(if panel.parent.is_some() {
+        "Del interruptor de este alimentador. Sin dato, toma la del tablero de donde sale."
+    } else {
+        "Del interruptor de este alimentador, en la fuente."
+    });
 
     section(ui, p, "Carga del alimentador");
     property(ui, p, "Factor de demanda", |ui| {
@@ -884,6 +920,24 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     result_row(ui, p, "Tubo", conduit, calc);
     if let Some(c) = &run.conduit {
         result_row(ui, p, "Ocupación", format!("{:.1} %", c.fill_percent), calc);
+    }
+    if let Some(fault) = run.fault_ka {
+        section(ui, p, "Cortocircuito");
+        result_row(
+            ui,
+            p,
+            "Disponible",
+            format!("{fault:.2} kA"),
+            Source::Calculated,
+        );
+        result_row(
+            ui,
+            p,
+            "Cap. interruptiva",
+            run.interrupting_ka
+                .map_or("Sin capturar".to_string(), |k| format!("{k} kA")),
+            Source::Calculated,
+        );
     }
     section(ui, p, "Caída de tensión");
     result_row(

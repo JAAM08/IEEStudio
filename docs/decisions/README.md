@@ -18,5 +18,6 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0010 | [Interfaz por paneles acoplables y espacios de trabajo](0010-interfaz-profesional.md) | Aceptada |
 | 0011 | [Motores y motocompresores](0011-motores.md) | Aceptada |
 | 0012 | [Carga de los alimentadores según el artículo 220](0012-carga-articulo-220.md) | Aceptada |
+| 0013 | [Cortocircuito y capacidad interruptiva](0013-cortocircuito.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

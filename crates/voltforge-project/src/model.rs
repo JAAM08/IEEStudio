@@ -10,8 +10,8 @@ use voltforge_core::{CircuitKind, ConduitType, Material, MotorType, Size, System
 
 /// Versión del formato de archivo. La 2 agrega los datos de motores y
 /// motocompresores y el interruptor fijado. La 3 agrega el tipo de inmueble,
-/// las áreas de cada tablero, los contactos y el método de demanda del
-/// alimentador. Lee los archivos de la 1 y la 2.
+/// las áreas de cada tablero, los contactos, el método de demanda del
+/// alimentador y los datos de cortocircuito. Lee los archivos de la 1 y la 2.
 pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -55,6 +55,9 @@ pub struct Settings {
     pub include_iec_ratings: bool,
     /// Desbalance entre fases a partir del cual se emite un aviso, en porciento.
     pub imbalance_warning_percent: f64,
+    /// Aportación de los motores a la corriente de cortocircuito, en veces su
+    /// corriente a plena carga.
+    pub motor_fault_multiplier: f64,
 }
 
 impl Default for Settings {
@@ -72,6 +75,7 @@ impl Default for Settings {
             resistance_temperature_c: None,
             include_iec_ratings: false,
             imbalance_warning_percent: 5.0,
+            motor_fault_multiplier: 4.0,
         }
     }
 }
@@ -81,6 +85,25 @@ impl Default for Settings {
 pub struct Source {
     pub name: String,
     pub system: System,
+    /// Datos para la corriente de cortocircuito de la fuente.
+    #[serde(default)]
+    pub fault: SourceFault,
+}
+
+/// Corriente de cortocircuito de la fuente: el dato de la compañía
+/// suministradora o el transformador. Si están los dos, manda el primero.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SourceFault {
+    /// Corriente simétrica disponible en el punto de conexión, en kA.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub available_ka: Option<f64>,
+    /// Potencia del transformador, en kVA.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transformer_kva: Option<f64>,
+    /// Impedancia del transformador, en porciento.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transformer_impedance_percent: Option<f64>,
 }
 
 /// Fase de un sistema.
@@ -106,6 +129,10 @@ pub struct Panel {
     /// carga mínima de alumbrado (220-12). Las de sus subtableros se suman.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub areas: Vec<Area>,
+    /// Capacidad interruptiva de los interruptores de este tablero, en kA:
+    /// los de sus circuitos y los de los alimentadores de sus subtableros.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupting_ka: Option<f64>,
     #[serde(default)]
     pub circuits: Vec<Circuit>,
 }
@@ -147,6 +174,10 @@ pub struct Feeder {
     /// El alimentador lleva neutro.
     #[serde(default = "yes")]
     pub has_neutral: bool,
+    /// Capacidad interruptiva del interruptor del alimentador, en kA. `None`
+    /// toma la del tablero de donde sale.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupting_ka: Option<f64>,
     #[serde(default)]
     pub overrides: Overrides,
 }
