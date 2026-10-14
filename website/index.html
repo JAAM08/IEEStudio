@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IEEStudio</title>
+<meta name="description" content="Programa gratuito y de código abierto para calcular instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012: cuadro de cargas, conductores, protecciones, caída de tensión, cortocircuito, diagrama unifilar y memoria de cálculo.">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="imagenes/icono-64.png">
+<link rel="apple-touch-icon" href="imagenes/icono-256.png">
+<meta property="og:title" content="IEEStudio">
+<meta property="og:description" content="Cálculo de instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012, con cada paso a la vista. Gratuito y de código abierto.">
+<meta property="og:image" content="https://ieestudio.com/imagenes/principal.png">
+<meta property="og:url" content="https://ieestudio.com/">
+<style>
+@font-face { font-family: "Plex Sans"; src: url("fuentes/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Plex Sans"; src: url("fuentes/IBMPlexSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Plex Mono"; src: url("fuentes/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+
+:root {
+  --paper: #f3f4f6;
+  --surface: #ffffff;
+  --ink: #1b1e23;
+  --muted: #565d69;
+  --line: #d6d9de;
+  --volt: #f5c518;
+  --on-volt: #1b1e23;
+  --ok: #17824a;
+  --fail: #c23a3a;
+  --pending: #9a6400;
+  --panel: #1e2126;
+  --panel-raise: #272b31;
+  --panel-line: #353a42;
+  --panel-text: #e6e8eb;
+  --panel-muted: #9aa1ac;
+  --panel-ok: #4cc38a;
+  --panel-fail: #ef6461;
+  --panel-pending: #e5a83b;
+  --focus: #2f6fe0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15171b;
+    --surface: #1c1f24;
+    --ink: #e8eaed;
+    --muted: #a3a9b3;
+    --line: #30343b;
+    --ok: #4cc38a;
+    --fail: #ef6461;
+    --pending: #e5a83b;
+    --panel: #1f2328;
+    --panel-raise: #262a30;
+    --panel-line: #3a3f47;
+    --focus: #79a7ff;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15171b; --surface: #1c1f24; --ink: #e8eaed; --muted: #a3a9b3; --line: #30343b;
+  --ok: #4cc38a; --fail: #ef6461; --pending: #e5a83b; --panel: #1f2328; --panel-raise: #262a30;
+  --panel-line: #3a3f47; --focus: #79a7ff;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.0625rem/1.6 "Plex Sans", system-ui, sans-serif;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-weight: 600; line-height: 1.15; margin: 0; }
+p { margin: 0; }
+code, .mono { font-family: "Plex Mono", ui-monospace, monospace; font-size: 0.92em; }
+
+.wrap { max-width: 1140px; margin: 0 auto; padding-inline: 24px; }
+
+/* Encabezado */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 20px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 1.125rem; text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+.top nav { display: flex; gap: 22px; font-size: 0.95rem; }
+.top nav a { text-decoration: none; color: var(--muted); }
+.top nav a:hover { color: var(--ink); }
+
+/* Portada */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr); gap: 56px; align-items: center; padding-block: 56px 72px; }
+.hero h1 { font-size: clamp(2.25rem, 4.6vw, 3.5rem); letter-spacing: -0.022em; max-width: 13em; }
+.hero .lead { margin-top: 22px; font-size: 1.1875rem; color: var(--muted); max-width: 34em; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 1rem; border: 1px solid transparent; }
+.btn-volt { background: var(--volt); color: var(--on-volt); }
+.btn-volt:hover { background: #ffd43a; }
+.btn-plain { border-color: var(--line); background: var(--surface); }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.release { margin-top: 16px; font-size: 0.9375rem; color: var(--muted); max-width: 34em; }
+.release strong { color: var(--ink); font-weight: 600; }
+
+/* Procedimiento, tal como lo muestra el programa */
+.proc {
+  background: var(--panel); color: var(--panel-text); border-radius: 12px; border: 1px solid var(--panel-line);
+  box-shadow: 0 30px 60px -30px rgba(15, 18, 22, 0.55);
+  font-size: 0.9375rem; overflow: hidden;
+}
+.proc-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; padding: 16px 20px; border-bottom: 1px solid var(--panel-line); }
+.proc-head b { font-weight: 600; }
+.proc-head span { color: var(--panel-muted); font-size: 0.875rem; }
+.proc ol { list-style: none; margin: 0; padding: 6px 20px 8px; counter-reset: paso; }
+.proc li { position: relative; padding: 14px 0 14px 30px; counter-increment: paso; }
+.proc li + li { border-top: 1px solid var(--panel-line); }
+.proc li::before { content: counter(paso); position: absolute; left: 0; top: 14px; color: var(--volt); font-weight: 600; }
+.proc h3 { font-size: 0.9375rem; }
+.proc .f { font-family: "Plex Mono", ui-monospace, monospace; color: var(--panel-muted); margin-top: 4px; font-size: 0.875rem; overflow-wrap: anywhere; }
+.proc .s { font-family: "Plex Mono", ui-monospace, monospace; margin-top: 2px; font-size: 0.875rem; overflow-wrap: anywhere; }
+.proc .n { color: var(--panel-muted); margin-top: 4px; font-size: 0.875rem; }
+.proc .ref { color: var(--panel-muted); margin-top: 6px; font-size: 0.8125rem; }
+.proc .bad { color: var(--panel-fail); }
+.proc-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; padding: 14px 20px; background: var(--panel-raise); border-top: 1px solid var(--panel-line); }
+.proc-foot .verdict { display: inline-flex; align-items: center; gap: 6px; color: var(--panel-fail); font-weight: 600; }
+.proc-foot .fix { color: var(--panel-text); font-size: 0.875rem; }
+.proc-foot .fix b { color: var(--volt); font-weight: 600; }
+.icon { width: 16px; height: 16px; flex: none; }
+
+/* Secciones */
+section.block { padding: 72px 0; border-top: 1px solid var(--line); }
+section.block > .wrap > h2 { font-size: clamp(1.625rem, 3vw, 2.125rem); letter-spacing: -0.015em; max-width: 22em; }
+.intro { margin-top: 14px; color: var(--muted); max-width: 40em; }
+
+.shot { margin-top: 36px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--panel); }
+.shot-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.shot-pair .shot { margin-top: 0; }
+figure { margin: 0; }
+figcaption { margin-top: 10px; font-size: 0.9375rem; color: var(--muted); }
+
+/* Qué calcula */
+.calc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 56px; margin-top: 36px; }
+.calc div { padding: 18px 0; border-top: 1px solid var(--line); }
+.calc dt { font-weight: 600; }
+.calc dd { margin: 4px 0 0; color: var(--muted); font-size: 1rem; }
+
+/* Veredictos */
+.verdicts { margin-top: 36px; display: grid; gap: 14px; }
+.v { display: grid; grid-template-columns: 170px minmax(0, 1fr) minmax(0, 1.1fr); gap: 24px; align-items: start; padding: 22px 24px; background: var(--surface); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; }
+.v.ok { border-left-color: var(--ok); }
+.v.fail { border-left-color: var(--fail); }
+.v.pending { border-left-color: var(--pending); border-left-style: dashed; }
+.v .name { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.v.ok .name { color: var(--ok); }
+.v.fail .name { color: var(--fail); }
+.v.pending .name { color: var(--pending); }
+.v .what { color: var(--ink); }
+.v .eg { color: var(--muted); font-size: 0.9375rem; }
+.v .eg .mono { color: var(--ink); }
+.approval { margin-top: 28px; padding: 22px 24px; border-radius: 8px; background: var(--panel); color: var(--panel-text); max-width: 46em; }
+.approval b { color: var(--volt); font-weight: 600; }
+
+/* Instalación */
+.steps { margin: 36px 0 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 0; max-width: 46em; }
+.steps li { counter-increment: s; position: relative; padding: 18px 0 18px 52px; border-top: 1px solid var(--line); }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 16px; width: 32px; height: 32px; border-radius: 50%; background: var(--volt); color: var(--on-volt); font-weight: 600; display: grid; place-items: center; font-size: 0.9375rem; }
+.steps b { font-weight: 600; }
+.steps p + p { margin-top: 6px; }
+.steps .sub { color: var(--muted); font-size: 1rem; }
+.req { margin-top: 24px; color: var(--muted); font-size: 0.9375rem; max-width: 46em; }
+
+/* Confianza */
+.trust { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 56px; margin-top: 36px; }
+.trust h3 { font-size: 1.0625rem; }
+.trust p { margin-top: 6px; color: var(--muted); font-size: 1rem; }
+.signing { margin-top: 40px; padding: 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); max-width: 46em; }
+.signing h3 { font-size: 1.0625rem; }
+.signing p, .signing ul { margin-top: 8px; color: var(--muted); font-size: 1rem; }
+.signing ul { padding-left: 1.2em; }
+.signing li + li { margin-top: 4px; }
+.signing .en { color: var(--ink); }
+
+footer { border-top: 1px solid var(--line); padding: 36px 0 48px; font-size: 0.9375rem; color: var(--muted); }
+footer .wrap { display: grid; gap: 14px; }
+footer nav { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+footer p { max-width: 52em; }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: 40px; padding-block: 32px 56px; }
+  .calc, .trust { grid-template-columns: 1fr; }
+  .v { grid-template-columns: 1fr; gap: 8px; }
+  .shot-pair { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .wrap { padding-inline: 16px; }
+  .top nav { display: none; }
+  .top { padding-block: 16px 4px; }
+  section.block { padding: 52px 0; }
+  .btn { width: 100%; justify-content: center; }
+  .proc ol, .proc-head, .proc-foot { padding-left: 16px; padding-right: 16px; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 8.2l2 2 4-4.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-fail" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-pending" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2.6 2.4"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 2v8.5M4.5 7.2L8 10.7l3.5-3.5M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-code" viewBox="0 0 16 16"><path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<header class="wrap top">
+  <a class="brand" href="./"><img src="imagenes/icono-64.png" alt="" width="30" height="30">IEEStudio</a>
+  <nav aria-label="Secciones">
+    <a href="#que-calcula">Qué calcula</a>
+    <a href="#instalar">Instalar</a>
+    <a href="#confianza">Código y firma</a>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <h1>Cálculo de instalaciones eléctricas con cada paso a la vista</h1>
+      <p class="lead">IEEStudio calcula instalaciones de baja tensión conforme a la NOM-001-SEDE-2012 y arma la memoria de cálculo. Cada resultado muestra la fórmula, los valores sustituidos y el artículo de la norma que lo respalda.</p>
+      <div class="actions">
+        <a class="btn btn-volt" id="descargar" href="https://github.com/JAAM08/IEEStudio/releases">
+          <svg aria-hidden="true"><use href="#i-down"/></svg>Descargar para Windows
+        </a>
+        <a class="btn btn-plain" href="https://github.com/JAAM08/IEEStudio">
+          <svg aria-hidden="true"><use href="#i-code"/></svg>Ver el código
+        </a>
+      </div>
+      <p class="release" id="version">Gratuito y de código abierto. Es una versión de prueba: revisa los resultados antes de usarlos en un proyecto.</p>
+    </div>
+
+    <figure class="proc" aria-label="Ejemplo del procedimiento que muestra IEEStudio">
+      <div class="proc-head"><b>C-04 Contactos sala</b><span>1,500 W, 127 V, 35 m, 12 AWG</span></div>
+      <ol>
+        <li>
+          <h3>Corriente nominal</h3>
+          <p class="f">I = P / (V · fp)</p>
+          <p class="s">I = 1,500 / (127 · 0.90) = 13.12 A</p>
+        </li>
+        <li>
+          <h3>Caída de tensión</h3>
+          <p class="f">ΔV = 2 · I · L · (R · cos θ + X · sen θ) / n</p>
+          <p class="s">ΔV = 2 · 13.12 · 0.0350 · (6.6 · 0.90 + 0.223 · 0.436) / 1 = 5.55 V</p>
+          <p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tabla 9</p>
+        </li>
+        <li>
+          <h3>Caída acumulada desde la fuente</h3>
+          <p class="s">e total = 0.68 + 4.37 = <span class="bad">5.05 %</span></p>
+          <p class="n">5.05 % es mayor que el límite de 5.00 %.</p>
+          <p class="ref">NOM-001-SEDE-2012: 210-19(a)(1), nota 4; 215-2(a)(1), nota 2</p>
+        </li>
+      </ol>
+      <div class="proc-foot">
+        <span class="verdict"><svg class="icon" aria-hidden="true"><use href="#i-fail"/></svg>No cumple</span>
+        <span class="fix">Con <b>10 AWG</b> cumple. Se aplica con un clic.</span>
+      </div>
+    </figure>
+  </div>
+
+  <section class="block" aria-labelledby="t-programa">
+    <div class="wrap">
+      <h2 id="t-programa">Un solo modelo de la instalación, del cuadro de cargas a la memoria</h2>
+      <p class="intro">Capturas la fuente, los tableros y los circuitos una vez. El cuadro de cargas, el diagrama unifilar y la memoria en PDF salen de ese mismo modelo y se recalculan con cada cambio.</p>
+      <figure>
+        <div class="shot"><img src="imagenes/principal.png" width="1280" height="900" alt="Ventana de IEEStudio con el cuadro de cargas de una casa habitación, el procedimiento del alimentador y sus propiedades." loading="lazy"></div>
+        <figcaption>Cuadro de cargas con el estado de cada circuito, el procedimiento del tramo seleccionado y sus datos.</figcaption>
+      </figure>
+      <div class="shot-pair">
+        <figure>
+          <div class="shot"><img src="imagenes/unifilar.png" width="1280" height="900" alt="Diagrama unifilar generado por IEEStudio con la acometida, el tablero y seis circuitos." loading="lazy"></div>
+          <figcaption>El diagrama unifilar se dibuja solo y se exporta a DXF para AutoCAD.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img src="imagenes/rapido.png" width="1280" height="900" alt="Cálculo rápido de un circuito en IEEStudio." loading="lazy"></div>
+          <figcaption>Cálculo rápido de un circuito, sin armar un proyecto.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="que-calcula" aria-labelledby="t-calcula">
+    <div class="wrap">
+      <h2 id="t-calcula">Qué calcula</h2>
+      <dl class="calc">
+        <div><dt>Conductores y protecciones</dt><dd>Menor calibre que cumple por terminales, temperatura, agrupamiento, protección y caída de tensión, y te dice cuál de esos criterios lo decidió. Propone conductores en paralelo cuando hace falta.</dd></div>
+        <div><dt>Caída de tensión</dt><dd>Por impedancia con la Tabla 9, por tramo y acumulada desde la fuente, con la longitud máxima permitida.</dd></div>
+        <div><dt>Carga de alimentadores</dt><dd>Artículo 220: carga mínima de alumbrado por área, contactos, aparatos fijos y equipo de cocina, con sus factores de demanda.</dd></div>
+        <div><dt>Cortocircuito</dt><dd>Corriente de falla en cada tablero por el método de impedancias, con aportación de motores, y capacidad interruptiva de cada interruptor.</dd></div>
+        <div><dt>Motores y aire acondicionado</dt><dd>Corrientes de tabla, conductor al 125 %, interruptor, relevador de sobrecarga y alimentadores con el motor mayor.</dd></div>
+        <div><dt>Transformadores</dt><dd>Hasta 600 V: primario, secundario, protección de la Tabla 450-3(b) y falla referida a través del transformador.</dd></div>
+        <div><dt>Puesta a tierra y tubería</dt><dd>Conductor de puesta a tierra y del electrodo, ocupación de tubo conduit EMT, IMC, RMC y PVC.</dd></div>
+        <div><dt>Balanceo de fases</dt><dd>Reparte los circuitos de un tablero entre las fases para dejarlo lo más balanceado posible.</dd></div>
+        <div><dt>Memoria de cálculo en PDF</dt><dd>Datos de la obra, cuadro de cargas, diagrama unifilar, procedimiento de cada tramo y espacio para firmas.</dd></div>
+        <div><dt>Excel</dt><dd>El cuadro de cargas se exporta a Excel y se importa de vuelta, para capturar en la hoja que ya usas.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="t-veredicto">
+    <div class="wrap">
+      <h2 id="t-veredicto">Nunca supone un dato</h2>
+      <p class="intro">Cada circuito, alimentador y tablero queda en uno de tres estados. Si falta información o la norma no cubre el caso, el programa no inventa un valor para poder decir que cumple.</p>
+      <div class="verdicts">
+        <div class="v ok">
+          <span class="name"><svg class="icon" aria-hidden="true"><use href="#i-ok"/></svg>Cumple</span>
+          <p class="what">Se calculó con todos sus datos y pasó cada verificación.</p>
+          <p class="eg">C-01 Alumbrado planta baja: caída de <span class="mono">2.76 %</span> de <span class="mono">3.00 %</span> permitido.</p>
+        </div>
+        <div class="v fail">
+          <span class="name"><svg class="icon" aria-hidden="true"><use href="#i-fail"/></svg>No cumple</span>
+          <p class="what">Al menos una verificación falla. Dice cuál y propone alternativas ya calculadas.</p>
+          <p class="eg">C-04 Contactos sala: caída acumulada de <span class="mono">5.05 %</span> de <span class="mono">5.00 %</span> permitido.</p>
+        </div>
+        <div class="v pending">
+          <span class="name"><svg class="icon" aria-hidden="true"><use href="#i-pending"/></svg>No evaluado</span>
+          <p class="what">Falta un dato o la tabla no cubre el caso. Dice exactamente qué falta.</p>
+          <p class="eg">C-06 Bomba de agua: falta la corriente de placa del motor para ajustar el relevador de sobrecarga.</p>
+        </div>
+      </div>
+      <p class="approval">La aprobación es tuya. IEEStudio verifica contra la norma, pero nunca marca un proyecto como aprobado: <b>esa firma la da el ingeniero responsable</b>.</p>
+    </div>
+  </section>
+
+  <section class="block" id="instalar" aria-labelledby="t-instalar">
+    <div class="wrap">
+      <h2 id="t-instalar">Instalar en Windows</h2>
+      <ol class="steps">
+        <li>
+          <p><b>Descarga el instalador</b> con el botón de arriba o desde la <a href="https://github.com/JAAM08/IEEStudio/releases">página de versiones</a> en GitHub.</p>
+        </li>
+        <li>
+          <p><b>Si Windows muestra «Windows protegió su PC»</b>, elige «Más información» y luego «Ejecutar de todas formas».</p>
+          <p class="sub">Aparece porque el instalador todavía no tiene firma digital. La firma está en trámite; mientras tanto puedes comprobar cómo se compila cada instalador en la sección de abajo.</p>
+        </li>
+        <li>
+          <p><b>Abre IEEStudio</b> desde el menú Inicio. Los proyectos se guardan con la extensión <code>.iees</code> y se abren con doble clic.</p>
+          <p class="sub">Si el acceso directo aparece sin ícono, revisa en Seguridad de Windows, Historial de protección, que el antivirus no haya quitado el programa, y permítelo.</p>
+        </li>
+      </ol>
+      <p class="req">Requiere Windows 10 u 11 de 64 bits. En Linux se puede compilar desde el código fuente.</p>
+    </div>
+  </section>
+
+  <section class="block" id="confianza" aria-labelledby="t-confianza">
+    <div class="wrap">
+      <h2 id="t-confianza">Código abierto, de principio a fin</h2>
+      <div class="trust">
+        <div>
+          <h3>Puedes revisar cada cálculo</h3>
+          <p>El código, las tablas de la norma en CSV y los casos de referencia con los que se prueba están <a href="https://github.com/JAAM08/IEEStudio">publicados en GitHub</a>. Cada tabla y cada regla cita su cláusula.</p>
+        </div>
+        <div>
+          <h3>Nadie sube instaladores a mano</h3>
+          <p>Cada instalador se compila en GitHub Actions a partir del código público. El registro de cada compilación se puede consultar en el repositorio.</p>
+        </div>
+        <div>
+          <h3>Tus proyectos no salen de tu computadora</h3>
+          <p>El programa no envía información a ningún lado. Esta página no usa cookies ni rastreadores; solo consulta a GitHub cuál es la versión más reciente.</p>
+        </div>
+        <div>
+          <h3>Gratuito y libre</h3>
+          <p>Licencias MIT o Apache-2.0, a tu elección. Puedes usarlo en proyectos de tu trabajo sin costo.</p>
+        </div>
+      </div>
+
+      <div class="signing" id="firma">
+        <h3>Política de firma de código</h3>
+        <p class="en">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+        <p>Solicitud en trámite. Mientras no se apruebe, los instaladores se publican sin firma.</p>
+        <ul>
+          <li>Los instaladores se compilan en GitHub Actions desde el código público del repositorio; ningún binario se compila ni se sube a mano.</li>
+          <li>Autor y responsable de aprobar cada versión firmada: <a href="https://github.com/JAAM08">Juan Antonio Aguilar Martínez</a>.</li>
+          <li>Privacidad: el programa no transfiere información a otros sistemas en red, salvo que el usuario lo pida expresamente.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <nav aria-label="Enlaces">
+      <a href="https://github.com/JAAM08/IEEStudio">Código en GitHub</a>
+      <a href="https://github.com/JAAM08/IEEStudio/releases">Versiones</a>
+      <a href="https://github.com/JAAM08/IEEStudio/issues">Reportar un problema</a>
+      <a href="#firma">Firma de código</a>
+    </nav>
+    <p>IEEStudio es software libre bajo licencias MIT o Apache-2.0. No está afiliado a la Secretaría de Energía ni a ningún organismo de normalización; la NOM-001-SEDE-2012 se cita por artículo y su texto no se reproduce. Tipografía IBM Plex, licencia SIL OFL.</p>
+  </div>
+</footer>
+
+<script>
+// Pone en el botón el instalador de la versión más reciente publicada en
+// GitHub. Si la consulta falla, el botón lleva a la página de versiones.
+(function () {
+  var button = document.getElementById("descargar");
+  var note = document.getElementById("version");
+  fetch("https://api.github.com/repos/JAAM08/IEEStudio/releases?per_page=10", {
+    headers: { Accept: "application/vnd.github+json" }
+  })
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (releases) {
+      for (var i = 0; i < releases.length; i++) {
+        var rel = releases[i];
+        if (rel.draft) continue;
+        var assets = rel.assets || [];
+        for (var j = 0; j < assets.length; j++) {
+          if (/-instalador\.exe$/i.test(assets[j].name)) {
+            var mb = Math.round(assets[j].size / 1048576);
+            button.href = assets[j].browser_download_url;
+            var label = rel.prerelease ? "versión de prueba" : "versión estable";
+            note.innerHTML = "<strong>IEEStudio " + rel.tag_name.replace(/^v/, "") +
+              "</strong>, " + label + ", instalador de " + mb + " MB. " +
+              "Gratuito y de código abierto." +
+              (rel.prerelease ? " Revisa los resultados antes de usarlos en un proyecto." : "");
+            return;
+          }
+        }
+      }
+    })
+    .catch(function () {});
+})();
+</script>
+</body>
+</html>
