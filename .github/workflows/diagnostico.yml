@@ -1,0 +1,73 @@
+name: Diagnóstico en Windows
+
+# Instala la versión publicada en una máquina Windows limpia, la abre y
+# reúne lo que haga falta para saber por qué se cierra. No compila nada.
+on:
+  push:
+    branches: [diagnostico-windows]
+  workflow_dispatch:
+
+jobs:
+  abrir:
+    runs-on: windows-latest
+    steps:
+      - name: Descargar e instalar
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.3.0-alpha.2 -p "*instalador.exe" -R ${{ github.repository }}
+          Start-Process .\IEEStudio-0.3.0-alpha.2-instalador.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=instalacion.txt' -Wait
+          Get-ChildItem "C:\Program Files\IEEStudio" | Format-Table Name, Length
+          Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu\Programs" -Filter "IEEStudio*" | Format-Table FullName
+      - name: Línea de comandos
+        shell: pwsh
+        run: |
+          & "C:\Program Files\IEEStudio\ieestudio.exe" ejemplo prueba.iees
+          "salida: $LASTEXITCODE"
+          & "C:\Program Files\IEEStudio\ieestudio.exe" calcular prueba.iees | Select-Object -First 8
+          "salida: $LASTEXITCODE"
+      - name: Abrir la app como el acceso directo
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Captura($nombre) {
+            $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+            $bmp.Save("$PWD\$nombre.png")
+          }
+          $inicio = Get-Date
+          $p = Start-Process "C:\Program Files\IEEStudio\IEEStudio.exe" -WorkingDirectory "C:\Program Files\IEEStudio" -PassThru
+          foreach ($s in 1, 3, 8, 15) {
+            Start-Sleep -Seconds ($s - ($(Get-Date) - $inicio).TotalSeconds)
+            $p.Refresh()
+            "t=$s s, terminó: $($p.HasExited)"
+            Captura "pantalla-$s"
+          }
+          if ($p.HasExited) { "Código de salida: 0x{0:X8}" -f $p.ExitCode }
+          else { Stop-Process -Id $p.Id }
+          "--- registro de errores del programa"
+          Get-Content "$env:LOCALAPPDATA\IEEStudio\registro-errores.txt" -ErrorAction SilentlyContinue
+          "--- eventos de Windows"
+          Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $inicio.AddSeconds(-5) } -ErrorAction SilentlyContinue |
+            Where-Object { $_.ProviderName -in 'Application Error', 'Windows Error Reporting', 'Application Hang' } |
+            Format-List TimeCreated, ProviderName, Message
+      - name: Abrir con OpenGL forzado por variable de wgpu
+        shell: pwsh
+        run: |
+          $env:WGPU_BACKEND = "gl"
+          $p = Start-Process "C:\Program Files\IEEStudio\IEEStudio.exe" -PassThru
+          Start-Sleep -Seconds 10
+          $p.Refresh(); "terminó: $($p.HasExited)"
+          if ($p.HasExited) { "Código de salida: 0x{0:X8}" -f $p.ExitCode } else { Stop-Process -Id $p.Id }
+          Get-Content "$env:LOCALAPPDATA\IEEStudio\registro-errores.txt" -ErrorAction SilentlyContinue
+      - name: Guardar evidencias
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: diagnostico
+          path: |
+            *.png
+            instalacion.txt
