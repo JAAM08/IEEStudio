@@ -18,14 +18,14 @@ jobs:
         run: |
           gh release download v0.3.0-alpha.2 -p "*instalador.exe" -R ${{ github.repository }}
           Start-Process .\IEEStudio-0.3.0-alpha.2-instalador.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG=instalacion.txt' -Wait
-          Get-ChildItem "C:\Program Files\IEEStudio" | Format-Table Name, Length
-          Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu\Programs" -Filter "IEEStudio*" | Format-Table FullName
+          Get-ChildItem "$env:LOCALAPPDATA\Programs\IEEStudio" | Format-Table Name, Length
+          Get-ChildItem "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter "IEEStudio*" | Format-Table FullName
       - name: Línea de comandos
         shell: pwsh
         run: |
-          & "C:\Program Files\IEEStudio\ieestudio.exe" ejemplo prueba.iees
+          & "$env:LOCALAPPDATA\Programs\IEEStudio\ieestudio.exe" ejemplo prueba.iees
           "salida: $LASTEXITCODE"
-          & "C:\Program Files\IEEStudio\ieestudio.exe" calcular prueba.iees | Select-Object -First 8
+          & "$env:LOCALAPPDATA\Programs\IEEStudio\ieestudio.exe" calcular prueba.iees | Select-Object -First 8
           "salida: $LASTEXITCODE"
       - name: Abrir la app como el acceso directo
         shell: pwsh
@@ -39,7 +39,7 @@ jobs:
             $bmp.Save("$PWD\$nombre.png")
           }
           $inicio = Get-Date
-          $p = Start-Process "C:\Program Files\IEEStudio\IEEStudio.exe" -WorkingDirectory "C:\Program Files\IEEStudio" -PassThru
+          $p = Start-Process "$env:LOCALAPPDATA\Programs\IEEStudio\IEEStudio.exe" -WorkingDirectory "$env:LOCALAPPDATA\Programs\IEEStudio" -PassThru
           foreach ($s in 1, 3, 8, 15) {
             Start-Sleep -Seconds ($s - ($(Get-Date) - $inicio).TotalSeconds)
             $p.Refresh()
@@ -58,7 +58,7 @@ jobs:
         shell: pwsh
         run: |
           $env:WGPU_BACKEND = "gl"
-          $p = Start-Process "C:\Program Files\IEEStudio\IEEStudio.exe" -PassThru
+          $p = Start-Process "$env:LOCALAPPDATA\Programs\IEEStudio\IEEStudio.exe" -PassThru
           Start-Sleep -Seconds 10
           $p.Refresh(); "terminó: $($p.HasExited)"
           if ($p.HasExited) { "Código de salida: 0x{0:X8}" -f $p.ExitCode } else { Stop-Process -Id $p.Id }
