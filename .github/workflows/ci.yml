@@ -6,6 +6,8 @@ on:
     # Una etiqueta v* publica una versión con el instalador.
     tags: ["v*"]
   pull_request:
+  # Desde la pestaña Actions, «Run workflow» vuelve a publicar ieestudio.com.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -120,6 +122,11 @@ jobs:
           name: ieestudio-sitio
           path: target/sitio
           include-hidden-files: true
+      - name: Preparar ieestudio.com para GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/sitio
       - name: Agregar el sitio a la versión en GitHub
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -129,3 +136,21 @@ jobs:
           zip="IEEStudio-${tag#v}-sitio-web.zip"
           (cd target/sitio && zip -qr "../$zip" .)
           gh release upload "$tag" "target/$zip" --clobber
+
+  pages:
+    name: Publicar ieestudio.com
+    needs: web
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Mientras GitHub Pages no esté activado en el repositorio, este paso
+    # falla sin marcar en rojo lo demás.
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

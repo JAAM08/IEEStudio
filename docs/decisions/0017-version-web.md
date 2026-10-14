@@ -31,7 +31,9 @@ instalar nada, con los mismos cálculos.
   instante y sin internet. Cada compilación tiene su propia versión de caché.
 - **Publicación.** `tools/sitio-web.sh` arma ieestudio.com en `target/sitio`:
   la página de inicio (`website/`) y la aplicación en `/app`. La integración
-  continua lo compila después de las pruebas y lo adjunta a cada versión.
+  continua lo compila después de las pruebas, lo adjunta a cada versión y
+  lo publica en GitHub Pages con cada cambio en `main`; el dominio solo
+  apunta ahí, sin hosting de pago.
 
 ## Consecuencias
 

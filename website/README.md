@@ -14,13 +14,16 @@ La integración continua arma el sitio en cada cambio (artefacto
 `ieestudio-sitio`) y lo adjunta a cada versión como
 `IEEStudio-<versión>-sitio-web.zip`.
 
-## Publicarlo en Hostinger
+## Publicación
 
-En el Administrador de archivos, carpeta `public_html` del dominio: subir el
-zip y extraerlo ahí, de modo que `index.html` y la carpeta `app` queden
-directo en `public_html`. El `.htaccess` declara el tipo de los archivos
-`.wasm` y hace que una versión nueva llegue en cuanto se publica. Hace falta
-HTTPS (SSL) para que la aplicación se pueda instalar.
+El sitio se publica en GitHub Pages: cada cambio en `main` que pasa las
+pruebas actualiza ieestudio.com, y «Run workflow» en la pestaña Actions lo
+vuelve a publicar. El dominio se compró en Hostinger y solo apunta a GitHub
+Pages con sus registros DNS; no hay hosting contratado.
+
+Si algún día se contrata hosting, basta con extraer el zip del sitio en
+`public_html`: el `.htaccess` declara el tipo de los archivos `.wasm`. En
+cualquier caso hace falta HTTPS para que la aplicación se pueda instalar.
 
 ## Capturas
 
