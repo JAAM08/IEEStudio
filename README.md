@@ -135,6 +135,23 @@ error que explica qué falta en lugar de suponer un valor.
 - El programa separa cálculo, verificación normativa y aprobación
   profesional, y nunca da la tercera.
 
+## Code signing policy / Firma de código
+
+Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org). *(Solicitud en
+trámite: mientras no se apruebe, los instaladores se publican sin firmar y
+Windows muestra «Windows protegió su PC».)*
+
+- Los instaladores de [Releases](https://github.com/JAAM08/IEEStudio/releases)
+  se compilan en GitHub Actions a partir del código público de este
+  repositorio; ningún binario se compila ni se sube a mano.
+- Committers and approvers: [Juan Antonio Aguilar Martínez](https://github.com/JAAM08)
+  (autor y responsable de aprobar cada versión firmada).
+- Privacy policy: this program will not transfer any information to other
+  networked systems unless specifically requested by the user or the person
+  installing or operating it. IEEStudio no se conecta a internet ni recopila
+  datos; los proyectos quedan solo en los archivos que guarda el usuario.
+
 ## Responsabilidad profesional
 
 IEEStudio asiste el cálculo; no sustituye el criterio ni la firma de un
