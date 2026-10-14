@@ -1,0 +1,16 @@
+[package]
+name = "ieestudio-core"
+description = "Base común de IEEStudio: tipos, unidades, errores y validación"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# El motor no tiene dependencias obligatorias. `serde` permite guardar y leer
+# sus tipos de entrada, y lo activan los crates que manejan archivos.
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }

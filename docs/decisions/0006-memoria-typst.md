@@ -11,4 +11,4 @@ calcula nada: usa los mismos pasos (`Step`) que muestra la interfaz.
 ## Consecuencias
 
 - El ejecutable creció de 16 a 55 MB. Se reducirá al preparar el instalador.
-- Un formato DOCX editable queda como opción futura en `voltforge-reports`.
+- Un formato DOCX editable queda como opción futura en `ieestudio-reports`.

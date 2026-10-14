@@ -1,0 +1,21 @@
+[package]
+name = "ieestudio-cli"
+description = "Línea de comandos de IEEStudio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version = "1.95"
+
+[[bin]]
+name = "ieestudio"
+path = "src/main.rs"
+
+[dependencies]
+ieestudio-core = { path = "../ieestudio-core" }
+ieestudio-rules = { path = "../ieestudio-rules" }
+ieestudio-project = { path = "../ieestudio-project" }
+ieestudio-reports = { path = "../ieestudio-reports" }
+ieestudio-diagrams = { path = "../ieestudio-diagrams" }
+ieestudio-exchange = { path = "../ieestudio-exchange" }
+serde_json = "1"

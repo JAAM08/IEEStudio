@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/voltforge-core", "crates/voltforge-rules", "crates/voltforge-electrical", "crates/voltforge-project", "crates/voltforge-cli", "crates/voltforge-app", "crates/voltforge-diagrams", "crates/voltforge-reports", "crates/voltforge-exchange"]
+members = ["crates/ieestudio-core", "crates/ieestudio-rules", "crates/ieestudio-electrical", "crates/ieestudio-project", "crates/ieestudio-cli", "crates/ieestudio-app", "crates/ieestudio-diagrams", "crates/ieestudio-reports", "crates/ieestudio-exchange"]
 
 [workspace.package]
 version = "0.3.0-alpha.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/JAAM08/voltforge"
+repository = "https://github.com/JAAM08/ieestudio"
 rust-version = "1.80"
 
 # Ejecutable de distribución: sin símbolos de depuración y con optimización

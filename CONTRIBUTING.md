@@ -1,6 +1,6 @@
 # Cómo contribuir
 
-VoltForge calcula instalaciones eléctricas. Un error de cálculo puede terminar
+IEEStudio calcula instalaciones eléctricas. Un error de cálculo puede terminar
 en una instalación insegura, así que toda contribución sigue estas reglas.
 
 ## Antes de empezar

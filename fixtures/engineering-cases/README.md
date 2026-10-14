@@ -2,7 +2,7 @@
 
 Casos de referencia en archivos CSV, uno por cálculo y por perfil normativo.
 Un ingeniero puede revisarlos y ampliarlos en una hoja de cálculo sin leer
-Rust; las pruebas de `voltforge-electrical` (`tests/engineering_cases.rs`)
+Rust; las pruebas de `ieestudio-electrical` (`tests/engineering_cases.rs`)
 los ejecutan todos.
 
 | Archivo | Qué verifica |
@@ -12,7 +12,7 @@ los ejecutan todos.
 | `conduit.csv` | Área de conductores, ocupación permitida y tamaño del tubo |
 | `motors.csv` | Corriente de motores y motocompresores, conductor, interruptor y calibre |
 | `short_circuit.csv` | Corriente de cortocircuito de la fuente y al final de un tramo, por el método de impedancias |
-| `feeder_load.csv` | Carga del alimentador según el artículo 220: mínimas por área y factores de demanda. Las cargas de varios circuitos se separan con `;`. Los ejecuta `voltforge-project` (`tests/engineering_cases.rs`) |
+| `feeder_load.csv` | Carga del alimentador según el artículo 220: mínimas por área y factores de demanda. Las cargas de varios circuitos se separan con `;`. Los ejecuta `ieestudio-project` (`tests/engineering_cases.rs`) |
 
 Columnas comunes:
 

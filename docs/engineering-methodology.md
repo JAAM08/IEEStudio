@@ -43,7 +43,7 @@ Cada módulo de cálculo tiene:
    quién los revisó. Un caso sin revisión se ejecuta, pero no cuenta como
    validado.
 3. **Pruebas normativas** (`tests/normative_cases.rs` y las del perfil en
-   `voltforge-rules`): que la selección, los límites y las advertencias
+   `ieestudio-rules`): que la selección, los límites y las advertencias
    correspondan al perfil, que cada regla tenga su cláusula y que los
    parámetros correspondan a la edición.
 

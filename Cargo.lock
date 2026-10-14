@@ -2361,6 +2361,110 @@ dependencies = [
 ]
 
 [[package]]
+name = "ieestudio-app"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "eframe",
+ "egui-phosphor",
+ "egui_dock",
+ "egui_extras",
+ "ieestudio-core",
+ "ieestudio-diagrams",
+ "ieestudio-exchange",
+ "ieestudio-project",
+ "ieestudio-reports",
+ "ieestudio-rules",
+ "image",
+ "rfd",
+ "serde",
+ "serde_json",
+ "winresource",
+]
+
+[[package]]
+name = "ieestudio-cli"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "ieestudio-core",
+ "ieestudio-diagrams",
+ "ieestudio-exchange",
+ "ieestudio-project",
+ "ieestudio-reports",
+ "ieestudio-rules",
+ "serde_json",
+]
+
+[[package]]
+name = "ieestudio-core"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "ieestudio-diagrams"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "ieestudio-core",
+ "ieestudio-project",
+]
+
+[[package]]
+name = "ieestudio-electrical"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "ieestudio-core",
+ "ieestudio-rules",
+ "serde",
+]
+
+[[package]]
+name = "ieestudio-exchange"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "calamine",
+ "ieestudio-core",
+ "ieestudio-project",
+ "ieestudio-rules",
+ "rust_xlsxwriter",
+]
+
+[[package]]
+name = "ieestudio-project"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "ieestudio-core",
+ "ieestudio-electrical",
+ "ieestudio-rules",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ieestudio-reports"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "chrono",
+ "ieestudio-core",
+ "ieestudio-diagrams",
+ "ieestudio-project",
+ "ieestudio-rules",
+ "typst-as-lib",
+ "typst-layout",
+ "typst-pdf",
+ "typst-render",
+ "typst-utils",
+]
+
+[[package]]
+name = "ieestudio-rules"
+version = "0.3.0-alpha.1"
+dependencies = [
+ "ieestudio-core",
+ "serde",
+]
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5570,110 +5674,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "voltforge-app"
-version = "0.3.0-alpha.1"
-dependencies = [
- "eframe",
- "egui-phosphor",
- "egui_dock",
- "egui_extras",
- "image",
- "rfd",
- "serde",
- "serde_json",
- "voltforge-core",
- "voltforge-diagrams",
- "voltforge-exchange",
- "voltforge-project",
- "voltforge-reports",
- "voltforge-rules",
- "winresource",
-]
-
-[[package]]
-name = "voltforge-cli"
-version = "0.3.0-alpha.1"
-dependencies = [
- "serde_json",
- "voltforge-core",
- "voltforge-diagrams",
- "voltforge-exchange",
- "voltforge-project",
- "voltforge-reports",
- "voltforge-rules",
-]
-
-[[package]]
-name = "voltforge-core"
-version = "0.3.0-alpha.1"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "voltforge-diagrams"
-version = "0.3.0-alpha.1"
-dependencies = [
- "voltforge-core",
- "voltforge-project",
-]
-
-[[package]]
-name = "voltforge-electrical"
-version = "0.3.0-alpha.1"
-dependencies = [
- "serde",
- "voltforge-core",
- "voltforge-rules",
-]
-
-[[package]]
-name = "voltforge-exchange"
-version = "0.3.0-alpha.1"
-dependencies = [
- "calamine",
- "rust_xlsxwriter",
- "voltforge-core",
- "voltforge-project",
- "voltforge-rules",
-]
-
-[[package]]
-name = "voltforge-project"
-version = "0.3.0-alpha.1"
-dependencies = [
- "serde",
- "serde_json",
- "voltforge-core",
- "voltforge-electrical",
- "voltforge-rules",
-]
-
-[[package]]
-name = "voltforge-reports"
-version = "0.3.0-alpha.1"
-dependencies = [
- "chrono",
- "typst-as-lib",
- "typst-layout",
- "typst-pdf",
- "typst-render",
- "typst-utils",
- "voltforge-core",
- "voltforge-diagrams",
- "voltforge-project",
- "voltforge-rules",
-]
-
-[[package]]
-name = "voltforge-rules"
-version = "0.3.0-alpha.1"
-dependencies = [
- "serde",
- "voltforge-core",
-]
 
 [[package]]
 name = "walkdir"

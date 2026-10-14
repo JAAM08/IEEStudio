@@ -4,7 +4,7 @@
 
 ## Contexto
 
-VoltForge modela una instalación eléctrica una sola vez y de ese modelo deriva
+IEEStudio modela una instalación eléctrica una sola vez y de ese modelo deriva
 cálculos, cuadro de cargas, unifilar y memoria. Debe correr en Windows primero,
 también en Linux, más adelante en navegador, y ser utilizable por agentes de IA.
 

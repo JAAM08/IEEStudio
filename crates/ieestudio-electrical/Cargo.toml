@@ -1,0 +1,17 @@
+[package]
+name = "ieestudio-electrical"
+description = "Fórmulas de IEEStudio: corriente, caída de tensión, conductor, protección y tubería"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# `serde` permite entregar los resultados en JSON.
+serde = ["dep:serde", "ieestudio-core/serde", "ieestudio-rules/serde"]
+
+[dependencies]
+ieestudio-core = { path = "../ieestudio-core" }
+ieestudio-rules = { path = "../ieestudio-rules" }
+serde = { version = "1", features = ["derive"], optional = true }

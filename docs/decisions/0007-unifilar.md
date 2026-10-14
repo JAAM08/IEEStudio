@@ -4,7 +4,7 @@
 
 ## Decisión
 
-`voltforge-diagrams` genera el unifilar como una lista de trazos y textos en
+`ieestudio-diagrams` genera el unifilar como una lista de trazos y textos en
 coordenadas propias. La interfaz los pinta con egui, la memoria los recibe
 como SVG, y una exportación a DXF para AutoCAD usará la misma lista.
 Instalación radial: cada tablero es una barra, sus circuitos cuelgan en

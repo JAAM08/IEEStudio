@@ -33,7 +33,7 @@ jobs:
       - name: Pruebas
         run: cargo test
       - name: Compilar los ejecutables
-        run: cargo build --release -p voltforge-cli -p voltforge-app
+        run: cargo build --release -p ieestudio-cli -p ieestudio-app
       - name: Instalador de Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -41,25 +41,25 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
           $meta = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
-          $version = ($meta.packages | Where-Object name -eq 'voltforge-app').version
+          $version = ($meta.packages | Where-Object name -eq 'ieestudio-app').version
           # Windows pide la versión en cuatro números: 0.2.0-alpha.1 → 0.2.0.1
           $base = ($version -split '-')[0]
           $build = if ($version -match '-.*\.(\d+)$') { $Matches[1] } else { '0' }
-          & $iscc "/DAppVersion=$version" "/DAppVersionNum=$base.$build" installer\voltforge.iss
+          & $iscc "/DAppVersion=$version" "/DAppVersionNum=$base.$build" installer\ieestudio.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Publicar el ejecutable de Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: voltforge-windows
+          name: ieestudio-windows
           path: |
-            target/release/voltforge.exe
-            target/release/voltforge-app.exe
+            target/release/ieestudio.exe
+            target/release/ieestudio-app.exe
       - name: Publicar el instalador de Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: voltforge-instalador
+          name: ieestudio-instalador
           path: target/installer/*.exe
       - name: Crear la versión en GitHub
         if: runner.os == 'Windows' && startsWith(github.ref, 'refs/tags/v')
@@ -69,13 +69,13 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           gh release create $tag (Get-ChildItem target\installer\*.exe).FullName `
-            --title "VoltForge $($tag.TrimStart('v'))" --prerelease `
+            --title "IEEStudio $($tag.TrimStart('v'))" --prerelease `
             --notes "Versión alfa. Descarga el instalador, ábrelo y sigue el asistente. Windows puede mostrar «Windows protegió su PC» porque el instalador no está firmado: elige «Más información» y luego «Ejecutar de todos modos»."
       - name: Publicar el ejecutable de Linux
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: voltforge-linux
+          name: ieestudio-linux
           path: |
-            target/release/voltforge
-            target/release/voltforge-app
+            target/release/ieestudio
+            target/release/ieestudio-app

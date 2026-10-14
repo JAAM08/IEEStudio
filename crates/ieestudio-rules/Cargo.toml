@@ -1,0 +1,16 @@
+[package]
+name = "ieestudio-rules"
+description = "Perfiles normativos de IEEStudio: tablas y referencias"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# `serde` permite entregar las referencias en JSON.
+serde = ["dep:serde", "ieestudio-core/serde"]
+
+[dependencies]
+ieestudio-core = { path = "../ieestudio-core" }
+serde = { version = "1", features = ["derive"], optional = true }

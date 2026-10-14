@@ -1,0 +1,19 @@
+[package]
+name = "ieestudio-reports"
+description = "Memoria de cálculo de IEEStudio en PDF."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version = "1.95"
+
+[dependencies]
+ieestudio-core = { path = "../ieestudio-core" }
+ieestudio-rules = { path = "../ieestudio-rules" }
+ieestudio-project = { path = "../ieestudio-project" }
+ieestudio-diagrams = { path = "../ieestudio-diagrams" }
+typst-as-lib = "0.17"
+typst-pdf = "0.15"
+typst-render = "0.15"
+typst-layout = "0.15"
+typst-utils = "0.15"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

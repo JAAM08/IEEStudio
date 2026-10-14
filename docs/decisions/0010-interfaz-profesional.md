@@ -23,7 +23,7 @@ como fuente de verdad y varias vistas sobre él.
   navegación: el menú de 20 entradas de la propuesta repetía elementos y
   anunciaba funciones inexistentes.
 - **Propiedades en tres pestañas:** Datos (lo que captura el usuario),
-  Resultados (lo que calcula VoltForge; el calibre se marca «propuesto» o
+  Resultados (lo que calcula IEEStudio; el calibre se marca «propuesto» o
   «fijado por ti») y Normativa (verificaciones con su cláusula).
 - **Cálculo rápido** como herramienta en ventana flotante, marcada «fuera del
   proyecto».

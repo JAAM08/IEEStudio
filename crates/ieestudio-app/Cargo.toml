@@ -1,0 +1,31 @@
+[package]
+name = "ieestudio-app"
+description = "Aplicación de escritorio de IEEStudio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version = "1.95"
+
+[[bin]]
+name = "ieestudio-app"
+path = "src/main.rs"
+
+[dependencies]
+ieestudio-core = { path = "../ieestudio-core" }
+ieestudio-rules = { path = "../ieestudio-rules" }
+ieestudio-project = { path = "../ieestudio-project" }
+ieestudio-diagrams = { path = "../ieestudio-diagrams" }
+ieestudio-reports = { path = "../ieestudio-reports" }
+ieestudio-exchange = { path = "../ieestudio-exchange" }
+eframe = { version = "0.36", features = ["persistence"] }
+egui_extras = "0.36"
+egui_dock = { version = "0.21", features = ["serde"] }
+egui-phosphor = "0.14"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rfd = "0.17"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[build-dependencies]
+winresource = "0.1"

@@ -1,6 +1,6 @@
 # Arquitectura
 
-VoltForge es un workspace de Cargo con un crate por responsabilidad. La regla
+IEEStudio es un workspace de Cargo con un crate por responsabilidad. La regla
 principal: **el cálculo no depende de ninguna interfaz**. La aplicación de
 escritorio, la línea de comandos, la memoria en PDF y los agentes de IA usan
 las mismas funciones.
@@ -8,43 +8,43 @@ las mismas funciones.
 ## Crates y dependencias
 
 ```
-voltforge-core          tipos del dominio, unidades, errores, validación
+ieestudio-core          tipos del dominio, unidades, errores, validación
    ↑
-voltforge-rules         perfiles normativos: tablas, parámetros y referencias (data/)
+ieestudio-rules         perfiles normativos: tablas, parámetros y referencias (data/)
    ↑
-voltforge-electrical    fórmulas: corriente, caída, conductor, protección, tierra, tubería, cortocircuito
+ieestudio-electrical    fórmulas: corriente, caída, conductor, protección, tierra, tubería, cortocircuito
    ↑
-voltforge-project       modelo del proyecto, carga del artículo 220, cuadro de cargas, cortocircuito, procedimiento, cálculo rápido, veredicto
+ieestudio-project       modelo del proyecto, carga del artículo 220, cuadro de cargas, cortocircuito, procedimiento, cálculo rápido, veredicto
    ↑
-voltforge-diagrams      diagrama unifilar como trazos y textos; exporta SVG
+ieestudio-diagrams      diagrama unifilar como trazos y textos; exporta SVG
    ↑
-voltforge-reports       memoria de cálculo en PDF (Typst)
-voltforge-exchange      cuadro de cargas de ida y vuelta con Excel
+ieestudio-reports       memoria de cálculo en PDF (Typst)
+ieestudio-exchange      cuadro de cargas de ida y vuelta con Excel
    ↑
-voltforge-cli           línea de comandos «voltforge»
-voltforge-app           aplicación de escritorio (egui)
+ieestudio-cli           línea de comandos «ieestudio»
+ieestudio-app           aplicación de escritorio (egui)
 ```
 
 Una flecha significa «depende de». Ningún crate depende de uno de arriba.
 
 | Crate | Depende de | No debe depender de |
 | --- | --- | --- |
-| `voltforge-core` | nada obligatorio (`serde` opcional) | tablas, fórmulas, interfaz |
-| `voltforge-rules` | core | fórmulas, proyecto, interfaz |
-| `voltforge-electrical` | core, rules | proyecto, interfaz |
-| `voltforge-project` | core, rules, electrical | diagramas, reportes, interfaz |
-| `voltforge-diagrams` | project | egui, Typst |
-| `voltforge-reports` | project, diagrams, rules | egui |
-| `voltforge-exchange` | project, rules | egui, Typst |
-| `voltforge-cli`, `voltforge-app` | todos los anteriores | — |
+| `ieestudio-core` | nada obligatorio (`serde` opcional) | tablas, fórmulas, interfaz |
+| `ieestudio-rules` | core | fórmulas, proyecto, interfaz |
+| `ieestudio-electrical` | core, rules | proyecto, interfaz |
+| `ieestudio-project` | core, rules, electrical | diagramas, reportes, interfaz |
+| `ieestudio-diagrams` | project | egui, Typst |
+| `ieestudio-reports` | project, diagrams, rules | egui |
+| `ieestudio-exchange` | project, rules | egui, Typst |
+| `ieestudio-cli`, `ieestudio-app` | todos los anteriores | — |
 
 ## Flujo de un cálculo
 
-1. El usuario captura el proyecto (`voltforge_project::Project`), que se
+1. El usuario captura el proyecto (`ieestudio_project::Project`), que se
    guarda como JSON con `format_version`.
 2. `calculate` elige el perfil por su identificador (`Profile::by_id`) y
    calcula cada alimentador y circuito con las fórmulas de
-   `voltforge-electrical`.
+   `ieestudio-electrical`.
 3. Cada tramo (`RunResult`) trae sus valores, sus verificaciones (`Check`),
    su procedimiento (`Step`) y las referencias normativas de ambos.
 4. `ProjectResult.verdict` resume en tres niveles: cálculo, verificación
@@ -56,7 +56,7 @@ Una flecha significa «depende de». Ningún crate depende de uno de arriba.
 
 La regla de cálculo y su referencia normativa son objetos separados:
 
-- `Rule` (en `voltforge-rules`) identifica lo que aplica el motor, por ejemplo
+- `Rule` (en `ieestudio-rules`) identifica lo que aplica el motor, por ejemplo
   `Rule::StandardRatings`. El identificador no cambia entre ediciones.
 - `RuleReference` dice dónde lo establece la norma: código, título, edición,
   cláusula y URL de la fuente.
@@ -77,7 +77,7 @@ más nueva que la suya. Ver `decisions/0003-archivo-json.md`.
 
 ## Interfaz
 
-`voltforge-app` usa egui con paneles acoplables (egui_dock). Todos los
+`ieestudio-app` usa egui con paneles acoplables (egui_dock). Todos los
 paneles leen el mismo `Doc` (`state.rs`): el proyecto, su resultado y la
 selección; cambiar algo en un panel recalcula y los demás lo reflejan.
 

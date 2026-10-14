@@ -17,7 +17,7 @@ resultados no se guardan: se recalculan al abrir.
 ## Cuándo reconsiderarlo
 
 SQLite tendrá sentido para catálogos grandes de equipos o historial de
-revisiones. Si llega, será un crate `voltforge-storage` aparte, sin cambiar
+revisiones. Si llega, será un crate `ieestudio-storage` aparte, sin cambiar
 el motor.
 
 ## Consecuencias

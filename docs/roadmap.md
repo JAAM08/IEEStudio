@@ -36,14 +36,14 @@
   con el área equivalente de los paralelos) y balanceo automático de fases
   por tablero (todas las combinaciones hasta 10 circuitos; búsqueda local
   arriba de eso), que se puede deshacer.
-- Servidor MCP para agentes de IA (`voltforge mcp`): proyecto de ejemplo,
+- Servidor MCP para agentes de IA (`ieestudio mcp`): proyecto de ejemplo,
   cálculo de proyecto y de un circuito, memoria, Excel, DXF y reglas.
 - Unifilar en DXF (R12, en capas) y botón para pasar un cálculo rápido al
   tablero seleccionado.
 - Deshacer y rehacer (Ctrl+Z, Ctrl+Y). Conductores en paralelo propuestos
   por el programa, un juego por tubo (decisión 0015).
 - Instalador de Windows (Inno Setup) con ícono, accesos directos y la
-  extensión `.vfp`; una etiqueta `v*` publica la versión en GitHub. El
+  extensión `.iees`; una etiqueta `v*` publica la versión en GitHub. El
   programa abre el último proyecto usado y recuerda los recientes.
 
 ## Pendiente, en orden

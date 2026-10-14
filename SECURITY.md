@@ -1,6 +1,6 @@
 # Seguridad
 
-En VoltForge hay dos tipos de problema que reportar.
+En IEEStudio hay dos tipos de problema que reportar.
 
 ## Errores de cálculo
 
@@ -25,5 +25,5 @@ vulnerabilidades de GitHub en este repositorio en lugar de un *issue* público.
 
 ## Responsabilidad
 
-VoltForge no sustituye el criterio ni la firma de un profesional. Los
+IEEStudio no sustituye el criterio ni la firma de un profesional. Los
 resultados deben revisarlos quien diseña y quien firma el proyecto.

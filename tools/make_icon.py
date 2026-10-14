@@ -1,4 +1,4 @@
-"""Genera el ícono de VoltForge (assets/icon/) a partir de su geometría.
+"""Genera el ícono de IEEStudio (assets/icon/) a partir de su geometría.
 
 Un rayo amarillo eléctrico sobre un cuadrado gris carbón con esquinas
 redondeadas. Se dibuja a 1024 px y se reduce, para que los bordes salgan
@@ -43,9 +43,9 @@ def draw(size: int) -> Image.Image:
 def main() -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
     big = draw(256)
-    big.save(ROOT / "voltforge-256.png")
-    draw(64).save(ROOT / "voltforge-64.png")
-    big.save(ROOT / "voltforge.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    big.save(ROOT / "ieestudio-256.png")
+    draw(64).save(ROOT / "ieestudio-64.png")
+    big.save(ROOT / "ieestudio.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
 
 
 if __name__ == "__main__":

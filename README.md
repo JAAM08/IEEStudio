@@ -1,8 +1,8 @@
-# VoltForge
+# IEEStudio
 
 Cálculo de instalaciones eléctricas de baja tensión, de código abierto.
 
-VoltForge modela una instalación una sola vez y de ese modelo deriva los
+IEEStudio modela una instalación una sola vez y de ese modelo deriva los
 cálculos, el cuadro de cargas, el diagrama unifilar y la memoria de cálculo.
 El perfil normativo inicial es la NOM-001-SEDE-2012.
 
@@ -34,12 +34,12 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
 | Interfaz gráfica | Paneles acoplables y espacios de trabajo (Cálculo, Diagrama, Documentación); navegador del proyecto; cuadro de cargas con filtros y columnas configurables; propiedades separadas en Datos, Resultados y Normativa; vista previa de la memoria. Recalcula con cada cambio y recuerda el acomodo |
 | Procedimiento | Cada circuito y alimentador del proyecto muestra su procedimiento paso a paso: fórmula, valores sustituidos y la tabla o artículo de la norma |
-| Diagrama unifilar | Se dibuja solo a partir del proyecto: fuente, alimentadores, tableros, subtableros y circuitos con interruptor, conductores, tubería, caída de tensión y cortocircuito. En la pestaña Unifilar, en la memoria y en DXF para AutoCAD u otro programa de CAD (`voltforge dxf`) |
-| Excel | El cuadro de cargas se exporta a un libro con tableros, circuitos y resultados, y se importa de vuelta: agrega o actualiza por ID, informa las filas con errores y se puede deshacer. Desde el menú Archivo o con `voltforge excel` y `voltforge importar` |
-| Memoria de cálculo | PDF con datos de la obra (cliente, ubicación, revisión, responsable y cédula), datos y criterios, cuadro de cargas, diagrama unifilar, observaciones, el procedimiento de cada tramo y espacio para firmas; también la hoja de un cálculo rápido. Desde el menú Archivo o con `voltforge memoria` |
+| Diagrama unifilar | Se dibuja solo a partir del proyecto: fuente, alimentadores, tableros, subtableros y circuitos con interruptor, conductores, tubería, caída de tensión y cortocircuito. En la pestaña Unifilar, en la memoria y en DXF para AutoCAD u otro programa de CAD (`ieestudio dxf`) |
+| Excel | El cuadro de cargas se exporta a un libro con tableros, circuitos y resultados, y se importa de vuelta: agrega o actualiza por ID, informa las filas con errores y se puede deshacer. Desde el menú Archivo o con `ieestudio excel` y `ieestudio importar` |
+| Memoria de cálculo | PDF con datos de la obra (cliente, ubicación, revisión, responsable y cédula), datos y criterios, cuadro de cargas, diagrama unifilar, observaciones, el procedimiento de cada tramo y espacio para firmas; también la hoja de un cálculo rápido. Desde el menú Archivo o con `ieestudio memoria` |
 | Cálculo rápido | Un solo circuito, sin proyecto: corriente nominal y de diseño, interruptor, verificación del conductor, puesta a tierra, tubería y caída de tensión; fórmula y procedimiento con los valores sustituidos, comprobación exacta y, si no cumple, alternativas ya calculadas (calibre mayor, conductores en paralelo, longitud máxima) que se aplican con un clic |
 
-![Pantalla principal de VoltForge](docs/pantalla-principal.png)
+![Pantalla principal de IEEStudio](docs/pantalla-principal.png)
 
 ![Cálculo rápido de un circuito](docs/calculo-rapido.png)
 
@@ -58,26 +58,26 @@ motor de cálculo).
 
 ```
 cargo test                                     # ejecuta los casos de referencia
-cargo run -p voltforge-cli -- ejemplo casa.vfp   # escribe un proyecto de ejemplo
-cargo run -p voltforge-cli -- calcular casa.vfp  # muestra su cuadro de cargas
-cargo run -p voltforge-cli -- memoria casa.vfp   # escribe casa.pdf, la memoria de cálculo
-cargo run -p voltforge-app -- casa.vfp           # abre la interfaz gráfica
-cargo run -p voltforge-cli -- excel casa.vfp     # cuadro de cargas en Excel
-cargo run -p voltforge-cli -- dxf casa.vfp       # unifilar en DXF
+cargo run -p ieestudio-cli -- ejemplo casa.iees   # escribe un proyecto de ejemplo
+cargo run -p ieestudio-cli -- calcular casa.iees  # muestra su cuadro de cargas
+cargo run -p ieestudio-cli -- memoria casa.iees   # escribe casa.pdf, la memoria de cálculo
+cargo run -p ieestudio-app -- casa.iees           # abre la interfaz gráfica
+cargo run -p ieestudio-cli -- excel casa.iees     # cuadro de cargas en Excel
+cargo run -p ieestudio-cli -- dxf casa.iees       # unifilar en DXF
 ```
 
 Sin instalar Rust: en la página *Releases* del repositorio está el instalador
 de Windows de cada versión. Además, cada compilación publica los ejecutables
-`voltforge` (línea de comandos) y `voltforge-app` (interfaz gráfica) para
+`ieestudio` (línea de comandos) y `ieestudio-app` (interfaz gráfica) para
 Windows y Linux, y el instalador, en la pestaña *Actions*, dentro de la
 ejecución más reciente, en la sección *Artifacts*.
 
-Los proyectos se guardan con la extensión `.vfp`. Por dentro son JSON
+Los proyectos se guardan con la extensión `.iees`. Por dentro son JSON
 legible; también se pueden abrir archivos `.json` de versiones anteriores.
 
 ## Agentes de IA
 
-`voltforge mcp` es un servidor MCP (Model Context Protocol) por entrada y
+`ieestudio mcp` es un servidor MCP (Model Context Protocol) por entrada y
 salida estándar. Un agente puede pedir el proyecto de ejemplo, calcular un
 proyecto o un circuito, escribir la memoria, el Excel o el DXF y consultar las
 reglas con su cláusula. Con el instalador de Windows, la configuración del
@@ -86,8 +86,8 @@ cliente (por ejemplo Claude Desktop) es:
 ```json
 {
   "mcpServers": {
-    "voltforge": {
-      "command": "C:\\Program Files\\VoltForge\\voltforge.exe",
+    "ieestudio": {
+      "command": "C:\\Program Files\\IEEStudio\\ieestudio.exe",
       "args": ["mcp"]
     }
   }
@@ -100,14 +100,14 @@ tres niveles y la aprobación profesional queda pendiente.
 ## Organización
 
 ```
-crates/voltforge-core/         tipos, unidades, errores y validación; sin dependencias obligatorias
-crates/voltforge-rules/        perfiles normativos: tablas, parámetros y referencias
-crates/voltforge-electrical/   fórmulas: corriente, caída, conductor, protección, tierra, tubería
-crates/voltforge-project/      proyecto, cuadro de cargas, procedimiento, cálculo rápido, veredicto
-crates/voltforge-diagrams/     diagrama unifilar
-crates/voltforge-reports/      memoria de cálculo en PDF (Typst)
-crates/voltforge-cli/          línea de comandos
-crates/voltforge-app/          aplicación de escritorio (egui)
+crates/ieestudio-core/         tipos, unidades, errores y validación; sin dependencias obligatorias
+crates/ieestudio-rules/        perfiles normativos: tablas, parámetros y referencias
+crates/ieestudio-electrical/   fórmulas: corriente, caída, conductor, protección, tierra, tubería
+crates/ieestudio-project/      proyecto, cuadro de cargas, procedimiento, cálculo rápido, veredicto
+crates/ieestudio-diagrams/     diagrama unifilar
+crates/ieestudio-reports/      memoria de cálculo en PDF (Typst)
+crates/ieestudio-cli/          línea de comandos
+crates/ieestudio-app/          aplicación de escritorio (egui)
 data/nom-001-sede-2012/        tablas, parámetros y cláusulas de la norma en CSV
 fixtures/engineering-cases/    casos de referencia en CSV, revisables por un ingeniero
 docs/                          arquitectura, metodología, fuentes normativas y decisiones
@@ -137,7 +137,7 @@ error que explica qué falta en lugar de suponer un valor.
 
 ## Responsabilidad profesional
 
-VoltForge asiste el cálculo; no sustituye el criterio ni la firma de un
+IEEStudio asiste el cálculo; no sustituye el criterio ni la firma de un
 ingeniero. El programa distingue entre un cálculo matemático, una comprobación
 normativa y una aprobación profesional, y esta última siempre es de quien
 firma el proyecto. Las tablas incluidas son una transcripción de trabajo: la

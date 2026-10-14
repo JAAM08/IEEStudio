@@ -1,0 +1,14 @@
+[package]
+name = "ieestudio-diagrams"
+description = "Diagrama unifilar de IEEStudio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ieestudio-project = { path = "../ieestudio-project" }
+
+[dev-dependencies]
+ieestudio-core = { path = "../ieestudio-core" }

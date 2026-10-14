@@ -1,4 +1,4 @@
-# VoltForge
+# IEEStudio
 
 Cálculo de instalaciones eléctricas de baja tensión en Rust. Antes de cambiar
 un criterio de cálculo o una decisión técnica, lee `docs/architecture.md`,
@@ -11,10 +11,10 @@ un criterio de cálculo o una decisión técnica, lee `docs/architecture.md`,
 cargo fmt --all
 cargo clippy --all-targets -- -D warnings
 cargo test
-cargo run -p voltforge-cli -- calcular casa.vfp
-cargo run -p voltforge-app -- casa.vfp
-cargo run -p voltforge-cli -- excel casa.vfp        # cuadro de cargas a Excel; «importar» lo trae de vuelta
-xvfb-run -a cargo run -p voltforge-app -- --captura captura.png   # revisar la interfaz sin pantalla
+cargo run -p ieestudio-cli -- calcular casa.iees
+cargo run -p ieestudio-app -- casa.iees
+cargo run -p ieestudio-cli -- excel casa.iees        # cuadro de cargas a Excel; «importar» lo trae de vuelta
+xvfb-run -a cargo run -p ieestudio-app -- --captura captura.png   # revisar la interfaz sin pantalla
 # con --espacio calculo|diagrama|documentacion, --panel rapido|unifilar|memoria|ninguno,
 # --propiedades datos|resultados|normativa y --claro
 ```
@@ -26,7 +26,7 @@ los ejecuta en Windows y Linux.
 
 - Interfaz, mensajes, comentarios y documentación en español. Identificadores
   de código en inglés.
-- `voltforge-core` no tiene dependencias obligatorias. Ningún crate de cálculo
+- `ieestudio-core` no tiene dependencias obligatorias. Ningún crate de cálculo
   (core, rules, electrical, project) conoce la interfaz; ver el orden de
   dependencias en `docs/architecture.md`.
 - Ningún valor normativo se escribe en el código: tablas en `data/<perfil>/*.csv`,
