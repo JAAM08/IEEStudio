@@ -21,7 +21,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -49,7 +49,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Publicar el ejecutable de Windows
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ieestudio-windows
           path: |
@@ -57,7 +57,7 @@ jobs:
             target/release/ieestudio-app.exe
       - name: Publicar el instalador de Windows
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ieestudio-instalador
           path: target/installer/*.exe
@@ -81,7 +81,7 @@ jobs:
           }
       - name: Publicar el ejecutable de Linux
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ieestudio-linux
           path: |
