@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funciones · IEEStudio</title>
+<meta name="description" content="Qué calcula IEEStudio, cómo muestra cada paso con su artículo de la NOM-001-SEDE-2012 y qué entrega: cuadro de cargas, diagrama unifilar y memoria de cálculo.">
+<meta name="theme-color" content="#121418">
+<link rel="icon" href="../app/icono.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="../app/icono-180.png">
+<meta property="og:title" content="Funciones · IEEStudio">
+<meta property="og:description" content="Qué calcula IEEStudio, cómo muestra cada paso con su artículo de la NOM-001-SEDE-2012 y qué entrega: cuadro de cargas, diagrama unifilar y memoria de cálculo.">
+<meta property="og:image" content="https://ieestudio.com/imagenes/compartir.jpg">
+<meta property="og:url" content="https://ieestudio.com/funciones/">
+<link rel="preload" href="../fuentes/IBMPlexSansCondensed-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../estilos.css">
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../app/icono.svg" alt="" width="30" height="30">IEEStudio</a>
+    <nav class="nav-links" aria-label="Páginas">
+      <a href="../funciones/" aria-current="page">Funciones</a>
+      <a href="../guia/">Guía</a>
+      <a href="../descargar/">Descargar</a>
+      <a href="../codigo-abierto/">Código abierto</a>
+      <a class="nav-git" href="https://github.com/JAAM08/IEEStudio"><svg aria-hidden="true"><use href="../iconos.svg#i-git"/></svg><span>GitHub</span></a>
+      <a class="btn btn-volt menu-app" href="../app/">Abrir la app</a>
+    </nav>
+    <button class="menu-toggle" type="button" aria-label="Menú" aria-expanded="false"><svg aria-hidden="true"><use href="../iconos.svg#i-menu"/></svg></button>
+    <a class="btn btn-volt btn-small" href="../app/">Abrir la app</a>
+  </div>
+</header>
+
+<main>
+  <section class="page-head has-photo">
+  <div class="photo"><img src="../imagenes/fotos/interruptores.webp" alt="Interruptores termomagnéticos en un tablero." width="1600" height="1000"></div>
+    <div class="wrap">
+      <p class="kicker">Funciones</p>
+      <h1>Nada sale de una caja negra</h1>
+      <p class="intro">Cada resultado trae su fórmula, los valores sustituidos y el artículo de la norma. Si algo no cumple te dice por qué y cómo corregirlo; si falta un dato, no lo inventa.</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <p class="kicker">Cada paso a la vista</p>
+      <h2>El procedimiento de cada circuito</h2>
+      <div class="split">
+      <figure class="proc" aria-label="Procedimiento del circuito C-04">
+        <div class="proc-head"><b>C-04 Contactos sala</b><span>1,500 W, 127 V, 35 m, 12 AWG</span></div>
+        <ol>
+          <li>
+            <h3>Corriente nominal</h3>
+            <p class="f">I = P / (V · fp)</p>
+            <p class="s">I = 1,500 / (127 · 0.90) = 13.12 A</p>
+          </li>
+          <li>
+            <h3>Caída de tensión</h3>
+            <p class="f">ΔV = 2 · I · L · (R · cos θ + X · sen θ) / n</p>
+            <p class="s">ΔV = 2 · 13.12 · 0.0350 · (6.6 · 0.90 + 0.223 · 0.436) / 1 = 5.55 V</p>
+            <p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tabla 9</p>
+          </li>
+          <li>
+            <h3>Caída acumulada desde la fuente</h3>
+            <p class="s">e total = 0.68 + 4.37 = <span class="bad">5.05 %</span></p>
+            <p class="n">5.05 % es mayor que el límite de 5.00 %.</p>
+            <p class="ref">NOM-001-SEDE-2012: 210-19(a)(1), nota 4; 215-2(a)(1), nota 2</p>
+          </li>
+        </ol>
+        <div class="proc-foot">
+          <span class="verdict"><svg class="icon" aria-hidden="true"><use href="../iconos.svg#i-fail"/></svg>No cumple</span>
+          <span class="fix">Con <b>10 AWG</b> cumple. Se aplica con un clic.</span>
+        </div>
+      </figure>
+        <div class="points">
+          <div>
+            <h3>La fórmula, los valores y el artículo</h3>
+            <p>Cada circuito y alimentador muestra su procedimiento con los valores sustituidos y la tabla o artículo que lo respalda. Es lo mismo que va en la memoria.</p>
+          </div>
+          <div>
+            <h3>Te dice qué criterio decidió</h3>
+            <p>Si el calibre lo determinó la ampacidad, la protección o la caída de tensión, lo dice. Si algo no cumple, propone alternativas ya calculadas.</p>
+          </div>
+          <div>
+            <h3>No redondea por ti</h3>
+            <p>Calcula con precisión completa y solo redondea lo que se muestra. Puedes comprobar cualquier número a mano.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="verdicts">
+        <div class="v ok">
+          <span class="name"><svg class="icon" aria-hidden="true"><use href="../iconos.svg#i-ok"/></svg>Cumple</span>
+          <p>Se calculó con todos sus datos y pasó cada verificación.</p>
+          <p class="eg">C-01: caída de <span class="mono">2.76 %</span> de <span class="mono">3.00 %</span> permitido.</p>
+        </div>
+        <div class="v fail">
+          <span class="name"><svg class="icon" aria-hidden="true"><use href="../iconos.svg#i-fail"/></svg>No cumple</span>
+          <p>Al menos una verificación falla. Dice cuál y cómo corregirla.</p>
+          <p class="eg">C-04: caída acumulada de <span class="mono">5.05 %</span> de <span class="mono">5.00 %</span>.</p>
+        </div>
+        <div class="v pending">
+          <span class="name"><svg class="icon" aria-hidden="true"><use href="../iconos.svg#i-pending"/></svg>No evaluado</span>
+          <p>Falta un dato o la norma no cubre el caso. Nunca supone un valor.</p>
+          <p class="eg">C-06: falta la corriente de placa del motor para el relevador de sobrecarga.</p>
+        </div>
+      </div>
+      <p class="approval"><b>La aprobación es tuya.</b> IEEStudio verifica contra la norma, pero nunca marca un proyecto como aprobado: esa firma la da el ingeniero responsable.</p>
+    </div>
+  </section>
+
+  <section class="block" id="entregables">
+    <div class="wrap">
+      <p class="kicker">Lo que entrega</p>
+      <h2>Del cuadro de cargas a la memoria</h2>
+      <div class="show section-gap" style="margin-top:56px">
+        <div class="show-media">
+          <div class="frame"><img src="../imagenes/app-calculo.webp" width="1440" height="900" alt="Cuadro de cargas con el estado de cada circuito." loading="lazy"></div>
+        </div>
+        <div class="show-text">
+          <h3>Cuadro de cargas que se calcula solo</h3>
+          <p>Cada circuito con su carga, corriente, calibre, tierra, tubería, interruptor y caída de tensión, y el alimentador con la carga del artículo 220. Filtra lo que no cumple con un clic.</p>
+          <ul>
+            <li>Carga por fase y desbalance del tablero.</li>
+            <li>Caída acumulada desde la fuente.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="show flip">
+        <div class="show-media">
+          <div class="frame"><img src="../imagenes/app-unifilar.webp" width="1440" height="900" alt="Diagrama unifilar dibujado por IEEStudio." loading="lazy"></div>
+        </div>
+        <div class="show-text">
+          <h3>El unifilar se dibuja solo</h3>
+          <p>Acometida, alimentadores, tableros y circuitos con su interruptor, conductores, tubería, caída de tensión y cortocircuito. Cambia un dato y el diagrama se actualiza.</p>
+          <ul>
+            <li>Se exporta a DXF para seguir dibujando en AutoCAD.</li>
+            <li>Va incluido en la memoria de cálculo.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="show">
+        <div class="show-media">
+          <div class="papers">
+            <img src="../imagenes/memoria-1.webp" width="1020" height="1320" alt="Primera hoja de la memoria: datos de la obra, criterios de diseño y resumen." loading="lazy">
+            <img src="../imagenes/memoria-2.webp" width="1020" height="1320" alt="Hoja de la memoria con el cuadro de cargas." loading="lazy">
+          </div>
+        </div>
+        <div class="show-text">
+          <h3>La memoria, lista para revisar y firmar</h3>
+          <p>Un PDF con los datos de la obra, los criterios de diseño, el cuadro de cargas, el diagrama unifilar, las observaciones y el procedimiento de cada tramo.</p>
+          <ul>
+            <li>Responsable, cédula y revisión en cada hoja.</li>
+            <li>Espacio para firmas al final.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="show flip">
+        <div class="show-media">
+          <div class="frame"><img src="../imagenes/app-rapido.webp" width="1440" height="900" alt="Cálculo rápido de un circuito." loading="lazy"></div>
+        </div>
+        <div class="show-text">
+          <h3>Un circuito, sin armar proyecto</h3>
+          <p>El cálculo rápido te da corriente, interruptor, conductor, tierra, tubería y caída de tensión de un solo circuito, con su hoja en PDF. Si te sirve, lo agregas al proyecto con un clic.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="calculos">
+    <div class="wrap">
+      <p class="kicker">Qué calcula</p>
+      <h2>Lo que lleva una instalación de baja tensión</h2>
+      <dl class="calc">
+        <div><dt>Conductores</dt><dd>Menor calibre por terminales, temperatura, agrupamiento, protección y caída de tensión. Conductores en paralelo, un juego por tubo, cuando hacen falta.</dd></div>
+        <div><dt>Protecciones</dt><dd>Interruptor normalizado inmediato superior a la corriente de diseño, o el que tú fijes, verificado contra el conductor.</dd></div>
+        <div><dt>Caída de tensión</dt><dd>Por impedancia con la Tabla 9, por tramo y acumulada desde la fuente, con la longitud máxima permitida.</dd></div>
+        <div><dt>Carga del alimentador</dt><dd>Artículo 220: alumbrado por área según el tipo de inmueble, contactos, aparatos fijos y cocina, con sus factores de demanda.</dd></div>
+        <div><dt>Cortocircuito</dt><dd>Corriente de falla en cada tablero por el método de impedancias, con aportación de motores, y capacidad interruptiva de cada interruptor.</dd></div>
+        <div><dt>Motores y clima</dt><dd>Corrientes de las tablas 430-248 y 430-250, conductor al 125 %, interruptor, relevador de sobrecarga y el motor mayor en el alimentador.</dd></div>
+        <div><dt>Transformadores</dt><dd>Hasta 600 V: primario y secundario, protección de la Tabla 450-3(b), tensión propia del tablero y falla a través del transformador.</dd></div>
+        <div><dt>Puesta a tierra</dt><dd>Conductor de puesta a tierra de equipos (Tabla 250-122) y conductor al electrodo de la acometida (Tabla 250-66).</dd></div>
+        <div><dt>Tubería conduit</dt><dd>EMT, IMC, RMC y PVC: ocupación de 53, 31 y 40 %, niples al 60 % y verificación de atascamiento.</dd></div>
+        <div><dt>Balanceo de fases</dt><dd>Reparte los circuitos de un tablero entre las fases para dejarlo lo más balanceado posible, y se puede deshacer.</dd></div>
+        <div><dt>Cálculo rápido</dt><dd>Un circuito sin armar proyecto, con su hoja en PDF y alternativas ya calculadas si no cumple.</dd></div>
+        <div><dt>Excel y DXF</dt><dd>El cuadro de cargas va y viene de Excel; el unifilar se exporta a DXF para AutoCAD.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="block" style="padding-top:0">
+    <div class="wrap">
+      <div class="photo-band">
+        <img src="../imagenes/fotos/subestacion.webp" width="1024" height="768" alt="Transformador de potencia en una subestación." loading="lazy">
+        <div class="content">
+          <p class="kicker">NOM-001-SEDE-2012</p>
+          <h2>Las tablas de la norma, en datos abiertos</h2>
+          <p>Las tablas que usa el programa están en archivos que cualquiera puede revisar, cotejadas contra una captura independiente. El código no tiene valores de la norma escritos a mano.</p>
+          <div class="actions"><a class="btn btn-line" href="../codigo-abierto/">Cómo se verifica</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="wrap">
+      <h2>Míralo con un<br>proyecto real.</h2>
+      <p>Abre la app con el proyecto de ejemplo o empieza el tuyo desde cero.</p>
+      <div class="actions">
+        <a class="btn btn-volt" href="../app/"><svg aria-hidden="true"><use href="../iconos.svg#i-play"/></svg>Abrir en el navegador</a>
+          <a class="btn btn-line descargar" href="https://github.com/JAAM08/IEEStudio/releases"><svg aria-hidden="true"><use href="../iconos.svg#i-down"/></svg>Descargar para Windows</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../app/icono.svg" alt="" width="26" height="26">IEEStudio</a>
+    <nav aria-label="Enlaces">
+      <a href="../app/">Abrir la app</a>
+      <a href="../funciones/">Funciones</a>
+      <a href="../guia/">Guía</a>
+      <a href="../descargar/">Descargar</a>
+      <a href="../codigo-abierto/">Código abierto</a>
+      <a href="https://github.com/JAAM08/IEEStudio/issues">Reportar un problema</a>
+    </nav>
+    <p>Software libre bajo licencias MIT o Apache-2.0. IEEStudio no está afiliado a la Secretaría de Energía ni a ningún organismo de normalización; la NOM-001-SEDE-2012 se cita por artículo y su texto no se reproduce. Fotografías de dominio público; ver <a href="../codigo-abierto/#creditos">créditos</a>.</p>
+  </div>
+</footer>
+
+<script src="../sitio.js"></script>
+</body>
+</html>

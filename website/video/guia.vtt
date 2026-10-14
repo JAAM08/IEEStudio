@@ -1,0 +1,86 @@
+WEBVTT
+
+1
+00:00:02.600 --> 00:00:12.338
+Hola. Te presento IEEStudio: un programa gratuito y de código abierto para calcular instalaciones eléctricas de baja tensión,
+
+2
+00:00:12.338 --> 00:00:14.831
+conforme a la NOM-001-SEDE-2012.
+
+3
+00:00:17.331 --> 00:00:26.695
+Funciona igual en el navegador y en Windows. Al abrirlo, carga un proyecto de ejemplo: una casa habitación con un tablero y seis
+
+4
+00:00:26.695 --> 00:00:27.426
+circuitos.
+
+5
+00:00:29.931 --> 00:00:38.540
+Aquí capturas los datos de la obra: el cliente, la ubicación y quién firma. También el sistema de la acometida y los datos de
+
+6
+00:00:38.540 --> 00:00:40.537
+cortocircuito de la compañía.
+
+7
+00:00:43.041 --> 00:00:53.439
+En cada tablero indicas cómo se alimenta y qué áreas atiende. Con eso calcula la carga del alimentador según el artículo 220, y
+
+8
+00:00:53.439 --> 00:00:56.550
+muestra cada paso en el procedimiento.
+
+9
+00:00:59.052 --> 00:01:09.127
+En el cuadro de cargas cada circuito se calcula solo: corriente, calibre, tierra, tubería, interruptor y caída de tensión. Este circuito
+
+10
+00:01:09.127 --> 00:01:10.831
+de contactos no cumple.
+
+11
+00:01:13.332 --> 00:01:25.258
+En Resultados ves por qué: con 35 m, el calibre 12 AWG tiene una caída acumulada de 5.05 %, arriba del límite de 5 %. IEEStudio
+
+12
+00:01:25.258 --> 00:01:26.666
+propone 10 AWG.
+
+13
+00:01:29.163 --> 00:01:36.913
+Con un clic aplicas la propuesta y el circuito pasa a cumplir. Todo lo demás se recalcula al instante.
+
+14
+00:01:39.414 --> 00:01:50.223
+En Normativa está cada verificación, con su estado y el artículo de la norma que aplica. Si falta un dato, no lo inventa: lo marca como
+
+15
+00:01:50.223 --> 00:01:51.344
+«no evaluado».
+
+16
+00:01:53.845 --> 00:02:00.718
+El diagrama unifilar se dibuja a partir del proyecto, y se exporta a DXF para seguir en AutoCAD.
+
+17
+00:02:03.215 --> 00:02:12.179
+La memoria de cálculo queda lista para revisar: datos de la obra, cuadro de cargas, unifilar, observaciones y el procedimiento de
+
+18
+00:02:12.179 --> 00:02:15.029
+cada tramo. Se exporta a PDF con un clic.
+
+19
+00:02:17.525 --> 00:02:25.513
+Para un circuito suelto, el cálculo rápido te da el resultado y alternativas ya calculadas, sin armar un proyecto.
+
+20
+00:02:28.015 --> 00:02:37.760
+Guarda tu proyecto como archivo .iees y ábrelo en el navegador o en Windows. IEEStudio verifica contra la norma, pero la
+
+21
+00:02:37.760 --> 00:02:43.202
+aprobación la da el ingeniero que firma. Pruébalo en ieestudio.com.
+

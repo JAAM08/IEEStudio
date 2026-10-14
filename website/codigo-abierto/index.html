@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Código abierto · IEEStudio</title>
+<meta name="description" content="Cómo se verifica IEEStudio: código y tablas públicos, pruebas, compilación en GitHub, política de firma de código y privacidad.">
+<meta name="theme-color" content="#121418">
+<link rel="icon" href="../app/icono.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="../app/icono-180.png">
+<meta property="og:title" content="Código abierto · IEEStudio">
+<meta property="og:description" content="Cómo se verifica IEEStudio: código y tablas públicos, pruebas, compilación en GitHub, política de firma de código y privacidad.">
+<meta property="og:image" content="https://ieestudio.com/imagenes/compartir.jpg">
+<meta property="og:url" content="https://ieestudio.com/codigo-abierto/">
+<link rel="preload" href="../fuentes/IBMPlexSansCondensed-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../estilos.css">
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../app/icono.svg" alt="" width="30" height="30">IEEStudio</a>
+    <nav class="nav-links" aria-label="Páginas">
+      <a href="../funciones/">Funciones</a>
+      <a href="../guia/">Guía</a>
+      <a href="../descargar/">Descargar</a>
+      <a href="../codigo-abierto/" aria-current="page">Código abierto</a>
+      <a class="nav-git" href="https://github.com/JAAM08/IEEStudio"><svg aria-hidden="true"><use href="../iconos.svg#i-git"/></svg><span>GitHub</span></a>
+      <a class="btn btn-volt menu-app" href="../app/">Abrir la app</a>
+    </nav>
+    <button class="menu-toggle" type="button" aria-label="Menú" aria-expanded="false"><svg aria-hidden="true"><use href="../iconos.svg#i-menu"/></svg></button>
+    <a class="btn btn-volt btn-small" href="../app/">Abrir la app</a>
+  </div>
+</header>
+
+<main>
+  <section class="page-head has-photo">
+  <div class="photo"><img src="../imagenes/fotos/charola.webp" alt="Charola portacables con cable de potencia en una subestación." width="1600" height="1000"></div>
+    <div class="wrap">
+      <p class="kicker">Código abierto</p>
+      <h1>Puedes revisar cómo calcula cada número</h1>
+      <p class="intro">El código, las tablas de la norma y los casos de prueba son públicos. Nadie tiene que creerle al programa: se puede comprobar.</p>
+      <div class="actions"><a class="btn btn-line" href="https://github.com/JAAM08/IEEStudio"><svg aria-hidden="true"><use href="../iconos.svg#i-git"/></svg>Ver el repositorio</a></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="trust" style="margin-top:0">
+        <div>
+          <svg aria-hidden="true"><use href="../iconos.svg#i-code"/></svg>
+          <h3>Código y tablas públicos</h3>
+          <p>El código, las tablas de la norma en CSV y los casos de prueba están <a href="https://github.com/JAAM08/IEEStudio">en GitHub</a>. Cada regla cita su cláusula.</p>
+        </div>
+        <div>
+          <svg aria-hidden="true"><use href="../iconos.svg#i-build"/></svg>
+          <h3>Compilado a la vista</h3>
+          <p>El instalador y la versión en línea se compilan en GitHub Actions desde el código público. Nadie los sube a mano.</p>
+        </div>
+        <div>
+          <svg aria-hidden="true"><use href="../iconos.svg#i-lock"/></svg>
+          <h3>Tus proyectos son tuyos</h3>
+          <p>El programa no envía información a ningún lado. Este sitio no usa cookies ni rastreadores.</p>
+        </div>
+        <div>
+          <svg aria-hidden="true"><use href="../iconos.svg#i-free"/></svg>
+          <h3>Gratis, sin cuentas</h3>
+          <p>Licencias MIT o Apache-2.0. Úsalo en los proyectos de tu trabajo sin registrarte ni pagar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="verificacion">
+    <div class="wrap">
+      <p class="kicker">Verificación</p>
+      <h2>Cómo se comprueba cada cálculo</h2>
+      <div class="two">
+        <div>
+          <h3>Tres tipos de prueba por regla</h3>
+          <p>Cada regla de cálculo tiene una prueba matemática (la fórmula da lo que debe), una de referencia (un caso resuelto a mano) y una normativa (aplica la tabla y el artículo correctos). Se ejecutan en cada cambio, en Windows y en Linux.</p>
+        </div>
+        <div>
+          <h3>Casos revisables en una hoja de cálculo</h3>
+          <p>Los casos de referencia están en archivos CSV que un ingeniero puede abrir en Excel, revisar contra su propio cálculo y firmar como revisados.</p>
+        </div>
+        <div>
+          <h3>Tablas cotejadas</h3>
+          <p>Las tablas de la NOM-001-SEDE-2012 se validan por consistencia interna y se cotejaron contra una captura independiente. El repositorio no contiene el texto de la norma.</p>
+        </div>
+        <div>
+          <h3>Nunca supone un dato</h3>
+          <p>Si una tabla no cubre un caso, el programa lo dice y lo marca como no evaluado en lugar de usar un valor aproximado.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="firma">
+    <div class="wrap">
+      <div class="signing" style="margin-top:0">
+        <div>
+          <h3>Política de firma de código</h3>
+          <p class="en">Free code signing provided by <a href="https://about.signpath.io">SignPath.io</a>, certificate by <a href="https://signpath.org">SignPath Foundation</a>.</p>
+          <p class="state">Solicitud en trámite. Mientras tanto el instalador se publica sin firma y Windows puede mostrar «Windows protegió su PC». La versión en línea no lo necesita.</p>
+        </div>
+        <ul>
+          <li>Los instaladores se compilan en GitHub Actions desde el código público del repositorio; ningún binario se compila ni se sube a mano.</li>
+          <li>Autor y responsable de aprobar cada versión firmada: <a href="https://github.com/JAAM08">Juan Antonio Aguilar Martínez</a>.</li>
+          <li>Privacidad: el programa no transfiere información a otros sistemas en red, salvo que el usuario lo pida expresamente.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="creditos">
+    <div class="wrap">
+      <p class="kicker">Créditos</p>
+      <h2>Imágenes de este sitio</h2>
+      <p class="intro">Las capturas son de IEEStudio y las hojas, de la memoria que genera. Las fotografías son de dominio público:</p>
+      <table class="credits">
+        <tr><th>Fotografía</th><th>Autor</th><th>Licencia</th><th></th></tr>
+        <tr><td>Tablero de distribución con electricista</td><td>CANEurope, vía Flickr</td><td>CC0 1.0 (dominio público)</td><td><a href="https://www.flickr.com/photos/101564557@N06/37439260981">Original</a></td></tr>
+        <tr><td>Tablillas de conexión</td><td>rawpixel</td><td>CC0 1.0 (dominio público)</td><td><a href="https://www.rawpixel.com/image/5904900/photo-image-public-domain-line-free">Original</a></td></tr>
+        <tr><td>Interruptores termomagnéticos</td><td>rawpixel</td><td>CC0 1.0 (dominio público)</td><td><a href="https://www.rawpixel.com/image/5921188/photo-image-public-domain-technology-free">Original</a></td></tr>
+        <tr><td>Subestación eléctrica</td><td>rawpixel</td><td>CC0 1.0 (dominio público)</td><td><a href="https://www.rawpixel.com/image/5902727/photo-image-background-public-domain-free">Original</a></td></tr>
+        <tr><td>Tubería conduit EMT</td><td>Darryl, vía WordPress Photo Directory</td><td>CC0 1.0 (dominio público)</td><td><a href="https://wordpress.org/photos/photo/4361f02677/">Original</a></td></tr>
+        <tr><td>Charola con cable 350 MCM</td><td>Darryl, vía WordPress Photo Directory</td><td>CC0 1.0 (dominio público)</td><td><a href="https://wordpress.org/photos/photo/63761f0310/">Original</a></td></tr>
+      </table>
+      <p class="intro" style="font-size:1rem">Tipografía IBM Plex, licencia SIL Open Font License. Íconos y personaje del video, propios del proyecto.</p>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="wrap">
+      <h2>¿Quieres contribuir?</h2>
+      <p>Reporta errores, propone mejoras o revisa los casos de prueba. Todo pasa en GitHub.</p>
+      <div class="actions">
+        <a class="btn btn-volt" href="https://github.com/JAAM08/IEEStudio/issues">Reportar un problema</a>
+        <a class="btn btn-line" href="https://github.com/JAAM08/IEEStudio"><svg aria-hidden="true"><use href="../iconos.svg#i-git"/></svg>Ver el código</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="../"><img src="../app/icono.svg" alt="" width="26" height="26">IEEStudio</a>
+    <nav aria-label="Enlaces">
+      <a href="../app/">Abrir la app</a>
+      <a href="../funciones/">Funciones</a>
+      <a href="../guia/">Guía</a>
+      <a href="../descargar/">Descargar</a>
+      <a href="../codigo-abierto/">Código abierto</a>
+      <a href="https://github.com/JAAM08/IEEStudio/issues">Reportar un problema</a>
+    </nav>
+    <p>Software libre bajo licencias MIT o Apache-2.0. IEEStudio no está afiliado a la Secretaría de Energía ni a ningún organismo de normalización; la NOM-001-SEDE-2012 se cita por artículo y su texto no se reproduce. Fotografías de dominio público; ver <a href="../codigo-abierto/#creditos">créditos</a>.</p>
+  </div>
+</footer>
+
+<script src="../sitio.js"></script>
+</body>
+</html>

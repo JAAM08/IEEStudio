@@ -1,6 +1,7 @@
 # Tipos de archivo que la aplicación en línea necesita.
 AddType application/wasm .wasm
 AddType application/manifest+json .webmanifest
+AddType text/vtt .vtt
 
 # La página y el registro de la aplicación se revisan siempre, para que una
 # versión nueva llegue en cuanto se publica. Lo demás se guarda en caché.
