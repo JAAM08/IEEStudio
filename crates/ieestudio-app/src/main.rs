@@ -1,21 +1,26 @@
-//! IEEStudio: aplicación de escritorio.
+//! IEEStudio: aplicación de escritorio y, compilada a WebAssembly, en el
+//! navegador.
 //!
-//! Uso: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
+//! Uso en escritorio: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
 //! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--captura imagen.png]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod files;
 mod panels;
 mod state;
 mod theme;
 mod widgets;
 mod workspace;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
+#[cfg(not(target_arch = "wasm32"))]
 use workspace::{Tab, Workspace};
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     let mut options = app::Options {
         open: None,
@@ -86,6 +91,7 @@ fn main() -> eframe::Result {
     std::process::exit(1);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn native_options(renderer: eframe::Renderer) -> eframe::NativeOptions {
     eframe::NativeOptions {
         renderer,
@@ -103,6 +109,7 @@ fn native_options(renderer: eframe::Renderer) -> eframe::NativeOptions {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// El programa de Windows no tiene consola: sin esto, una falla al arrancar lo
 /// cierra sin mensaje. Así queda escrita y se muestra.
 fn install_panic_report() {
@@ -114,6 +121,7 @@ fn install_panic_report() {
     }));
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 /// Escribe el error en `registro-errores.txt` (en la carpeta de datos del
 /// usuario) y lo muestra en una ventana de aviso.
 fn report_failure(message: &str) {
@@ -137,4 +145,64 @@ fn report_failure(message: &str) {
         .set_description(text)
         .set_buttons(rfd::MessageButtons::Ok)
         .show();
+}
+
+/// En el navegador: arranca en el lienzo `ieestudio` de `index.html`.
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    use eframe::wasm_bindgen::JsCast as _;
+
+    std::panic::set_hook(Box::new(|info| {
+        web_status(&format!(
+            "IEEStudio se detuvo por un error interno. Recarga la página; tu \
+             proyecto quedó guardado en este navegador.\n\n{info}"
+        ));
+    }));
+    let options = app::Options {
+        open: None,
+        capture: None,
+        light: false,
+        workspace: None,
+        focus: None,
+        no_panels: false,
+        select: None,
+        properties: None,
+    };
+    wasm_bindgen_futures::spawn_local(async move {
+        let canvas = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.get_element_by_id("ieestudio"))
+            .and_then(|e| e.dyn_into::<web_sys::HtmlCanvasElement>().ok());
+        let Some(canvas) = canvas else {
+            web_status("Falta el lienzo de la aplicación en la página.");
+            return;
+        };
+        let started = eframe::WebRunner::new()
+            .start(
+                canvas,
+                eframe::WebOptions::default(),
+                Box::new(move |cc| Ok(Box::new(app::App::new(cc, options)))),
+            )
+            .await;
+        match started {
+            Ok(()) => web_status(""),
+            Err(e) => web_status(&format!(
+                "Este navegador no pudo iniciar IEEStudio. Prueba con una versión \
+                 reciente de Chrome, Edge o Firefox.\n\n{e:?}"
+            )),
+        }
+    });
+}
+
+/// Muestra un mensaje en la página, sobre el lienzo; vacío lo oculta.
+#[cfg(target_arch = "wasm32")]
+fn web_status(message: &str) {
+    let Some(el) = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|d| d.get_element_by_id("estado"))
+    else {
+        return;
+    };
+    el.set_text_content(Some(message));
+    let _ = el.set_attribute("data-visible", if message.is_empty() { "no" } else { "si" });
 }

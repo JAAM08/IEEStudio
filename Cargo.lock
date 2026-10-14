@@ -2376,9 +2376,13 @@ dependencies = [
  "ieestudio-reports",
  "ieestudio-rules",
  "image",
+ "js-sys",
  "rfd",
  "serde",
  "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "winresource",
 ]
 
@@ -4139,6 +4143,8 @@ version = "0.99.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34f2d2cda7223168a14fb86bc7411dbc3379bd7d49749ecc53b91ed98585b6b0"
 dependencies = [
+ "js-sys",
+ "wasm-bindgen",
  "zip",
 ]
 

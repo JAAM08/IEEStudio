@@ -17,6 +17,8 @@ cargo run -p ieestudio-cli -- excel casa.iees        # cuadro de cargas a Excel;
 xvfb-run -a cargo run -p ieestudio-app -- --captura captura.png   # revisar la interfaz sin pantalla
 # con --espacio calculo|diagrama|documentacion, --panel rapido|unifilar|memoria|ninguno,
 # --propiedades datos|resultados|normativa y --claro
+tools/sitio-web.sh                                   # ieestudio.com con la app en el navegador, en target/sitio
+cargo clippy --target wasm32-unknown-unknown -p ieestudio-app -- -D warnings
 ```
 
 Los tres primeros deben pasar antes de cada commit; la integración continua
@@ -26,6 +28,8 @@ los ejecuta en Windows y Linux.
 
 - Interfaz, mensajes, comentarios y documentación en español. Identificadores
   de código en inglés.
+- La app también corre en el navegador (WebAssembly): leer y escribir archivos
+  siempre por `files`, nunca con `std::fs` o `rfd` directo. Ver la decisión 0017.
 - `ieestudio-core` no tiene dependencias obligatorias. Ningún crate de cálculo
   (core, rules, electrical, project) conoce la interfaz; ver el orden de
   dependencias en `docs/architecture.md`.

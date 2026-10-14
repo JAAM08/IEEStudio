@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IEEStudio</title>
+<meta name="description" content="IEEStudio en el navegador: cálculo de instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012.">
+<meta name="theme-color" content="#1d2024">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icono-180.png">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2024; }
+  body { font: 15px/1.5 system-ui, "Segoe UI", sans-serif; color: #e6e8eb; }
+  #ieestudio { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  #carga {
+    position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 18px;
+    background: #1d2024; transition: opacity 0.25s ease;
+  }
+  #carga[hidden] { display: none; }
+  #carga img { width: 64px; height: 64px; }
+  #carga .barra { width: 220px; height: 3px; border-radius: 2px; background: #32373e; overflow: hidden; }
+  #carga .barra span { display: block; height: 100%; width: 0; background: #f5c518; transition: width 0.15s linear; }
+  #carga p { margin: 0; color: #9aa1ac; font-size: 13px; }
+  #estado {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: min(560px, calc(100% - 32px));
+    padding: 20px 22px; border-radius: 10px; background: #272b31; border: 1px solid #3a3f47; white-space: pre-wrap;
+    display: none; overflow-wrap: anywhere;
+  }
+  #estado[data-visible="si"] { display: block; }
+  #pequena {
+    position: fixed; left: 12px; right: 12px; bottom: 12px; padding: 12px 14px; border-radius: 8px;
+    background: #272b31; border: 1px solid #3a3f47; font-size: 13px; display: none;
+  }
+  #pequena button { margin-top: 8px; font: inherit; color: #1b1e23; background: #f5c518; border: 0; border-radius: 6px; padding: 6px 12px; }
+  @media (max-width: 760px) { #pequena.mostrar { display: block; } }
+  @media (prefers-reduced-motion: reduce) { #carga, #carga .barra span { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="ieestudio"></canvas>
+<div id="carga">
+  <img src="icono.svg" alt="">
+  <div class="barra" role="progressbar" aria-label="Cargando IEEStudio"><span id="avance"></span></div>
+  <p id="texto">Cargando IEEStudio…</p>
+</div>
+<div id="estado" role="alert"></div>
+<div id="pequena">
+  IEEStudio está pensado para pantallas grandes. En el celular funciona, pero es más cómodo en una computadora o tableta.
+  <br><button type="button" id="entendido">Entendido</button>
+</div>
+<noscript><p style="padding:24px">IEEStudio necesita JavaScript activado.</p></noscript>
+<script type="module">
+  import init from "./ieestudio-app.js";
+
+  const carga = document.getElementById("carga");
+  const avance = document.getElementById("avance");
+  const texto = document.getElementById("texto");
+
+  // Descarga el programa mostrando el avance; la primera vez pesa varios MB,
+  // después queda guardado en el navegador.
+  async function descargar(url) {
+    const respuesta = await fetch(url);
+    if (!respuesta.ok) throw new Error("No se pudo descargar el programa (" + respuesta.status + ").");
+    const total = Number(respuesta.headers.get("Content-Length")) || 0;
+    if (!respuesta.body || !total) return respuesta.arrayBuffer();
+    const lector = respuesta.body.getReader();
+    const partes = [];
+    let recibido = 0;
+    for (;;) {
+      const { done, value } = await lector.read();
+      if (done) break;
+      partes.push(value);
+      recibido += value.length;
+      avance.style.width = Math.min(100, (recibido / total) * 100) + "%";
+      // Si el servidor comprime, el total es menor que lo recibido.
+      texto.textContent = "Cargando IEEStudio… " + (recibido / 1048576).toFixed(1) +
+        (recibido <= total ? " de " + (total / 1048576).toFixed(1) : "") + " MB";
+    }
+    const todo = new Uint8Array(recibido);
+    let i = 0;
+    for (const p of partes) { todo.set(p, i); i += p.length; }
+    return todo.buffer;
+  }
+
+  try {
+    const modulo = await descargar("./ieestudio-app_bg.wasm");
+    texto.textContent = "Iniciando…";
+    await init({ module_or_path: modulo });
+    carga.hidden = true;
+    document.getElementById("ieestudio").focus();
+  } catch (e) {
+    carga.hidden = true;
+    const estado = document.getElementById("estado");
+    estado.textContent = "No se pudo cargar IEEStudio. Revisa tu conexión y recarga la página.\n\n" + e;
+    estado.dataset.visible = "si";
+  }
+
+  const pequena = document.getElementById("pequena");
+  try {
+    if (!localStorage.getItem("ieestudio-aviso-pantalla")) pequena.classList.add("mostrar");
+  } catch (_) { pequena.classList.add("mostrar"); }
+  document.getElementById("entendido").addEventListener("click", () => {
+    pequena.classList.remove("mostrar");
+    try { localStorage.setItem("ieestudio-aviso-pantalla", "1"); } catch (_) {}
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
+</script>
+</body>
+</html>

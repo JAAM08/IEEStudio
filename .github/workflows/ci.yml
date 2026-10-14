@@ -87,3 +87,45 @@ jobs:
           path: |
             target/release/ieestudio
             target/release/ieestudio-app
+
+  web:
+    name: Sitio y aplicación web
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: web
+      - name: Análisis estático para el navegador
+        run: cargo clippy --target wasm32-unknown-unknown -p ieestudio-app -- -D warnings
+      - name: Herramientas de WebAssembly
+        run: |
+          # wasm-bindgen-cli debe ser de la misma versión que el crate.
+          version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/version = "\(.*\)"/\1/p')
+          if ! wasm-bindgen --version 2>/dev/null | grep -q "$version"; then
+            cargo install wasm-bindgen-cli --version "$version" --locked --force
+          fi
+      - name: Armar el sitio
+        run: tools/sitio-web.sh
+      - name: Publicar el sitio
+        uses: actions/upload-artifact@v5
+        with:
+          name: ieestudio-sitio
+          path: target/sitio
+          include-hidden-files: true
+      - name: Agregar el sitio a la versión en GitHub
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ github.ref_name }}"
+          zip="IEEStudio-${tag#v}-sitio-web.zip"
+          (cd target/sitio && zip -qr "../$zip" .)
+          gh release upload "$tag" "target/$zip" --clobber

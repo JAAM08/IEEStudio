@@ -1,0 +1,15 @@
+# Tipos de archivo que la aplicación en línea necesita.
+AddType application/wasm .wasm
+AddType application/manifest+json .webmanifest
+
+# La página y el registro de la aplicación se revisan siempre, para que una
+# versión nueva llegue en cuanto se publica. Lo demás se guarda en caché.
+<IfModule mod_headers.c>
+  <FilesMatch "(\.html|sw\.js|\.webmanifest)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE application/wasm application/javascript text/html text/css
+</IfModule>

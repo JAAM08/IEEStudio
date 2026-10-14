@@ -45,6 +45,10 @@
 - Instalador de Windows (Inno Setup) con ícono, accesos directos y la
   extensión `.iees`; una etiqueta `v*` publica la versión en GitHub. El
   programa abre el último proyecto usado y recuerda los recientes.
+- La aplicación completa en el navegador (WebAssembly), instalable como PWA y
+  sin internet, y la página de ieestudio.com que la publica en `/app`
+  (decisión 0017). El programa avisa en pantalla si no puede arrancar, en
+  escritorio y en el navegador.
 
 ## Pendiente, en orden
 

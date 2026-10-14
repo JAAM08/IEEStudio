@@ -72,6 +72,13 @@ de Windows de cada versión. Además, cada compilación publica los ejecutables
 Windows y Linux, y el instalador, en la pestaña *Actions*, dentro de la
 ejecución más reciente, en la sección *Artifacts*.
 
+**En el navegador.** La misma aplicación corre en el navegador, sin instalar
+nada, y se puede instalar como aplicación (PWA). Los proyectos se guardan en
+el propio navegador y se descargan como `.iees`; nada se sube a un servidor.
+`tools/sitio-web.sh` arma la página de ieestudio.com con la aplicación en
+`/app`, y cada versión la adjunta como `IEEStudio-<versión>-sitio-web.zip`.
+Ver [la decisión 0017](docs/decisions/0017-version-web.md).
+
 Los proyectos se guardan con la extensión `.iees`. Por dentro son JSON
 legible; también se pueden abrir archivos `.json` de versiones anteriores.
 

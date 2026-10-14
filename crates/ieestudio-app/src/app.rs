@@ -9,6 +9,7 @@ use egui_phosphor::regular as icon;
 use ieestudio_project::{example, Project};
 use serde::{Deserialize, Serialize};
 
+use crate::files::{self, Filter, Inbox, Picked, Purpose, Saved};
 use crate::panels::{schedule, Shared, Viewer};
 use crate::state::{empty_project, Doc, Selection};
 use crate::theme::{self, Palette, ACCENTS};
@@ -16,6 +17,19 @@ use crate::widgets::{muted, strong, verdict_chips};
 use crate::workspace::{self, Tab, Workspace};
 
 const STORAGE_KEY: &str = "ieestudio-interfaz-1";
+/// En el navegador, el proyecto abierto se guarda solo con esta clave, para
+/// no perder trabajo si se cierra la pestaña.
+const WEB_PROJECT_KEY: &str = "ieestudio-proyecto-web";
+
+const EXCEL_FILTER: Filter<'static> = Filter {
+    name: "Libro de Excel",
+    extensions: &["xlsx"],
+};
+
+const PROJECT_FILTER: Filter<'static> = Filter {
+    name: "Proyecto de IEEStudio",
+    extensions: &[EXTENSION, "vfp", "json"],
+};
 
 /// Preferencias de interfaz que se guardan al cerrar.
 #[derive(Serialize, Deserialize)]
@@ -77,6 +91,9 @@ pub struct App {
     /// Cerrar la ventana al terminar este cuadro.
     quit: bool,
     recent: Vec<PathBuf>,
+    /// Archivos elegidos para abrir; en el navegador llegan un momento después.
+    inbox: Inbox,
+    ctx: egui::Context,
 }
 
 #[derive(Clone)]
@@ -149,12 +166,23 @@ impl App {
             allow_close: false,
             quit: false,
             recent,
+            inbox: Inbox::default(),
+            ctx: cc.egui_ctx.clone(),
         };
         app.doc.selection = Selection::Circuit(0, 1);
         // Abre lo que se pidió; si no, el último proyecto, si todavía existe.
         let last = app.recent.first().filter(|p| p.exists()).cloned();
         if let Some(path) = options.open.or(last) {
             app.load(path);
+        } else if files::WEB {
+            // En el navegador se retoma el proyecto en el que se trabajaba.
+            let saved = cc
+                .storage
+                .and_then(|s| s.get_string(WEB_PROJECT_KEY))
+                .and_then(|text| Project::from_json(&text).ok());
+            if let Some(project) = saved {
+                app.set_project(project, None);
+            }
         }
         if let Some(id) = &options.select {
             if id == "proyecto" {
@@ -237,34 +265,59 @@ impl App {
     }
 
     fn save(&mut self, ask: bool) {
-        let target = match (&self.doc.path, ask) {
-            (Some(path), false) => Some(path.clone()),
-            _ => rfd::FileDialog::new()
-                .add_filter("Proyecto de IEEStudio", &[EXTENSION])
-                .set_file_name(self.suggested_name())
-                .save_file(),
-        };
-        let Some(path) = target else {
-            return;
-        };
-        match std::fs::write(&path, self.doc.project.to_json()) {
-            Ok(()) => {
-                self.done = Some(format!("Guardado en {}", path.display()));
-                self.remember(&path);
-                self.doc.path = Some(path);
+        let path = if ask { None } else { self.doc.path.clone() };
+        let json = self.doc.project.to_json();
+        match files::save(
+            json.as_bytes(),
+            &self.suggested_name(),
+            PROJECT_FILTER,
+            path,
+        ) {
+            Ok(Some(saved)) => {
+                self.done = Some(format!("Guardado {}", saved.describe()));
+                if let Saved::Path(path) = saved {
+                    self.remember(&path);
+                    self.doc.path = Some(path);
+                }
                 self.doc.dirty = false;
                 self.notice = None;
             }
-            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
+            Ok(None) => {}
+            Err(e) => self.notice = Some(e),
         }
     }
 
     fn open_dialog(&mut self) {
-        if let Some(path) = rfd::FileDialog::new()
-            .add_filter("Proyecto de IEEStudio", &[EXTENSION, "vfp", "json"])
-            .pick_file()
-        {
-            self.load(path);
+        files::pick(&self.inbox, Purpose::Project, PROJECT_FILTER, &self.ctx);
+    }
+
+    /// Atiende los archivos que el usuario eligió abrir.
+    fn receive(&mut self) {
+        for picked in self.inbox.take() {
+            match picked.purpose {
+                Purpose::Project => self.open_picked(picked),
+                Purpose::Excel => self.import_picked(picked),
+            }
+        }
+    }
+
+    fn open_picked(&mut self, picked: Picked) {
+        let name = picked.name;
+        let loaded = picked
+            .bytes
+            .and_then(|b| {
+                String::from_utf8(b).map_err(|_| format!("{name} no es un proyecto de IEEStudio."))
+            })
+            .and_then(|text| Project::from_json(&text));
+        match loaded {
+            Ok(project) => {
+                self.notice = None;
+                if let Some(path) = &picked.path {
+                    self.remember(path);
+                }
+                self.set_project(project, picked.path);
+            }
+            Err(message) => self.notice = Some(message),
         }
     }
 
@@ -289,20 +342,11 @@ impl App {
                 return;
             }
         };
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("PDF", &["pdf"])
-            .set_file_name(name)
-            .save_file()
-        else {
-            return;
+        let filter = Filter {
+            name: "PDF",
+            extensions: &["pdf"],
         };
-        match std::fs::write(&path, pdf) {
-            Ok(()) => {
-                self.notice = None;
-                self.done = Some(format!("PDF guardado en {}", path.display()));
-            }
-            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
-        }
+        self.report_saved("PDF guardado", files::save(&pdf, name, filter, None));
     }
 
     /// Agrega el circuito del cálculo rápido al tablero seleccionado.
@@ -339,20 +383,15 @@ impl App {
         let bytes = ieestudio_diagrams::single_line(&self.doc.project, result).to_dxf();
         let stem = self.suggested_name();
         let stem = stem.trim_end_matches(&format!(".{EXTENSION}"));
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Dibujo DXF", &["dxf"])
-            .set_file_name(format!("{stem} - unifilar.dxf"))
-            .save_file()
-        else {
-            return;
+        let filter = Filter {
+            name: "Dibujo DXF",
+            extensions: &["dxf"],
         };
-        match std::fs::write(&path, bytes) {
-            Ok(()) => {
-                self.notice = None;
-                self.done = Some(format!("Unifilar guardado en {}", path.display()));
-            }
-            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
-        }
+        let name = format!("{stem} - unifilar.dxf");
+        self.report_saved(
+            "Unifilar guardado",
+            files::save(&bytes, &name, filter, None),
+        );
     }
 
     /// Cuadro de cargas a Excel: tableros, circuitos y resultados.
@@ -368,34 +407,33 @@ impl App {
             };
         let stem = self.suggested_name();
         let stem = stem.trim_end_matches(&format!(".{EXTENSION}"));
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Libro de Excel", &["xlsx"])
-            .set_file_name(format!("{stem} - cuadro de cargas.xlsx"))
-            .save_file()
-        else {
-            return;
-        };
-        match std::fs::write(&path, bytes) {
-            Ok(()) => {
+        let name = format!("{stem} - cuadro de cargas.xlsx");
+        let saved = files::save(&bytes, &name, EXCEL_FILTER, None);
+        self.report_saved("Cuadro de cargas guardado", saved);
+    }
+
+    /// Avisa dónde quedó un archivo exportado, o por qué no se pudo.
+    fn report_saved(&mut self, what: &str, saved: Result<Option<Saved>, String>) {
+        match saved {
+            Ok(Some(saved)) => {
                 self.notice = None;
-                self.done = Some(format!("Cuadro de cargas guardado en {}", path.display()));
+                self.done = Some(format!("{what} {}", saved.describe()));
             }
-            Err(e) => self.notice = Some(format!("No se pudo guardar {}: {e}", path.display())),
+            Ok(None) => {}
+            Err(e) => self.notice = Some(e),
         }
     }
 
     /// Agrega o actualiza tableros y circuitos desde un libro de Excel.
     fn import_excel(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Libro de Excel", &["xlsx"])
-            .pick_file()
-        else {
-            return;
-        };
-        let bytes = match std::fs::read(&path) {
+        files::pick(&self.inbox, Purpose::Excel, EXCEL_FILTER, &self.ctx);
+    }
+
+    fn import_picked(&mut self, picked: Picked) {
+        let bytes = match picked.bytes {
             Ok(b) => b,
             Err(e) => {
-                self.notice = Some(format!("No se pudo leer {}: {e}", path.display()));
+                self.notice = Some(e);
                 return;
             }
         };
@@ -570,46 +608,55 @@ impl App {
                     self.request(Pending::Open);
                 }
                 let recent: Vec<PathBuf> = self.recent.clone();
-                ui.add_enabled_ui(!recent.is_empty(), |ui| {
-                    ui.menu_button("     Abrir reciente", |ui| {
-                        for path in &recent {
-                            let name = path.file_name().map_or_else(
-                                || path.display().to_string(),
-                                |n| n.to_string_lossy().into_owned(),
-                            );
-                            let exists = path.exists();
-                            let response = ui
-                                .add_enabled(exists, egui::Button::new(name))
-                                .on_hover_text(path.display().to_string())
-                                .on_disabled_hover_text(format!(
-                                    "Ya no existe: {}",
-                                    path.display()
-                                ));
-                            if response.clicked() {
-                                ui.close();
-                                self.request(Pending::OpenPath(path.clone()));
+                // En el navegador no hay rutas a las que volver.
+                if !files::WEB {
+                    ui.add_enabled_ui(!recent.is_empty(), |ui| {
+                        ui.menu_button("     Abrir reciente", |ui| {
+                            for path in &recent {
+                                let name = path.file_name().map_or_else(
+                                    || path.display().to_string(),
+                                    |n| n.to_string_lossy().into_owned(),
+                                );
+                                let exists = path.exists();
+                                let response = ui
+                                    .add_enabled(exists, egui::Button::new(name))
+                                    .on_hover_text(path.display().to_string())
+                                    .on_disabled_hover_text(format!(
+                                        "Ya no existe: {}",
+                                        path.display()
+                                    ));
+                                if response.clicked() {
+                                    ui.close();
+                                    self.request(Pending::OpenPath(path.clone()));
+                                }
                             }
-                        }
-                        ui.separator();
-                        if ui.button("Borrar la lista").clicked() {
-                            ui.close();
-                            self.recent.clear();
-                        }
+                            ui.separator();
+                            if ui.button("Borrar la lista").clicked() {
+                                ui.close();
+                                self.recent.clear();
+                            }
+                        });
                     });
-                });
+                }
                 if ui
                     .add(
-                        egui::Button::new(format!("{}  Guardar", icon::FLOPPY_DISK))
-                            .shortcut_text("Ctrl+S"),
+                        egui::Button::new(if files::WEB {
+                            format!("{}  Descargar proyecto", icon::FLOPPY_DISK)
+                        } else {
+                            format!("{}  Guardar", icon::FLOPPY_DISK)
+                        })
+                        .shortcut_text("Ctrl+S"),
                     )
                     .clicked()
                 {
                     ui.close();
                     self.save(false);
                 }
-                if ui
-                    .add(egui::Button::new("     Guardar como…").shortcut_text("Ctrl+Mayús+S"))
-                    .clicked()
+                // En el navegador «Guardar» ya descarga con el nombre del proyecto.
+                if !files::WEB
+                    && ui
+                        .add(egui::Button::new("     Guardar como…").shortcut_text("Ctrl+Mayús+S"))
+                        .clicked()
                 {
                     ui.close();
                     self.save(true);
@@ -669,13 +716,16 @@ impl App {
                     ui.close();
                     self.request(Pending::Example);
                 }
-                ui.separator();
-                if ui
-                    .add(egui::Button::new("     Salir").shortcut_text("Alt+F4"))
-                    .clicked()
-                {
-                    ui.close();
-                    self.request(Pending::Quit);
+                // En el navegador se cierra la pestaña; el proyecto ya quedó guardado.
+                if !files::WEB {
+                    ui.separator();
+                    if ui
+                        .add(egui::Button::new("     Salir").shortcut_text("Alt+F4"))
+                        .clicked()
+                    {
+                        ui.close();
+                        self.request(Pending::Quit);
+                    }
                 }
             });
 
@@ -870,9 +920,18 @@ impl App {
                     .path
                     .as_ref()
                     .and_then(|p| p.file_name())
-                    .map_or("sin guardar".to_string(), |n| {
-                        n.to_string_lossy().into_owned()
-                    });
+                    .map_or_else(
+                        // En el navegador el proyecto se guarda solo ahí.
+                        || {
+                            if files::WEB {
+                                "en este navegador"
+                            } else {
+                                "sin guardar"
+                            }
+                            .to_string()
+                        },
+                        |n| n.to_string_lossy().into_owned(),
+                    );
                 let dirty = if self.doc.dirty { " •" } else { "" };
                 ui.label(muted(&p, format!("{file}{dirty}")));
                 ui.label(strong(&self.doc.project.name));
@@ -1052,14 +1111,23 @@ impl App {
                 ui.label(strong("¿Guardar los cambios?").size(15.0));
             });
             ui.add_space(4.0);
-            ui.label(format!(
-                "«{}» tiene cambios sin guardar. Si continúas sin guardar, se pierden.",
-                self.doc.project.name
-            ));
+            ui.label(if files::WEB {
+                format!(
+                    "«{}» tiene cambios que no has descargado. Si continúas, el proyecto \
+                     guardado en este navegador se reemplaza.",
+                    self.doc.project.name
+                )
+            } else {
+                format!(
+                    "«{}» tiene cambios sin guardar. Si continúas sin guardar, se pierden.",
+                    self.doc.project.name
+                )
+            });
             ui.add_space(10.0);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let label = if files::WEB { "Descargar" } else { "Guardar" };
                 let save = egui::Button::new(
-                    RichText::new(format!("{}  Guardar", icon::FLOPPY_DISK)).color(p.on_accent),
+                    RichText::new(format!("{}  {label}", icon::FLOPPY_DISK)).color(p.on_accent),
                 )
                 .fill(p.accent);
                 if ui.add(save).clicked() {
@@ -1142,6 +1210,7 @@ impl eframe::App for App {
         if self.pending.is_none() {
             self.shortcuts(&ctx);
         }
+        self.receive();
 
         egui::Panel::top("menu")
             .frame(
@@ -1228,6 +1297,9 @@ impl eframe::App for App {
         };
         if let Ok(text) = serde_json::to_string(&prefs) {
             storage.set_string(STORAGE_KEY, text);
+        }
+        if files::WEB {
+            storage.set_string(WEB_PROJECT_KEY, self.doc.project.to_json());
         }
     }
 }
