@@ -49,6 +49,38 @@ jobs:
           $build = if ($version -match '-.*\.(\d+)$') { $Matches[1] } else { '0' }
           & $iscc "/DAppVersion=$version" "/DAppVersionNum=$base.$build" installer\ieestudio.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Probar el instalador
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Instala como lo haría un usuario y comprueba que el programa abre.
+          # Así se descubrió que la línea de comandos se escribía encima del
+          # programa con ventana (Windows no distingue mayúsculas).
+          $dir = "$env:RUNNER_TEMP\IEEStudio"
+          $setup = (Get-ChildItem target\installer\*.exe).FullName
+          Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir" -Wait
+          Get-ChildItem $dir | Format-Table Name, Length
+          function Subsistema($ruta) {
+            $b = [System.IO.File]::ReadAllBytes($ruta)
+            $pe = [BitConverter]::ToInt32($b, 0x3C)
+            [BitConverter]::ToUInt16($b, $pe + 24 + 68)
+          }
+          $app = Join-Path $dir 'IEEStudio.exe'
+          $cli = Join-Path $dir 'ieestudio-cli.exe'
+          if (-not (Test-Path $app) -or -not (Test-Path $cli)) { throw "Faltan IEEStudio.exe o ieestudio-cli.exe" }
+          if ((Subsistema $app) -ne 2) { throw "IEEStudio.exe no es el programa con ventana" }
+          if ((Subsistema $cli) -ne 3) { throw "ieestudio-cli.exe no es la línea de comandos" }
+          & $cli ejemplo "$env:RUNNER_TEMP\prueba.iees"
+          if ($LASTEXITCODE -ne 0) { throw "La línea de comandos falló" }
+          $log = "$env:LOCALAPPDATA\IEEStudio\registro-errores.txt"
+          Remove-Item $log -ErrorAction SilentlyContinue
+          $p = Start-Process $app -PassThru
+          Start-Sleep -Seconds 10
+          $p.Refresh()
+          if (Test-Path $log) { Get-Content $log; throw "El programa registró un error al abrir" }
+          if ($p.HasExited) { throw ("El programa se cerró solo (código 0x{0:X8})" -f $p.ExitCode) }
+          Stop-Process -Id $p.Id
+          "El programa abrió y siguió abierto."
       - name: Publicar el ejecutable de Windows
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v5

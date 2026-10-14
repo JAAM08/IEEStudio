@@ -87,14 +87,15 @@ legible; también se pueden abrir archivos `.json` de versiones anteriores.
 `ieestudio mcp` es un servidor MCP (Model Context Protocol) por entrada y
 salida estándar. Un agente puede pedir el proyecto de ejemplo, calcular un
 proyecto o un circuito, escribir la memoria, el Excel o el DXF y consultar las
-reglas con su cláusula. Con el instalador de Windows, la configuración del
-cliente (por ejemplo Claude Desktop) es:
+reglas con su cláusula. El instalador de Windows lo deja como
+`ieestudio-cli.exe` en `%LOCALAPPDATA%\Programs\IEEStudio`; la configuración
+del cliente (por ejemplo Claude Desktop) es, con tu usuario:
 
 ```json
 {
   "mcpServers": {
     "ieestudio": {
-      "command": "C:\\Program Files\\IEEStudio\\ieestudio.exe",
+      "command": "C:\\Users\\TU_USUARIO\\AppData\\Local\\Programs\\IEEStudio\\ieestudio-cli.exe",
       "args": ["mcp"]
     }
   }

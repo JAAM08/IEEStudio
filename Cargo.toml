@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/ieestudio-core", "crates/ieestudio-rules", "crates/ieestudio-electrical", "crates/ieestudio-project", "crates/ieestudio-cli", "crates/ieestudio-app", "crates/ieestudio-diagrams", "crates/ieestudio-reports", "crates/ieestudio-exchange"]
 
 [workspace.package]
-version = "0.3.0-alpha.2"
+version = "0.3.0-alpha.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/JAAM08/ieestudio"

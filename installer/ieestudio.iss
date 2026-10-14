@@ -52,8 +52,10 @@ Name: "asociar"; Description: "Abrir los proyectos .iees con IEEStudio (doble cl
 
 [Files]
 Source: "..\target\release\ieestudio-app.exe"; DestDir: "{app}"; DestName: "IEEStudio.exe"; Flags: ignoreversion
-; Línea de comandos, para scripts y agentes.
-Source: "..\target\release\ieestudio.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Línea de comandos, para scripts y agentes. Su nombre no puede ser
+; «ieestudio.exe»: Windows no distingue mayúsculas y lo escribiría encima de
+; IEEStudio.exe, el programa con ventana.
+Source: "..\target\release\ieestudio.exe"; DestDir: "{app}"; DestName: "ieestudio-cli.exe"; Flags: ignoreversion
 Source: "..\LICENSE-MIT"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE-APACHE"; DestDir: "{app}"; Flags: ignoreversion
 
