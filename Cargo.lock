@@ -1162,6 +1162,7 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_glow",
+ "glow",
  "glutin",
  "glutin-winit",
  "image",
@@ -2362,7 +2363,7 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-app"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "eframe",
  "egui-phosphor",
@@ -2383,7 +2384,7 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-cli"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "ieestudio-core",
  "ieestudio-diagrams",
@@ -2396,14 +2397,14 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-core"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "ieestudio-diagrams"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "ieestudio-core",
  "ieestudio-project",
@@ -2411,7 +2412,7 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-electrical"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "ieestudio-core",
  "ieestudio-rules",
@@ -2420,7 +2421,7 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-exchange"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "calamine",
  "ieestudio-core",
@@ -2431,7 +2432,7 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-project"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "ieestudio-core",
  "ieestudio-electrical",
@@ -2442,7 +2443,7 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-reports"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "chrono",
  "ieestudio-core",
@@ -2458,7 +2459,7 @@ dependencies = [
 
 [[package]]
 name = "ieestudio-rules"
-version = "0.3.0-alpha.1"
+version = "0.3.0-alpha.2"
 dependencies = [
  "ieestudio-core",
  "serde",

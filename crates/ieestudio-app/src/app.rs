@@ -79,6 +79,7 @@ pub struct App {
     recent: Vec<PathBuf>,
 }
 
+#[derive(Clone)]
 pub struct Options {
     pub open: Option<PathBuf>,
     pub capture: Option<PathBuf>,

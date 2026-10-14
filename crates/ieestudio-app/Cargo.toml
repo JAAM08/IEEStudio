@@ -18,7 +18,7 @@ ieestudio-project = { path = "../ieestudio-project" }
 ieestudio-diagrams = { path = "../ieestudio-diagrams" }
 ieestudio-reports = { path = "../ieestudio-reports" }
 ieestudio-exchange = { path = "../ieestudio-exchange" }
-eframe = { version = "0.36", features = ["persistence"] }
+eframe = { version = "0.36", features = ["persistence", "glow"] }
 egui_extras = "0.36"
 egui_dock = { version = "0.21", features = ["serde"] }
 egui-phosphor = "0.14"

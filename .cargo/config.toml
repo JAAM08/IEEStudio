@@ -1,0 +1,4 @@
+# En Windows el runtime de C va dentro del ejecutable: así IEEStudio abre en
+# equipos que no tienen instalado el «Visual C++ Redistributable».
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
