@@ -68,9 +68,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ github.ref_name }}"
-          gh release create $tag (Get-ChildItem target\installer\*.exe).FullName `
-            --title "IEEStudio $($tag.TrimStart('v'))" --prerelease `
-            --notes "Versión alfa. Descarga el instalador, ábrelo y sigue el asistente. Windows puede mostrar «Windows protegió su PC» porque el instalador no está firmado: elige «Más información» y luego «Ejecutar de todos modos»."
+          $files = (Get-ChildItem target\installer\*.exe).FullName
+          # Si la versión ya se creó desde la página de GitHub, solo se le
+          # agrega el instalador.
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $files --clobber
+          } else {
+            gh release create $tag $files `
+              --title "IEEStudio $($tag.TrimStart('v'))" --prerelease `
+              --notes "Versión alfa. Descarga el instalador, ábrelo y sigue el asistente. Windows puede mostrar «Windows protegió su PC» porque el instalador no está firmado: elige «Más información» y luego «Ejecutar de todos modos»."
+          }
       - name: Publicar el ejecutable de Linux
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
