@@ -11,7 +11,8 @@ use voltforge_core::{CircuitKind, ConduitType, Material, MotorType, Size, System
 /// Versión del formato de archivo. La 2 agrega los datos de motores y
 /// motocompresores y el interruptor fijado. La 3 agrega el tipo de inmueble,
 /// las áreas de cada tablero, los contactos, el método de demanda del
-/// alimentador, los datos de cortocircuito y los datos de la obra. Lee los archivos de la 1 y la 2.
+/// alimentador, los datos de cortocircuito, los datos de la obra y los
+/// transformadores. Lee los archivos de la 1 y la 2.
 pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -162,8 +163,38 @@ pub struct Panel {
     /// los de sus circuitos y los de los alimentadores de sus subtableros.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupting_ka: Option<f64>,
+    /// Transformador entre el alimentador y el tablero. El alimentador es su
+    /// primario; el tablero y sus circuitos quedan con la tensión del
+    /// secundario.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transformer: Option<Transformer>,
     #[serde(default)]
     pub circuits: Vec<Circuit>,
+}
+
+/// Transformador de 600 V o menos que alimenta un tablero (artículo 450).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Transformer {
+    pub kva: f64,
+    /// Impedancia de placa, en porciento.
+    pub impedance_percent: f64,
+    /// Sistema del secundario.
+    pub secondary: System,
+    /// Lleva protección en el secundario (el interruptor principal del
+    /// tablero). Con ella el primario puede protegerse hasta el 250 %.
+    #[serde(default = "yes")]
+    pub secondary_protection: bool,
+    /// Longitud de los conductores del secundario, del transformador al
+    /// tablero, en metros.
+    #[serde(default)]
+    pub secondary_length_m: f64,
+    #[serde(default = "yes")]
+    pub secondary_has_neutral: bool,
+    #[serde(default)]
+    pub secondary_overrides: Overrides,
+    /// Capacidad interruptiva del interruptor del secundario, en kA.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_interrupting_ka: Option<f64>,
 }
 
 /// Superficie de piso que atiende un tablero.

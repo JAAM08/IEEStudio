@@ -79,6 +79,7 @@ fn feeder_load_cases() {
                 overrides: Overrides::default(),
             },
             interrupting_ka: None,
+            transformer: None,
             areas: area
                 .map(|m2| {
                     vec![Area {

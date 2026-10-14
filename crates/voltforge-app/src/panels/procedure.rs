@@ -12,6 +12,10 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     let title = match doc.selection {
         Selection::Project => None,
         Selection::Feeder(i) => Some(format!("Alimentador de {}", doc.project.panels[i].id)),
+        Selection::Secondary(i) => Some(format!(
+            "Secundario del transformador de {}",
+            doc.project.panels[i].id
+        )),
         Selection::Circuit(i, c) => {
             let circuit = &doc.project.panels[i].circuits[c];
             Some(format!("{} · {}", circuit.id, circuit.name))

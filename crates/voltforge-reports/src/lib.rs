@@ -332,6 +332,7 @@ fn schedule_row(out: &mut String, id: &str, item: &RunResult) {
 
 fn panel_runs(panel: &PanelResult) -> impl Iterator<Item = (String, &RunResult)> {
     std::iter::once(("ALIM".to_string(), &panel.feeder))
+        .chain(panel.secondary.iter().map(|s| ("SEC".to_string(), s)))
         .chain(panel.circuits.iter().map(|c| (c.id.clone(), c)))
 }
 
@@ -511,9 +512,18 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     for panel in &result.panels {
         let _ = writeln!(out, "\n== Cuadro de cargas · #{};", q(&panel.name));
         let [a, b, c] = panel.phase_va;
-        let fault = panel.fault_ka.map_or(String::new(), |ka| {
+        let mut fault = panel.fault_ka.map_or(String::new(), |ka| {
             format!(" Corriente de cortocircuito en barras: {ka:.2} kA.")
         });
+        if let Some(t) = &panel.transformer {
+            fault.push_str(&format!(
+                " Se alimenta por un transformador de {} kVA (primario {}, secundario {}), cargado al {:.0} %.",
+                t.kva,
+                t.primary_a.map_or("—".into(), |a| format!("{a:.2} A")),
+                t.secondary_a.map_or("—".into(), |a| format!("{a:.2} A")),
+                t.load_percent
+            ));
+        }
         let balance = match panel.imbalance_percent {
             Some(i) => format!(
                 " Carga por fase: A {a:.0} VA, B {b:.0} VA, C {c:.0} VA; desbalance de {i:.1} %."
@@ -551,6 +561,8 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             for check in item.checks.iter().filter(|c| c.status != Status::Complies) {
                 let who = if id == "ALIM" {
                     format!("Alimentador de {}", panel.name)
+                } else if id == "SEC" {
+                    format!("Secundario del transformador de {}", panel.name)
                 } else {
                     format!("{id} {}", item.name)
                 };
@@ -585,6 +597,8 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
         for (id, item) in panel_runs(panel) {
             let title = if id == "ALIM" {
                 format!("Alimentador de {}", panel.name)
+            } else if id == "SEC" {
+                format!("Secundario del transformador de {}", panel.name)
             } else {
                 format!("{id} · {}", item.name)
             };

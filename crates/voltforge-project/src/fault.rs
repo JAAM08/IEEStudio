@@ -24,9 +24,12 @@ pub(crate) struct SourceFault {
     pub basis: FaultBasis,
     pub available_a: f64,
     pub impedance: Impedance,
-    /// Aportación de los motores, sumada en cada punto.
+    /// Aportación de los motores, sumada en cada punto, a la tensión de la
+    /// fuente.
     pub motor_a: f64,
     pub motor_multiplier: f64,
+    /// Potencia aparente de todos los motores del proyecto.
+    pub motors_va: f64,
     pub steps: Vec<Step>,
 }
 
@@ -38,8 +41,11 @@ pub(crate) enum Upstream {
     /// No se pudo calcular; la razón.
     Unknown(String),
     Known {
-        /// Impedancia desde la fuente hasta el punto, ya con la ida y la
-        /// vuelta en sistemas de una fase.
+        /// Tensión y recorrido de la falla en este punto: cambian después de
+        /// un transformador.
+        basis: FaultBasis,
+        /// Impedancia desde la fuente hasta el punto, referida a su tensión y
+        /// ya con la ida y la vuelta en sistemas de una fase.
         impedance: Impedance,
         /// Corriente de falla en el punto, en amperes.
         fault_a: f64,
@@ -169,58 +175,84 @@ pub(crate) fn source_fault(
         impedance,
         motor_a,
         motor_multiplier: multiplier,
+        motors_va,
         steps,
     }))
 }
 
+/// Aportación de los motores a la falla con la tensión de `basis`.
+pub(crate) fn motor_fault_a(source: &SourceFault, basis: &FaultBasis) -> f64 {
+    if basis.three_phase {
+        source.motor_multiplier * source.motors_va / (3.0 * basis.voltage_v)
+    } else {
+        source.motor_multiplier * source.motors_va / basis.voltage_v
+    }
+}
+
+/// Impedancia de un transformador referida a su secundario, toda reactiva:
+/// `Z = z · V² / S` con la tensión de la falla del secundario.
+pub(crate) fn transformer_impedance(
+    basis: &FaultBasis,
+    kva: f64,
+    impedance_percent: f64,
+) -> Impedance {
+    let v2 = basis.voltage_v * basis.voltage_v;
+    let base = if basis.three_phase { 3.0 * v2 } else { v2 };
+    Impedance {
+        r_ohm: 0.0,
+        x_ohm: impedance_percent / 100.0 * base / (kva * 1000.0),
+    }
+}
+
 /// Paso del cortocircuito en el tablero al final de un alimentador.
+#[allow(clippy::too_many_arguments)] // los datos del paso, sin agrupar
 pub(crate) fn bus_step(
     profile: &Profile,
     source: &SourceFault,
+    basis: &FaultBasis,
     conductor: Impedance,
     total: Impedance,
     fault_a: f64,
+    title: &str,
     description: &str,
 ) -> Step {
-    let symmetric = fault_current_a(&source.basis, total);
-    let loop_text = if source.basis.loop_factor > 1.0 {
-        "2 · "
-    } else {
-        ""
-    };
+    let motor_a = motor_fault_a(source, basis);
+    let symmetric = fault_current_a(basis, total);
+    let loop_text = if basis.loop_factor > 1.0 { "2 · " } else { "" };
     let mut note = format!(
-        "Alimentador: {description}, {loop_text}({:.6} + j{:.6}) Ω con la resistencia a 25 °C.",
+        "{description}, {loop_text}({:.6} + j{:.6}) Ω con la resistencia a 25 °C.",
         conductor.r_ohm, conductor.x_ohm
     );
-    if source.motor_a > 0.0 {
+    if motor_a > 0.0 {
         note.push_str(&format!(
             " Se suma la aportación de todos los motores del proyecto, {} veces su corriente: {:.0} A, del lado seguro.",
             plain(source.motor_multiplier),
-            source.motor_a
+            motor_a
         ));
     }
+    let source = (basis, motor_a);
     Step {
-        title: "Cortocircuito en el tablero".into(),
-        formula: Some(if source.motor_a > 0.0 {
+        title: title.into(),
+        formula: Some(if source.1 > 0.0 {
             "Icc = Vf / |Z total| + I motores".into()
         } else {
             "Icc = Vf / |Z total|".into()
         }),
-        substitution: if source.motor_a > 0.0 {
+        substitution: if source.1 > 0.0 {
             format!(
                 "Icc = {} / |{:.6} + j{:.6}| + {:.0} = {:.0} + {:.0} = {:.2} kA",
-                plain(source.basis.voltage_v),
+                plain(source.0.voltage_v),
                 total.r_ohm,
                 total.x_ohm,
-                source.motor_a,
+                source.1,
                 symmetric,
-                source.motor_a,
+                source.1,
                 fault_a / 1000.0
             )
         } else {
             format!(
                 "Icc = {} / |{:.6} + j{:.6}| = {:.2} kA",
-                plain(source.basis.voltage_v),
+                plain(source.0.voltage_v),
                 total.r_ohm,
                 total.x_ohm,
                 fault_a / 1000.0

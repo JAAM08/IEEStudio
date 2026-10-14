@@ -87,7 +87,7 @@ impl TabViewer for Viewer<'_> {
                 Ok(result) => {
                     let d = single_line(&self.doc.project, result);
                     let selected = match self.doc.selection {
-                        Selection::Feeder(i) => Some((i, None)),
+                        Selection::Feeder(i) | Selection::Secondary(i) => Some((i, None)),
                         Selection::Circuit(i, c) => Some((i, Some(c))),
                         Selection::Project => None,
                     };

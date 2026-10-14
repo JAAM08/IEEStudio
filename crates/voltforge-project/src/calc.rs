@@ -15,7 +15,8 @@ use voltforge_electrical::voltage_drop::{voltage_drop, VoltageDropInput};
 
 use crate::demand::{feeder_demand, outlet_check, DemandLine, Groups};
 use crate::fault::{
-    bus_step, interrupting_check, missing_source, source_fault, unknown, SourceFault, Upstream,
+    bus_step, interrupting_check, missing_source, motor_fault_a, source_fault,
+    transformer_impedance, unknown, SourceFault, Upstream,
 };
 use crate::model::{Overrides, Panel, Phase, Project, Settings};
 use crate::motors::{motor_circuit, MotorCircuit};
@@ -192,8 +193,32 @@ pub struct PanelResult {
     pub phase_va: [f64; 3],
     /// Desbalance entre fases, en porciento. `None` si no se asignaron fases.
     pub imbalance_percent: Option<f64>,
+    /// Alimentador; con transformador, su primario.
     pub feeder: RunResult,
+    /// Datos del transformador, si el tablero se alimenta de uno.
+    pub transformer: Option<TransformerResult>,
+    /// Conductores del secundario del transformador al tablero.
+    pub secondary: Option<RunResult>,
     pub circuits: Vec<RunResult>,
+}
+
+impl PanelResult {
+    /// Alimentador, secundario y circuitos, en orden.
+    pub fn runs(&self) -> impl Iterator<Item = &RunResult> {
+        std::iter::once(&self.feeder)
+            .chain(self.secondary.as_ref())
+            .chain(&self.circuits)
+    }
+}
+
+/// Corrientes nominales y carga de un transformador.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct TransformerResult {
+    pub kva: f64,
+    pub primary_a: Option<f64>,
+    pub secondary_a: Option<f64>,
+    /// Carga calculada en porciento de su capacidad.
+    pub load_percent: f64,
 }
 
 /// Conductor al electrodo de puesta a tierra, según el mayor conductor de la
@@ -833,6 +858,35 @@ struct Context<'a> {
     results: Vec<Option<PanelResult>>,
     warnings: Vec<String>,
     source_fault: Option<Result<SourceFault, String>>,
+    /// Sistema de las barras de cada tablero: el de la fuente o el del
+    /// secundario del transformador más cercano aguas arriba.
+    systems: Vec<System>,
+}
+
+/// Sistema de las barras de cada tablero. El proyecto ya se validó: no hay
+/// ciclos ni padres que no existan.
+fn bus_systems(project: &Project) -> Vec<System> {
+    let index: HashMap<&str, usize> = project
+        .panels
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.id.as_str(), i))
+        .collect();
+    (0..project.panels.len())
+        .map(|i| {
+            let mut at = i;
+            loop {
+                let panel = &project.panels[at];
+                if let Some(t) = &panel.transformer {
+                    return t.secondary;
+                }
+                match panel.parent.as_deref().and_then(|p| index.get(p)) {
+                    Some(&parent) => at = parent,
+                    None => return project.source.system,
+                }
+            }
+        })
+        .collect()
 }
 
 fn validate(project: &Project) -> Result<(), String> {
@@ -958,12 +1012,91 @@ impl<'a> Context<'a> {
         load
     }
 
-    fn compute(&mut self, index: usize, upstream_drop_percent: f64, upstream: Upstream) {
+    /// Falla al final de un tramo: la del punto de donde sale más la
+    /// impedancia de sus conductores. Devuelve el punto nuevo y su paso.
+    #[allow(clippy::too_many_arguments)] // los datos del tramo, sin agrupar
+    fn fault_after(
+        &self,
+        upstream: &Upstream,
+        run: &Run,
+        overrides: &Overrides,
+        place: &str,
+        rating_ka: Option<f64>,
+        title: &str,
+        description: &str,
+    ) -> (Upstream, Option<Step>) {
+        let settings = &self.project.settings;
+        let source = self.source_fault.as_ref().and_then(|s| s.as_ref().ok());
+        let (
+            Upstream::Known {
+                basis, impedance, ..
+            },
+            Some(src),
+        ) = (upstream, source)
+        else {
+            return match upstream {
+                Upstream::Known { .. } => (
+                    Upstream::Unknown("no se calculó el cortocircuito".into()),
+                    None,
+                ),
+                other => (other.clone(), None),
+            };
+        };
+        let material = overrides.material.unwrap_or(settings.material);
+        let raceway = overrides
+            .conduit
+            .unwrap_or(settings.conduit)
+            .raceway_material();
+        match conductor_impedance(
+            self.profile,
+            &run.size,
+            material,
+            raceway,
+            run.length_m,
+            run.conductors_per_phase,
+        ) {
+            Ok(zc) => {
+                let total = impedance.plus(zc.scaled(basis.loop_factor));
+                let fault_a = fault_current_a(basis, total) + motor_fault_a(src, basis);
+                let step = bus_step(
+                    self.profile,
+                    src,
+                    basis,
+                    zc,
+                    total,
+                    fault_a,
+                    title,
+                    description,
+                );
+                (
+                    Upstream::Known {
+                        basis: *basis,
+                        impedance: total,
+                        fault_a,
+                        rating_ka,
+                        place: place.to_string(),
+                    },
+                    Some(step),
+                )
+            }
+            Err(e) => (unknown(&e), None),
+        }
+    }
+
+    fn compute(
+        &mut self,
+        index: usize,
+        upstream_drop_percent: f64,
+        upstream: Upstream,
+        feeder_system: System,
+    ) {
         let project = self.project;
         let panel: &Panel = &project.panels[index];
         let settings = &project.settings;
-        let system = &project.source.system;
+        let system = &feeder_system;
+        let bus_system = self.systems[index];
         let load = self.loads[index].clone();
+        let transformer = panel.transformer.as_ref();
 
         let power_factor = if load.apparent_va > 0.0 {
             load.connected_w / load.apparent_va
@@ -984,7 +1117,7 @@ impl<'a> Context<'a> {
         } else {
             0.0
         };
-        let given = match &load.largest_motor {
+        let motors_given = |system: &System| match &load.largest_motor {
             Some(m) if load.connected_w > 0.0 => feeder_with_motors(
                 self.profile,
                 system,
@@ -997,8 +1130,26 @@ impl<'a> Context<'a> {
             .ok(),
             _ => None,
         };
+        let primary_rating =
+            transformer.map(|t| crate::transformer::rating(t.kva, panel.kind, system));
+        let given = match (transformer, &primary_rating) {
+            (Some(t), Some(Ok(r))) => crate::transformer::side_given(
+                self.profile,
+                panel.kind,
+                system,
+                demanded_w,
+                power_factor,
+                continuous_fraction,
+                motors_given(system),
+                *r,
+                "primario",
+                t.kva,
+            )
+            .ok(),
+            _ => motors_given(system),
+        };
         let motor_breaker_a = match (&load.largest_motor, panel.kind.reference_voltage(system)) {
-            (Some(m), Ok(v)) => {
+            (Some(m), Ok(v)) if transformer.is_none() => {
                 Some(m.breaker_va / (v * crate::calc::phase_multiplier(panel.kind)))
             }
             _ => None,
@@ -1021,14 +1172,14 @@ impl<'a> Context<'a> {
                 panel.feeder.interrupting_ka.or(*rating_ka),
             )),
         };
-        let source = self.source_fault.as_ref().and_then(|s| s.as_ref().ok());
         let mut bus = match &upstream {
             Upstream::Known { .. } => {
                 Upstream::Unknown("no se calculó el alimentador del tablero".into())
             }
             other => other.clone(),
         };
-        let feeder = if load.connected_w > 0.0 {
+        let has_load = load.connected_w > 0.0;
+        let feeder = if has_load {
             let mut outcome = size_run(
                 self.profile,
                 settings,
@@ -1057,68 +1208,71 @@ impl<'a> Context<'a> {
                     ));
                 }
             }
-            if let Ok((run, _)) = &mut outcome {
-                run.steps.splice(0..0, demand.steps.iter().cloned());
-                if let (
-                    Upstream::Known {
-                        impedance, fault_a, ..
-                    },
-                    Some(src),
-                ) = (&upstream, source)
-                {
-                    run.fault_ka = Some(fault_a / 1000.0);
-                    run.interrupting_ka = panel.feeder.interrupting_ka.or(match &upstream {
-                        Upstream::Known { rating_ka, .. } => *rating_ka,
-                        _ => None,
-                    });
-                    let ov = &panel.feeder.overrides;
-                    let material = ov.material.unwrap_or(settings.material);
-                    let raceway = ov.conduit.unwrap_or(settings.conduit).raceway_material();
-                    bus = match conductor_impedance(
-                        self.profile,
-                        &run.size,
-                        material,
-                        raceway,
-                        run.length_m,
-                        run.conductors_per_phase,
-                    ) {
-                        Ok(zc) => {
-                            let total = impedance.plus(zc.scaled(src.basis.loop_factor));
-                            let bus_a = fault_current_a(&src.basis, total) + src.motor_a;
-                            if panel.parent.is_none() {
-                                run.steps.extend(src.steps.iter().cloned());
-                            }
-                            let description = format!(
-                                "{} m de {}{}",
-                                crate::procedure::plain(run.length_m),
-                                if run.conductors_per_phase > 1 {
-                                    format!("{} × ", run.conductors_per_phase)
-                                } else {
-                                    String::new()
-                                },
-                                crate::procedure::size_label(&run.size)
-                            );
-                            run.steps.push(bus_step(
-                                self.profile,
-                                src,
-                                zc,
-                                total,
-                                bus_a,
-                                &description,
-                            ));
-                            Upstream::Known {
-                                impedance: total,
-                                fault_a: bus_a,
-                                rating_ka: panel.interrupting_ka,
-                                place: panel.name.clone(),
-                            }
-                        }
-                        Err(e) => unknown(&e),
-                    };
-                }
-            }
             let mut extra = vec![demand.check.clone()];
             extra.extend(feeder_fault_check);
+            if let Ok((run, _)) = &mut outcome {
+                run.steps.splice(0..0, demand.steps.iter().cloned());
+                if let Upstream::Known {
+                    fault_a, rating_ka, ..
+                } = &upstream
+                {
+                    run.fault_ka = Some(fault_a / 1000.0);
+                    run.interrupting_ka = panel.feeder.interrupting_ka.or(*rating_ka);
+                    if panel.parent.is_none() {
+                        if let Some(Ok(src)) = &self.source_fault {
+                            run.steps.extend(src.steps.iter().cloned());
+                        }
+                    }
+                }
+                let (place, title) = if transformer.is_some() {
+                    (
+                        format!("el primario del transformador de {}", panel.name),
+                        "Cortocircuito en el primario del transformador",
+                    )
+                } else {
+                    (panel.name.clone(), "Cortocircuito en el tablero")
+                };
+                let (point, step) = self.fault_after(
+                    &upstream,
+                    run,
+                    &panel.feeder.overrides,
+                    &place,
+                    if transformer.is_some() {
+                        None
+                    } else {
+                        panel.interrupting_ka
+                    },
+                    title,
+                    &format!("Alimentador: {}", run_description(run)),
+                );
+                bus = point;
+                run.steps.extend(step);
+                if let (Some(t), Some(Ok(r))) = (transformer, &primary_rating) {
+                    extra.push(crate::transformer::protection_check(
+                        self.profile,
+                        run.breaker_a,
+                        r.rated_a,
+                        true,
+                        t.secondary_protection,
+                        settings.include_iec_ratings,
+                    ));
+                }
+            }
+            if let (Some(t), Some(rating)) = (transformer, &primary_rating) {
+                match rating {
+                    Ok(_) => extra.push(crate::transformer::capacity_check(
+                        self.profile,
+                        demand.demanded_va,
+                        t.kva,
+                    )),
+                    Err(e) => extra.push(Check {
+                        name: "Transformador".into(),
+                        status: Status::NotEvaluated,
+                        detail: e.to_string(),
+                        references: vec![],
+                    }),
+                }
+            }
             run_result(&panel.id, "Alimentador", demanded_w, outcome, extra)
         } else {
             run_result(
@@ -1129,11 +1283,190 @@ impl<'a> Context<'a> {
                 vec![],
             )
         };
-        let panel_drop_percent = feeder
+        let mut panel_drop_percent = feeder
             .run
             .as_ref()
             .map_or(upstream_drop_percent, |r| r.cumulative_drop_percent);
 
+        // Transformador: del secundario al tablero.
+        let mut secondary = None;
+        let mut transformer_summary = None;
+        if let Some(t) = transformer {
+            let sec_rating = crate::transformer::rating(t.kva, panel.kind, &bus_system);
+            transformer_summary = Some(TransformerResult {
+                kva: t.kva,
+                primary_a: primary_rating
+                    .as_ref()
+                    .and_then(|r| r.as_ref().ok())
+                    .map(|r| r.rated_a),
+                secondary_a: sec_rating.as_ref().ok().map(|r| r.rated_a),
+                load_percent: demand.demanded_va / (t.kva * 10.0),
+            });
+            // Falla en las terminales del secundario.
+            let terminals = match (&bus, &self.source_fault) {
+                (
+                    Upstream::Known {
+                        basis, impedance, ..
+                    },
+                    Some(Ok(src)),
+                ) => match voltforge_electrical::short_circuit::fault_basis(&bus_system) {
+                    Ok(bs) => {
+                        let ratio = bs.voltage_v / basis.voltage_v;
+                        let referred = impedance.scaled(ratio * ratio);
+                        let zt = transformer_impedance(&bs, t.kva, t.impedance_percent);
+                        let total = referred.plus(zt);
+                        let fault_a = fault_current_a(&bs, total) + motor_fault_a(src, &bs);
+                        Upstream::Known {
+                            basis: bs,
+                            impedance: total,
+                            fault_a,
+                            rating_ka: t.secondary_interrupting_ka.or(panel.interrupting_ka),
+                            place: format!("el secundario del transformador de {}", panel.name),
+                        }
+                    }
+                    Err(e) => unknown(&e),
+                },
+                (other, _) => other.clone(),
+            };
+            let mut outcome = if has_load {
+                let given_s = match &sec_rating {
+                    Ok(r) => crate::transformer::side_given(
+                        self.profile,
+                        panel.kind,
+                        &bus_system,
+                        demanded_w,
+                        power_factor,
+                        continuous_fraction,
+                        motors_given(&bus_system),
+                        *r,
+                        "secundario",
+                        t.kva,
+                    )
+                    .ok(),
+                    Err(_) => None,
+                };
+                size_run(
+                    self.profile,
+                    settings,
+                    &bus_system,
+                    &RunSpec {
+                        kind: panel.kind,
+                        power_w: demanded_w,
+                        power_factor,
+                        continuous_fraction,
+                        length_m: t.secondary_length_m,
+                        has_neutral: t.secondary_has_neutral,
+                        overrides: &t.secondary_overrides,
+                        drop_limit_percent: settings.feeder_drop_limit_percent,
+                        drop_rule: Rule::FeederDrop,
+                        // Sistema derivado: la caída se cuenta desde el secundario.
+                        upstream_drop_percent: 0.0,
+                        given: given_s,
+                    },
+                )
+            } else {
+                Err(Error::InvalidInput("el tablero no tiene carga".into()))
+            };
+            let mut extra = Vec::new();
+            match &terminals {
+                Upstream::NoData => {}
+                Upstream::Unknown(reason) => {
+                    extra.push(interrupting_check(self.profile, Err(reason.clone()), None))
+                }
+                Upstream::Known {
+                    fault_a,
+                    rating_ka,
+                    place,
+                    ..
+                } => extra.push(interrupting_check(
+                    self.profile,
+                    Ok((*fault_a, place)),
+                    *rating_ka,
+                )),
+            }
+            bus = match &terminals {
+                Upstream::Known { .. } => {
+                    Upstream::Unknown("no se calculó el secundario del transformador".into())
+                }
+                other => other.clone(),
+            };
+            if let Ok((run, _)) = &mut outcome {
+                run.steps.insert(
+                    0,
+                    Step {
+                        title: "Transformador".into(),
+                        formula: None,
+                        substitution: format!(
+                            "{} kVA, {} % de impedancia",
+                            crate::procedure::plain(t.kva),
+                            crate::procedure::plain(t.impedance_percent)
+                        ),
+                        note: Some(
+                            "Sistema derivado: la caída de tensión del secundario y de sus circuitos se cuenta desde el transformador."
+                                .into(),
+                        ),
+                        references: vec![self.profile.reference(Rule::TransformerProtection)],
+                    },
+                );
+                if let Upstream::Known {
+                    fault_a, rating_ka, ..
+                } = &terminals
+                {
+                    run.fault_ka = Some(fault_a / 1000.0);
+                    run.interrupting_ka = *rating_ka;
+                }
+                let (point, step) = self.fault_after(
+                    &terminals,
+                    run,
+                    &t.secondary_overrides,
+                    &panel.name,
+                    panel.interrupting_ka,
+                    "Cortocircuito en el tablero",
+                    &format!(
+                        "Transformador de {} kVA y {} %, referido al secundario; secundario: {}",
+                        crate::procedure::plain(t.kva),
+                        crate::procedure::plain(t.impedance_percent),
+                        run_description(run)
+                    ),
+                );
+                bus = point;
+                run.steps.extend(step);
+                if t.secondary_protection {
+                    if let Ok(r) = &sec_rating {
+                        extra.push(crate::transformer::protection_check(
+                            self.profile,
+                            run.breaker_a,
+                            r.rated_a,
+                            false,
+                            true,
+                            settings.include_iec_ratings,
+                        ));
+                    }
+                } else {
+                    extra.push(crate::transformer::unprotected_secondary(self.profile));
+                }
+                panel_drop_percent = run.cumulative_drop_percent;
+            } else {
+                panel_drop_percent = 0.0;
+            }
+            if let Err(e) = &sec_rating {
+                extra.push(Check {
+                    name: "Transformador".into(),
+                    status: Status::NotEvaluated,
+                    detail: e.to_string(),
+                    references: vec![],
+                });
+            }
+            secondary = Some(run_result(
+                &panel.id,
+                "Secundario del transformador",
+                demanded_w,
+                outcome,
+                extra,
+            ));
+        }
+
+        let system = &bus_system;
         let circuits = panel
             .circuits
             .iter()
@@ -1243,6 +1576,8 @@ impl<'a> Context<'a> {
             phase_va: load.phase_va,
             imbalance_percent,
             feeder,
+            transformer: transformer_summary,
+            secondary,
             circuits,
         });
         for child in self
@@ -1251,9 +1586,32 @@ impl<'a> Context<'a> {
             .cloned()
             .unwrap_or_default()
         {
-            self.compute(child, panel_drop_percent, bus.clone());
+            self.compute(child, panel_drop_percent, bus.clone(), bus_system);
         }
     }
+}
+
+/// Tramo en pocas palabras: `12 m de 2 × 300 kcmil`.
+fn run_description(run: &Run) -> String {
+    format!(
+        "{} m de {}{}",
+        crate::procedure::plain(run.length_m),
+        if run.conductors_per_phase > 1 {
+            format!("{} × ", run.conductors_per_phase)
+        } else {
+            String::new()
+        },
+        crate::procedure::size_label(&run.size)
+    )
+}
+
+/// Valor normalizado igual o inmediato superior (240-6).
+pub(crate) fn standard_at_least(
+    profile: &Profile,
+    current_a: f64,
+    include_iec: bool,
+) -> Result<f64, Error> {
+    standard_rating_at_least(profile, current_a, include_iec)
 }
 
 /// Conductor al electrodo de puesta a tierra con el mayor de los
@@ -1350,13 +1708,15 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         }
     }
     let count = project.panels.len();
+    let systems = bus_systems(project);
     let motors: Vec<Vec<Option<Result<MotorCircuit, Error>>>> = project
         .panels
         .iter()
-        .map(|p| {
+        .zip(&systems)
+        .map(|(p, system)| {
             p.circuits
                 .iter()
-                .map(|c| motor_circuit(profile, &project.settings, &project.source.system, c))
+                .map(|c| motor_circuit(profile, &project.settings, system, c))
                 .collect()
         })
         .collect();
@@ -1379,6 +1739,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         None => Upstream::NoData,
         Some(Err(reason)) => Upstream::Unknown(reason.clone()),
         Some(Ok(s)) => Upstream::Known {
+            basis: s.basis,
             impedance: s.impedance,
             fault_a: s.available_a + s.motor_a,
             rating_ka: None,
@@ -1394,23 +1755,18 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         results: vec![None; count],
         warnings: Vec::new(),
         source_fault: source,
+        systems,
     };
     for &root in &roots {
         ctx.aggregate(root);
-        ctx.compute(root, 0.0, root_upstream.clone());
+        ctx.compute(root, 0.0, root_upstream.clone(), project.source.system);
     }
 
     let grounding_electrode = electrode_conductor(profile, project, &roots, &ctx.results);
     let panels: Vec<PanelResult> = ctx.results.into_iter().flatten().collect();
-    let statuses: Vec<Status> = panels
-        .iter()
-        .flat_map(|p| std::iter::once(p.feeder.status).chain(p.circuits.iter().map(|c| c.status)))
-        .collect();
+    let runs: Vec<&RunResult> = panels.iter().flat_map(PanelResult::runs).collect();
+    let statuses: Vec<Status> = runs.iter().map(|r| r.status).collect();
     let tally = |s: Status| statuses.iter().filter(|&&x| x == s).count();
-    let runs: Vec<&RunResult> = panels
-        .iter()
-        .flat_map(|p| std::iter::once(&p.feeder).chain(&p.circuits))
-        .collect();
     let verdict = Verdict::new(
         runs.len(),
         runs.iter().filter(|r| r.run.is_none()).count(),

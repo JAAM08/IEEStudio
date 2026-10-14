@@ -738,6 +738,7 @@ impl App {
                 let label = match self.doc.selection {
                     Selection::Circuit(..) => "Eliminar circuito",
                     Selection::Feeder(_) => "Eliminar tablero",
+                    Selection::Secondary(_) => "Quitar el transformador",
                     Selection::Project => "Eliminar",
                 };
                 if ui

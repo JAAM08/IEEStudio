@@ -26,6 +26,7 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Aire acondicionado | Con la ampacidad mínima y la protección máxima de la placa, o con la corriente de carga nominal del compresor (artículo 440) |
 | Cortocircuito | Corriente de falla en cada tablero por el método de impedancias, desde el dato de la compañía o el transformador, con aportación de motores; capacidad interruptiva de cada interruptor (110-9) |
 | Puesta a tierra | Tabla 250-122, con el incremento proporcional cuando el conductor de fase se sobredimensiona; conductor al electrodo de la acometida por la Tabla 250-66 |
+| Transformadores | Un tablero puede alimentarse por un transformador de 600 V o menos: primario y secundario dimensionados con su capacidad, protección de la Tabla 450-3(b), tensión propia del tablero y cortocircuito a través del transformador |
 | Balanceo de fases | Un botón reparte las fases de los circuitos de un tablero para dejarlo lo más balanceado posible |
 | Tubería conduit | EMT, IMC, RMC y PVC cédula 40 y 80; ocupación de 53, 31 y 40 % según el número de conductores, niples al 60 % y verificación de atascamiento |
 

@@ -193,6 +193,20 @@ pub struct ElectrodeRow {
     pub electrode_aluminum: String,
 }
 
+/// Fila de la Tabla 450-3(b).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransformerProtectionRow {
+    /// `primary_only` o `primary_and_secondary`.
+    pub method: String,
+    /// `primary` o `secondary`.
+    pub side: String,
+    /// La fila aplica desde esta corriente nominal, en amperes.
+    pub min_current_a: f64,
+    pub percent: f64,
+    /// Se admite el valor normalizado inmediato superior (nota 1).
+    pub next_standard: bool,
+}
+
 /// Fila de la Tabla 220-56.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KitchenDemandRow {
@@ -238,6 +252,8 @@ pub struct Profile {
     pub kitchen_demand: Vec<KitchenDemandRow>,
     /// Tabla 250-66.
     pub grounding_electrode: Vec<ElectrodeRow>,
+    /// Tabla 450-3(b).
+    pub transformer_protection: Vec<TransformerProtectionRow>,
     /// Norma de la que salen las tablas.
     pub document: NormativeDocument,
     /// Factores, límites y calibres mínimos del perfil.
@@ -538,6 +554,17 @@ impl Profile {
                         electrode_aluminum: r.text("electrode_aluminum"),
                     }
                 ),
+                transformer_protection: table!(
+                    "nom-001-sede-2012",
+                    "table_450_3_b_transformer_protection.csv",
+                    |r| TransformerProtectionRow {
+                        method: r.text("method"),
+                        side: r.text("side"),
+                        min_current_a: r.get("min_current_a"),
+                        percent: r.get("percent"),
+                        next_standard: r.get("next_standard"),
+                    }
+                ),
                 small_conductor_limits: table!(
                     "nom-001-sede-2012",
                     "section_240_4_d_small_conductors.csv",
@@ -713,6 +740,27 @@ impl Profile {
                     .or(r.service_max_area_mm2);
                 limit.map_or(true, |max| area_mm2 <= max + 1e-9)
             })
+    }
+
+    /// Fila de la Tabla 450-3(b) para un lado del transformador. `secondary`
+    /// dice si el transformador lleva protección en el secundario.
+    pub fn transformer_protection_row(
+        &self,
+        primary: bool,
+        secondary: bool,
+        rated_a: f64,
+    ) -> Option<&TransformerProtectionRow> {
+        let method = if secondary {
+            "primary_and_secondary"
+        } else {
+            "primary_only"
+        };
+        let side = if primary { "primary" } else { "secondary" };
+        self.transformer_protection
+            .iter()
+            .filter(|r| r.method == method && r.side == side)
+            .filter(|r| rated_a >= r.min_current_a)
+            .max_by(|a, b| a.min_current_a.total_cmp(&b.min_current_a))
     }
 
     /// Tipo de inmueble o de área de la Tabla 220-12.
@@ -923,6 +971,25 @@ mod tests {
         assert_eq!(gec(al, "1/0", 1.0), ("8".into(), "6".into()));
         assert_eq!(gec(al, "250", 1.0), ("4".into(), "2".into()));
         assert_eq!(gec(al, "600", 1.0), ("1/0".into(), "3/0".into()));
+    }
+
+    /// Pruebas normativas de la Tabla 450-3(b).
+    #[test]
+    fn table_450_3_b_matches_the_2012_edition() {
+        let p = Profile::nom_001_sede_2012();
+        let pct = |primary, secondary, a| {
+            p.transformer_protection_row(primary, secondary, a)
+                .map(|r| (r.percent, r.next_standard))
+        };
+        assert_eq!(pct(true, false, 50.0), Some((125.0, true)));
+        assert_eq!(pct(true, false, 9.0), Some((125.0, true)));
+        assert_eq!(pct(true, false, 5.0), Some((167.0, false)));
+        assert_eq!(pct(true, false, 1.0), Some((300.0, false)));
+        assert_eq!(pct(true, true, 50.0), Some((250.0, false)));
+        assert_eq!(pct(true, true, 1.0), Some((250.0, false)));
+        assert_eq!(pct(false, true, 120.0), Some((125.0, true)));
+        assert_eq!(pct(false, true, 5.0), Some((167.0, false)));
+        assert_eq!(pct(false, false, 50.0), None);
     }
 
     #[test]

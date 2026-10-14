@@ -36,6 +36,10 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             format!("Alimentador · {}", doc.project.panels[i].id),
             doc.selected_run().map(|r| r.status),
         ),
+        Selection::Secondary(i) => (
+            format!("Secundario · {}", doc.project.panels[i].id),
+            doc.selected_run().map(|r| r.status),
+        ),
         Selection::Circuit(i, c) => {
             let circuit = &doc.project.panels[i].circuits[c];
             (
@@ -87,6 +91,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             let changed = match (shared.props_tab, doc.selection) {
                 (PropsTab::Inputs, Selection::Project) => project_inputs(ui, doc, &p),
                 (PropsTab::Inputs, Selection::Feeder(i)) => feeder_inputs(ui, doc, &p, i),
+                (PropsTab::Inputs, Selection::Secondary(i)) => secondary_inputs(ui, doc, &p, i),
                 (PropsTab::Inputs, Selection::Circuit(i, c)) => circuit_inputs(ui, doc, &p, i, c),
                 (PropsTab::Results, Selection::Project) => {
                     project_results(ui, doc, &p);
@@ -331,6 +336,48 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
         "Del interruptor de este alimentador, en la fuente."
     });
 
+    section(ui, p, "Transformador");
+    let mut has_transformer = panel.transformer.is_some();
+    if ui
+        .checkbox(&mut has_transformer, "Se alimenta por un transformador")
+        .on_hover_text("El alimentador llega al primario; el tablero y sus circuitos quedan con la tensión del secundario (artículo 450).")
+        .changed()
+    {
+        panel.transformer = has_transformer.then(|| voltforge_project::Transformer {
+            kva: 45.0,
+            impedance_percent: 3.0,
+            secondary: voltforge_core::System::WYE_220_127,
+            secondary_protection: true,
+            secondary_length_m: 3.0,
+            secondary_has_neutral: true,
+            secondary_overrides: Overrides::default(),
+            secondary_interrupting_ka: None,
+        });
+        changed = true;
+    }
+    let mut show_secondary = false;
+    if let Some(t) = panel.transformer.as_mut() {
+        property(ui, p, "Potencia", |ui| {
+            changed |= number(ui, &mut t.kva, 1.0, 0.5, 10_000.0, " kVA");
+        });
+        property(ui, p, "Impedancia", |ui| {
+            changed |= number(ui, &mut t.impedance_percent, 0.1, 0.5, 20.0, " %");
+        });
+        property(ui, p, "Secundario", |ui| {
+            changed |= combo(ui, "sistema-secundario", &mut t.secondary, &SYSTEMS);
+        });
+        changed |= ui
+            .checkbox(&mut t.secondary_protection, "Interruptor en el secundario")
+            .on_hover_text("Con protección en el secundario (máximo 125 %) el primario puede protegerse hasta el 250 % (Tabla 450-3(b)).")
+            .changed();
+        if ui
+            .button(format!("{} Conductores del secundario", icon::ARROW_RIGHT))
+            .clicked()
+        {
+            show_secondary = true;
+        }
+    }
+
     section(ui, p, "Carga del alimentador");
     property(ui, p, "Factor de demanda", |ui| {
         let text = match panel.feeder.demand {
@@ -418,6 +465,38 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
         changed = true;
     }
     changed |= decisions(ui, p, &mut panel.feeder.overrides, "alim", &settings);
+    if show_secondary {
+        doc.selection = Selection::Secondary(i);
+    }
+    changed
+}
+
+/// Conductores del secundario de un transformador hasta su tablero.
+fn secondary_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> bool {
+    let mut changed = false;
+    let settings = doc.project.settings.clone();
+    let Some(t) = doc.project.panels[i].transformer.as_mut() else {
+        return false;
+    };
+    section(ui, p, "Secundario del transformador");
+    ui.label(
+        muted(
+            p,
+            "Del transformador al tablero. Su interruptor protege estos conductores; la caída de tensión del tablero se cuenta desde aquí.",
+        )
+        .size(11.0),
+    );
+    property(ui, p, "Longitud", |ui| {
+        changed |= number(ui, &mut t.secondary_length_m, 0.5, 0.0, 5000.0, " m");
+    });
+    changed |= ui
+        .checkbox(&mut t.secondary_has_neutral, "Lleva neutro")
+        .changed();
+    property(ui, p, "Cap. interruptiva", |ui| {
+        changed |= optional_number(ui, &mut t.secondary_interrupting_ka, 10.0, " kA");
+    })
+    .on_hover_text("Del interruptor del secundario. Sin dato, toma la del tablero.");
+    changed |= decisions(ui, p, &mut t.secondary_overrides, "secundario", &settings);
     changed
 }
 
@@ -1012,6 +1091,11 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     if let Some(size) = set_size {
         match doc.selection {
             Selection::Feeder(i) => doc.project.panels[i].feeder.overrides.size = size,
+            Selection::Secondary(i) => {
+                if let Some(t) = doc.project.panels[i].transformer.as_mut() {
+                    t.secondary_overrides.size = size;
+                }
+            }
             Selection::Circuit(i, c) => doc.project.panels[i].circuits[c].overrides.size = size,
             Selection::Project => {}
         }

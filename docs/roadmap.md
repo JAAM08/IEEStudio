@@ -28,6 +28,10 @@
   (110-9, 110-10; ver la decisión 0013).
 - Datos de la obra en la memoria (cliente, ubicación, revisión, responsable
   y cédula) y cuadro de cargas de ida y vuelta con Excel (decisión 0014).
+- Transformadores de 600 V o menos dentro del proyecto: tensión por tablero,
+  primario y secundario dimensionados con la capacidad del transformador,
+  protección de la Tabla 450-3(b), caída desde el secundario y cortocircuito
+  a través del transformador (decisión 0016).
 - Conductor al electrodo de puesta a tierra de la acometida (Tabla 250-66,
   con el área equivalente de los paralelos) y balanceo automático de fases
   por tablero (todas las combinaciones hasta 10 circuitos; búsqueda local
@@ -52,7 +56,7 @@ industriales en baja tensión, con motores.
 
 ## Después de la 1.0
 
-Transformador y acometida en media tensión (artículo 450); lo que
+Acometida y transformadores en media tensión (Tabla 450-3(a)); lo que
 falta del artículo 220 (estufas y secadoras, calefacción, neutro del
 alimentador, métodos opcionales); falla de fase a tierra; coordinación de
 protecciones; charola; sistemas fotovoltaicos; sistemas de tierra y otros

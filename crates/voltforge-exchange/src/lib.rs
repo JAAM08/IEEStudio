@@ -267,6 +267,7 @@ fn build(project: &Project, result: Option<&ProjectResult>) -> Result<Vec<u8>, X
         let mut r = 1u32;
         for panel in &result.panels {
             let rows = std::iter::once(("ALIM".to_string(), &panel.feeder))
+                .chain(panel.secondary.iter().map(|s| ("SEC".to_string(), s)))
                 .chain(panel.circuits.iter().map(|c: &RunResult| (c.id.clone(), c)));
             for (id, item) in rows {
                 text(sheet, r, 0, &panel.id)?;
@@ -509,6 +510,7 @@ fn new_panel(id: &str) -> Panel {
             interrupting_ka: None,
             overrides: Overrides::default(),
         },
+        transformer: None,
         areas: vec![],
         interrupting_ka: None,
         circuits: vec![],

@@ -412,6 +412,19 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         forced: panel.feeder.overrides.size.is_some(),
         item: &result.feeder,
     });
+    if let (Some(t), Some(item)) = (&panel.transformer, &result.secondary) {
+        rows.push(Row {
+            selection: Selection::Secondary(panel_index),
+            id: "SEC".to_string(),
+            name: format!("Secundario, transformador de {} kVA", t.kva),
+            kind: "Transformador",
+            connection: label_of(&KINDS, panel.kind),
+            phases: "—".to_string(),
+            power_factor: Some(result.power_factor),
+            forced: t.secondary_overrides.size.is_some(),
+            item,
+        });
+    }
     for (i, (circuit, item)) in panel.circuits.iter().zip(&result.circuits).enumerate() {
         rows.push(Row {
             selection: Selection::Circuit(panel_index, i),
@@ -499,7 +512,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                         let row = &rows[table_row.index()];
                         let selected = doc.selection == row.selection;
                         table_row.set_selected(selected);
-                        let feeder = matches!(row.selection, Selection::Feeder(_));
+                        let feeder = matches!(row.selection, Selection::Feeder(_) | Selection::Secondary(_));
                         for (k, col) in cols.iter().enumerate() {
                             table_row.col(|ui| {
                                 if k == 0 && selected {

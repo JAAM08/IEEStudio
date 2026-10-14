@@ -1,0 +1,7 @@
+method,side,min_current_a,percent,next_standard
+primary_only,primary,9,125,true
+primary_only,primary,2,167,false
+primary_only,primary,0,300,false
+primary_and_secondary,primary,0,250,false
+primary_and_secondary,secondary,9,125,true
+primary_and_secondary,secondary,0,167,false

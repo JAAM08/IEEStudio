@@ -14,6 +14,8 @@ pub enum Selection {
     Project,
     /// El tablero y su alimentador.
     Feeder(usize),
+    /// Los conductores del secundario del transformador de un tablero.
+    Secondary(usize),
     /// Tablero y circuito.
     Circuit(usize, usize),
 }
@@ -69,6 +71,7 @@ fn new_panel(id: &str, name: &str, parent: Option<String>) -> Panel {
             overrides: Overrides::default(),
         },
         interrupting_ka: None,
+        transformer: None,
         areas: vec![],
         circuits: vec![],
     }
@@ -153,7 +156,12 @@ impl Doc {
             Selection::Circuit(p, c) if p < panels.len() && c < panels[p].circuits.len() => {
                 Selection::Circuit(p, c)
             }
-            Selection::Circuit(p, _) | Selection::Feeder(p) if p < panels.len() => {
+            Selection::Secondary(p) if p < panels.len() && panels[p].transformer.is_some() => {
+                Selection::Secondary(p)
+            }
+            Selection::Circuit(p, _) | Selection::Feeder(p) | Selection::Secondary(p)
+                if p < panels.len() =>
+            {
                 Selection::Feeder(p)
             }
             _ if panels.is_empty() => Selection::Project,
@@ -165,7 +173,7 @@ impl Doc {
     /// Tablero activo: el de la selección, o el primero.
     pub fn panel_index(&self) -> Option<usize> {
         match self.selection {
-            Selection::Feeder(p) | Selection::Circuit(p, _) => Some(p),
+            Selection::Feeder(p) | Selection::Secondary(p) | Selection::Circuit(p, _) => Some(p),
             Selection::Project => (!self.project.panels.is_empty()).then_some(0),
         }
     }
@@ -184,6 +192,7 @@ impl Doc {
     pub fn selected_run(&self) -> Option<&RunResult> {
         match self.selection {
             Selection::Feeder(p) => Some(&self.panel_result(p)?.feeder),
+            Selection::Secondary(p) => self.panel_result(p)?.secondary.as_ref(),
             Selection::Circuit(p, c) => self.panel_result(p)?.circuits.get(c),
             Selection::Project => None,
         }
@@ -194,6 +203,7 @@ impl Doc {
         match self.selection {
             Selection::Project => (0, 0, 0),
             Selection::Feeder(p) => (1, p, 0),
+            Selection::Secondary(p) => (3, p, 0),
             Selection::Circuit(p, c) => (2, p, c),
         }
     }
@@ -204,6 +214,10 @@ impl Doc {
         match self.selection {
             Selection::Project => {}
             Selection::Feeder(p) => parts.push(self.project.panels[p].id.clone()),
+            Selection::Secondary(p) => {
+                parts.push(self.project.panels[p].id.clone());
+                parts.push("Secundario".into());
+            }
             Selection::Circuit(p, c) => {
                 parts.push(self.project.panels[p].id.clone());
                 parts.push(self.project.panels[p].circuits[c].id.clone());
@@ -299,6 +313,10 @@ impl Doc {
                     Selection::Circuit(p, c.min(n - 1))
                 };
             }
+            Selection::Secondary(p) => {
+                self.project.panels[p].transformer = None;
+                self.selection = Selection::Feeder(p);
+            }
             Selection::Feeder(p) => {
                 // Los subtableros pasan a colgar del tablero padre del que se quita.
                 let removed = self.project.panels.remove(p);
@@ -335,18 +353,16 @@ impl Doc {
         let Some(p) = self.panel_index() else {
             return;
         };
-        let n = self.project.panels[p].circuits.len() as i32;
-        // Fila 0 es el alimentador; las siguientes, los circuitos.
-        let row = match self.selection {
-            Selection::Circuit(_, c) => c as i32 + 1,
-            _ => 0,
-        };
-        let next = (row + delta).clamp(0, n);
-        self.selection = if next == 0 {
-            Selection::Feeder(p)
-        } else {
-            Selection::Circuit(p, next as usize - 1)
-        };
+        // Filas: el alimentador, el secundario si hay transformador y los
+        // circuitos.
+        let mut rows = vec![Selection::Feeder(p)];
+        if self.project.panels[p].transformer.is_some() {
+            rows.push(Selection::Secondary(p));
+        }
+        rows.extend((0..self.project.panels[p].circuits.len()).map(|c| Selection::Circuit(p, c)));
+        let row = rows.iter().position(|s| *s == self.selection).unwrap_or(0) as i32;
+        let next = (row + delta).clamp(0, rows.len() as i32 - 1);
+        self.selection = rows[next as usize];
     }
 
     /// Motivo por el que no se pudo calcular el proyecto, como oración.

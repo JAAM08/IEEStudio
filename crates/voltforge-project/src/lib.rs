@@ -12,16 +12,17 @@ mod model;
 mod motors;
 mod procedure;
 pub mod quick;
+mod transformer;
 pub mod verdict;
 
 pub use calc::{
     calculate, Check, ConduitChoice, ElectrodeConductor, PanelResult, ProjectResult, Run,
-    RunResult, Status,
+    RunResult, Status, TransformerResult,
 };
 pub use demand::DemandLine;
 pub use model::{
     Area, Circuit, CompressorLoad, Demand, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel,
-    Phase, Project, ProjectInfo, Settings, Source, SourceFault, FORMAT_VERSION,
+    Phase, Project, ProjectInfo, Settings, Source, SourceFault, Transformer, FORMAT_VERSION,
 };
 pub use motors::hp_label;
 pub use procedure::{insulation_name, material_name, size_label, Step};

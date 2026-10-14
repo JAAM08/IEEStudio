@@ -16,6 +16,8 @@ const COLUMN: f64 = 116.0;
 const MIN_PANEL_WIDTH: f64 = 2.0 * COLUMN;
 /// Alto del tramo de alimentador, del origen a la barra del tablero.
 const FEEDER_HEIGHT: f64 = 120.0;
+/// Alto del símbolo del transformador entre su primario y su secundario.
+const TRANSFORMER_HEIGHT: f64 = 52.0;
 /// Alto del tramo de circuito, de la barra al símbolo de carga.
 const BRANCH_HEIGHT: f64 = 96.0;
 const LINE: f64 = 13.0;
@@ -162,6 +164,24 @@ impl Painter {
         }
     }
 
+    /// Circunferencia aproximada con 32 segmentos.
+    fn circle(&mut self, center: (f64, f64), radius: f64) {
+        let points = (0..=32)
+            .map(|i| {
+                let angle = std::f64::consts::TAU * f64::from(i) / 32.0;
+                (
+                    center.0 + radius * angle.cos(),
+                    center.1 + radius * angle.sin(),
+                )
+            })
+            .collect();
+        self.elements.push(Element::Path {
+            points,
+            width: 1.4,
+            ink: Ink::Text,
+        });
+    }
+
     /// Tramo vertical con interruptor, de `top` a `bottom`.
     fn run(&mut self, x: f64, top: f64, bottom: f64) {
         self.line((x, top), (x, top + 22.0), 1.4);
@@ -253,16 +273,21 @@ fn draw_panel(
     let bare = project.settings.bare_grounding;
     let width = panel_width(project, index);
     let feed_x = x0 + COLUMN / 2.0;
-    let bus_y = top + FEEDER_HEIGHT;
+    // Con transformador, el primario, el símbolo y el secundario.
+    let transformer_y = top + FEEDER_HEIGHT;
+    let bus_y = match &panel.transformer {
+        Some(_) => transformer_y + TRANSFORMER_HEIGHT + FEEDER_HEIGHT,
+        None => top + FEEDER_HEIGHT,
+    };
 
     // Alimentador.
     painter.hotspots.push(Hotspot {
         min: (x0, top),
-        size: (width, FEEDER_HEIGHT + 22.0),
+        size: (width, bus_y - top + 22.0),
         panel: index,
         circuit: None,
     });
-    painter.run(feed_x, top, bus_y);
+    painter.run(feed_x, top, transformer_y);
     let feeder = &panel_result.feeder;
     let mut y = top + 18.0;
     painter.text(
@@ -275,6 +300,34 @@ fn draw_panel(
     for (text, font, ink) in run_lines(feeder, bare, 30) {
         y += LINE;
         painter.text((feed_x + 12.0, y), text, font, ink, Anchor::Start);
+    }
+    if let (Some(t), Some(secondary)) = (&panel.transformer, &panel_result.secondary) {
+        // Dos circunferencias que se cruzan: el transformador.
+        let r = 11.0;
+        painter.circle((feed_x, transformer_y + r), r);
+        painter.circle((feed_x, transformer_y + 2.6 * r), r);
+        painter.text(
+            (feed_x + 20.0, transformer_y + 2.0 * r),
+            format!("Transformador {} kVA · {} %", t.kva, t.impedance_percent),
+            Font::Bold,
+            Ink::Text,
+            Anchor::Start,
+        );
+        let below = transformer_y + TRANSFORMER_HEIGHT;
+        painter.line((feed_x, transformer_y + 3.6 * r), (feed_x, below), 1.4);
+        painter.run(feed_x, below, bus_y);
+        let mut y = below + 18.0;
+        painter.text(
+            (feed_x + 12.0, y),
+            "Secundario".to_string(),
+            Font::Bold,
+            status_ink(secondary.status),
+            Anchor::Start,
+        );
+        for (text, font, ink) in run_lines(secondary, bare, 30) {
+            y += LINE;
+            painter.text((feed_x + 12.0, y), text, font, ink, Anchor::Start);
+        }
     }
 
     // Barra del tablero.

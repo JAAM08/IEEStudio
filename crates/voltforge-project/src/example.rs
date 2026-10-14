@@ -125,6 +125,7 @@ pub fn house() -> Project {
                 overrides: Overrides::default(),
             },
             interrupting_ka: Some(10.0),
+            transformer: None,
             areas: vec![Area {
                 description: "Planta baja y planta alta".to_string(),
                 occupancy: None,

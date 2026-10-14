@@ -109,10 +109,12 @@ pub enum Rule {
     KitchenDemand,
     InterruptingRating,
     GroundingElectrode,
+    TransformerProtection,
+    TransformerSecondary,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 46] = [
+    pub const ALL: [Rule; 48] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -159,6 +161,8 @@ impl Rule {
         Rule::KitchenDemand,
         Rule::InterruptingRating,
         Rule::GroundingElectrode,
+        Rule::TransformerProtection,
+        Rule::TransformerSecondary,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -210,6 +214,8 @@ impl Rule {
             Rule::KitchenDemand => "kitchen_demand",
             Rule::InterruptingRating => "interrupting_rating",
             Rule::GroundingElectrode => "grounding_electrode",
+            Rule::TransformerProtection => "transformer_protection",
+            Rule::TransformerSecondary => "transformer_secondary",
         }
     }
 }

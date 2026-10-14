@@ -196,11 +196,14 @@ fn print_panel(panel: &PanelResult) {
         None => println!("  Fases: sin asignar en todos los circuitos"),
     }
     println!("\n  ID     Descripción                      W     I A   L m  Calibre Tierra Tubo   ITM          e %   Σe %  Estado");
-    print_row(&panel.feeder, true);
-    for circuit in &panel.circuits {
-        print_row(circuit, false);
+    print_row(&panel.feeder, "ALIM");
+    if let Some(secondary) = &panel.secondary {
+        print_row(secondary, "SEC");
     }
-    for item in std::iter::once(&panel.feeder).chain(&panel.circuits) {
+    for circuit in &panel.circuits {
+        print_row(circuit, &circuit.id);
+    }
+    for item in panel.runs() {
         for check in item
             .checks
             .iter()
@@ -227,8 +230,7 @@ fn print_panel(panel: &PanelResult) {
     }
 }
 
-fn print_row(item: &RunResult, feeder: bool) {
-    let id = if feeder { "ALIM" } else { item.id.as_str() };
+fn print_row(item: &RunResult, id: &str) {
     let name: String = item.name.chars().take(25).collect();
     match &item.run {
         Some(run) => {

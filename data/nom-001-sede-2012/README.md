@@ -28,6 +28,7 @@ de cálculo.
 | `table_220_56_kitchen_demand.csv` | Tabla 220-56, factores de demanda de equipos de cocina fuera de vivienda |
 | `section_220_14_k_office_receptacles.csv` | Sección 220-14(k), carga mínima de contactos en bancos y oficinas |
 | `table_250_66_grounding_electrode.csv` | Tabla 250-66, conductor al electrodo de puesta a tierra según el mayor conductor de la acometida. El límite de cada fila es el área del calibre en la Tabla 8; `service_max_area_mm2` es el área que imprime la tabla, para el calibre de 1100 kcmil que la Tabla 8 no tiene |
+| `table_450_3_b_transformer_protection.csv` | Tabla 450-3(b), protección máxima de transformadores de 600 V o menos, por método (solo primario, o primario y secundario), lado y corriente nominal. `next_standard` marca la nota 1 |
 | `profile.csv` | Datos de la norma (código, título, edición, URL) y parámetros: 125 % de carga continua (210-19(a)(1)), terminales de 60 °C hasta 100 A (110-14(c)), valor inmediato superior hasta 800 A (240-4(b)), calibres mínimos, atascamiento (Tabla 1, nota 2) y niples (notas de las tablas, nota 4), y los factores de motores (430-22, 430-24, 430-32, 430-52), de motocompresores (440-22, 440-32), la carga por salida de contacto (220-14(i)) y el factor de aparatos fijos de vivienda (220-53) |
 | `references.csv` | Cláusula de cada regla del motor, con una descripción propia (no es texto de la norma) |
 

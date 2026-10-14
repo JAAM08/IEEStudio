@@ -45,3 +45,5 @@ appliance_demand,220-53,"En vivienda, 75 % de cuatro o más aparatos fijos en el
 kitchen_demand,"220-56, Tabla 220-56","Factores de demanda de equipos de cocina en inmuebles que no son vivienda"
 interrupting_rating,"110-9, 110-10","La capacidad interruptiva del interruptor no es menor que la corriente de falla disponible en sus terminales de línea"
 grounding_electrode,"250-66, Tabla 250-66","Tamaño del conductor al electrodo de puesta a tierra según el mayor conductor de la acometida, con el área equivalente de los paralelos"
+transformer_protection,"450-3(b), Tabla 450-3(b)","Protección máxima del primario y del secundario de un transformador de 600 V o menos, en porciento de su corriente nominal"
+transformer_secondary,240-21(c),"Los conductores del secundario de un transformador se protegen en su origen o según las reglas de derivación"

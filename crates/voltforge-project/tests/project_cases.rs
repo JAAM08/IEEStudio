@@ -171,6 +171,7 @@ fn industrial() -> Project {
                 overrides: Overrides::default(),
             },
             interrupting_ka: None,
+            transformer: None,
             areas: vec![],
             circuits: vec![],
         },
@@ -188,6 +189,7 @@ fn industrial() -> Project {
                 overrides: Overrides::default(),
             },
             interrupting_ka: None,
+            transformer: None,
             areas: vec![],
             circuits: vec![Circuit {
                 id: "F-01".to_string(),
@@ -422,6 +424,7 @@ fn motor_panel() -> Project {
             overrides: Overrides::default(),
         },
         interrupting_ka: Some(10.0),
+        transformer: None,
         areas: vec![Area {
             description: "Nave".to_string(),
             occupancy: None,
@@ -673,4 +676,116 @@ fn large_feeders_go_parallel() {
     assert_eq!(feeder.current_carrying_conductors, 6);
     assert_eq!(feeder.conduit.as_ref().unwrap().count, 1);
     assert!(!feeder.parallel_auto);
+}
+
+/// Un tablero de 220Y/127 V alimentado desde 480Y/277 V por un transformador
+/// de 45 kVA y 3 %. Primario: In = 45 000 / (√3 · 480) = 54.13 A; diseño al
+/// 125 %, 67.66 A: interruptor de 70 A y 4 AWG (70 A a 60 °C). Secundario:
+/// In = 118.09 A; 147.62 A de diseño: interruptor de 150 A (el normalizado
+/// inmediato superior al 125 %, nota 1) y 1/0 AWG (150 A a 75 °C).
+fn transformer_project() -> Project {
+    let mut project = industrial();
+    project.source.fault = SourceFault {
+        available_ka: Some(30.0),
+        ..SourceFault::default()
+    };
+    project.panels[0].feeder.interrupting_ka = Some(65.0);
+    project.panels[0].interrupting_ka = Some(35.0);
+    let force = &mut project.panels[1];
+    force.name = "Tablero de servicios".into();
+    force.circuits[0].load.power_w = 20_000.0;
+    force.circuits[0].load.continuous = false;
+    force.feeder.length_m = 20.0;
+    force.interrupting_ka = Some(10.0);
+    force.transformer = Some(voltforge_project::Transformer {
+        kva: 45.0,
+        impedance_percent: 3.0,
+        secondary: System::WYE_220_127,
+        secondary_protection: true,
+        secondary_length_m: 3.0,
+        secondary_has_neutral: true,
+        secondary_overrides: Overrides::default(),
+        secondary_interrupting_ka: Some(10.0),
+    });
+    project
+}
+
+#[test]
+fn transformer_sizes_both_sides_by_its_rating() {
+    let result = calculate(&transformer_project()).unwrap();
+    let panel = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
+    let t = panel.transformer.as_ref().unwrap();
+    close(t.primary_a.unwrap(), 54.13);
+    close(t.secondary_a.unwrap(), 118.09);
+    close(t.load_percent, 44.44);
+
+    let primary = panel.feeder.run.as_ref().unwrap();
+    close(primary.nominal_a, 24.06);
+    close(primary.design_a, 67.66);
+    close(primary.breaker_a, 70.0);
+    assert_eq!(primary.size, Size::new("4"));
+    for name in ["Protección del primario", "Capacidad del transformador"] {
+        let c = panel.feeder.checks.iter().find(|c| c.name == name).unwrap();
+        assert_eq!(c.status, Status::Complies, "{name}: {}", c.detail);
+    }
+
+    let secondary = panel.secondary.as_ref().unwrap();
+    let run = secondary.run.as_ref().unwrap();
+    close(run.nominal_a, 52.49);
+    close(run.design_a, 147.62);
+    close(run.breaker_a, 150.0);
+    assert_eq!(run.size, Size::new("1/0"));
+    // Sistema derivado: la caída se cuenta desde el secundario.
+    close(run.cumulative_drop_percent, run.drop_percent);
+    let c = secondary
+        .checks
+        .iter()
+        .find(|c| c.name == "Protección del secundario")
+        .unwrap();
+    assert_eq!(c.status, Status::Complies, "{}", c.detail);
+
+    // El circuito de 127/220 V se calcula con la tensión del secundario.
+    let oven = circuit(&panel.circuits, "F-01").run.as_ref().unwrap();
+    close(oven.nominal_a, 52.49);
+    close(
+        oven.cumulative_drop_percent,
+        run.drop_percent + oven.drop_percent,
+    );
+
+    // Cortocircuito: la impedancia hasta el primario (fuente de 30 kA, 40 m
+    // de 12 AWG y 20 m de 4 AWG) es 0.238469 + j0.022098 Ω a 277 V; referida
+    // al secundario, por (127.017 / 277.128)² = 0.21007: 0.050095 +
+    // j0.004642 Ω. El transformador suma j 0.03 · 3 · 127.017² / 45 000 =
+    // j0.032267 Ω. En las terminales del secundario:
+    // 127.017 / |0.050095 + j0.036909| = 2.04 kA, menos que su límite
+    // In / Z = 118.09 / 0.03 = 3.94 kA.
+    let terminals = run.fault_ka.unwrap();
+    close(terminals, 2.0413);
+    assert!(panel.fault_ka.unwrap() < terminals);
+}
+
+/// Un transformador chico para la carga no cumple, y sin protección en el
+/// secundario se exige revisar 240-21(c).
+#[test]
+fn an_overloaded_transformer_fails() {
+    let mut project = transformer_project();
+    let t = project.panels[1].transformer.as_mut().unwrap();
+    t.kva = 15.0;
+    t.secondary_protection = false;
+    let result = calculate(&project).unwrap();
+    let panel = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
+    let capacity = panel
+        .feeder
+        .checks
+        .iter()
+        .find(|c| c.name == "Capacidad del transformador")
+        .unwrap();
+    assert_eq!(capacity.status, Status::Fails);
+    let secondary = panel.secondary.as_ref().unwrap();
+    let protection = secondary
+        .checks
+        .iter()
+        .find(|c| c.name == "Protección del secundario")
+        .unwrap();
+    assert_eq!(protection.status, Status::NotEvaluated);
 }

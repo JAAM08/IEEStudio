@@ -135,9 +135,7 @@ fn panel_tree(
     shown[index] = true;
     let panel = &doc.project.panels[index];
     let result = doc.panel_result(index);
-    let status = result.map(|r| {
-        worst(std::iter::once(r.feeder.status).chain(r.circuits.iter().map(|c| c.status)))
-    });
+    let status = result.map(|r| worst(r.runs().map(|c| c.status)));
     let selected = doc.selection == Selection::Feeder(index);
     let id = ui.make_persistent_id(("tablero", index));
     let mut state =
@@ -174,6 +172,23 @@ fn panel_tree(
     state.store(ui.ctx());
     if !open {
         return;
+    }
+    if let Some(t) = &panel.transformer {
+        let st = result.and_then(|r| r.secondary.as_ref()).map(|r| r.status);
+        if item(
+            ui,
+            p,
+            depth + 1,
+            icon::SWAP,
+            &format!("Transformador {} kVA", t.kva),
+            "secundario",
+            doc.selection == Selection::Secondary(index),
+            st,
+        )
+        .clicked()
+        {
+            *select = Some(Selection::Secondary(index));
+        }
     }
     for (c, circuit) in panel.circuits.iter().enumerate() {
         let st = result.and_then(|r| r.circuits.get(c)).map(|r| r.status);

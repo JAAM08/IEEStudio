@@ -25,6 +25,7 @@ fn industrial() -> Project {
                 overrides: Overrides::default(),
             },
             interrupting_ka: None,
+            transformer: None,
             areas: vec![],
             circuits: vec![],
         },
@@ -42,6 +43,7 @@ fn industrial() -> Project {
                 overrides: Overrides::default(),
             },
             interrupting_ka: None,
+            transformer: None,
             areas: vec![],
             circuits: vec![Circuit {
                 id: "F-01".to_string(),
