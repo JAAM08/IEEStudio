@@ -16,8 +16,9 @@ cargo run -p ieestudio-app -- casa.iees
 cargo run -p ieestudio-cli -- excel casa.iees        # cuadro de cargas a Excel; «importar» lo trae de vuelta
 xvfb-run -a cargo run -p ieestudio-app -- --captura captura.png   # revisar la interfaz sin pantalla
 # con --espacio calculo|diagrama|documentacion, --panel rapido|unifilar|memoria|ninguno,
-# --propiedades datos|resultados|normativa, --claro, --inicio (pantalla de inicio)
-# y --comandos (paleta de comandos abierta)
+# --propiedades datos|resultados|normativa, --claro, --inicio (pantalla de inicio),
+# --comandos (paleta de comandos abierta), --paso proyecto|tableros|circuitos|revisar|memoria
+# (vista guiada) y --avanzada (vista con paneles)
 tools/sitio-web.sh                                   # ieestudio.com con la app en el navegador, en target/sitio
 cargo clippy --target wasm32-unknown-unknown -p ieestudio-app -- -D warnings
 ```

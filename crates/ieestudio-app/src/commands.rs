@@ -7,6 +7,7 @@
 use eframe::egui::{self, Key, RichText};
 use egui_phosphor::regular as icon;
 
+use crate::guided::Step;
 use crate::state::{Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{muted, strong};
@@ -37,6 +38,8 @@ pub enum Command {
     ResetWorkspace,
     ToggleTheme,
     Select(Selection),
+    Step(Step),
+    ToggleView,
 }
 
 /// Un renglón de la paleta: el comando, su texto, su ícono, palabras para
@@ -204,6 +207,22 @@ fn entries(doc: &Doc) -> Vec<Entry> {
             "Supr",
         ));
     }
+    for (k, step) in Step::ALL.into_iter().enumerate() {
+        list.push(entry(
+            Command::Step(step),
+            icon::LIST_NUMBERS,
+            format!("Paso {}: {}", k + 1, step.title()),
+            "paso ir guiada",
+            "",
+        ));
+    }
+    list.push(entry(
+        Command::ToggleView,
+        icon::LAYOUT,
+        "Cambiar entre vista guiada y avanzada",
+        "vista guiada avanzada paneles pasos",
+        "",
+    ));
     for tab in Tab::ALL {
         list.push(entry(
             Command::Panel(tab),

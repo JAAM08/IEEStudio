@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::{Command, CommandPalette};
 use crate::files::{self, Filter, Inbox, Picked, Purpose, Saved};
+use crate::guided::{self, Step};
 use crate::panels::{schedule, Shared, Viewer};
 use crate::state::{empty_project, Doc, Selection};
 use crate::theme::{self, Palette, ACCENTS};
@@ -45,6 +46,15 @@ struct Prefs {
     /// arrancar.
     #[serde(default)]
     recent: Vec<PathBuf>,
+    /// Vista guiada por pasos (la de omisión) o avanzada con paneles.
+    #[serde(default = "yes")]
+    guided: bool,
+    #[serde(default)]
+    step: Step,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// Cuántos proyectos recientes se recuerdan.
@@ -100,6 +110,11 @@ pub struct App {
     /// Pantalla de inicio en lugar de los paneles: al arrancar sin nada que
     /// abrir, o cuando el usuario la pide.
     home: bool,
+    /// Vista guiada por pasos; si no, la avanzada con paneles acoplables.
+    guided: bool,
+    step: Step,
+    /// Cálculo rápido como ventana flotante, en la vista guiada.
+    quick_window: bool,
 }
 
 #[derive(Clone)]
@@ -119,6 +134,10 @@ pub struct Options {
     pub home: bool,
     /// Empieza con la paleta de comandos abierta, para revisarla.
     pub palette: bool,
+    /// Paso de la vista guiada en el que se empieza.
+    pub step: Option<Step>,
+    /// Empieza en la vista avanzada, con paneles.
+    pub advanced: bool,
 }
 
 impl App {
@@ -134,6 +153,18 @@ impl App {
                 .and_then(|text| serde_json::from_str(&text).ok())
         };
         let recent = prefs.as_ref().map(|p| p.recent.clone()).unwrap_or_default();
+        let (saved_guided, saved_step) = prefs
+            .as_ref()
+            .map_or((true, Step::Circuits), |p| (p.guided, p.step));
+        // Las opciones de la vista avanzada (espacio, panel, pestaña de
+        // propiedades) la piden; un paso pide la guiada.
+        let advanced = options.advanced
+            || options.properties.is_some()
+            || options.workspace.is_some()
+            || options.focus.is_some()
+            || options.no_panels;
+        let guided_view = options.step.is_some() || (!advanced && saved_guided);
+        let start_step = options.step.unwrap_or(saved_step);
         let (dark, accent, workspace, dock, columns, zoom) = match prefs {
             Some(p) => (
                 p.dark,
@@ -181,6 +212,9 @@ impl App {
             ctx: cc.egui_ctx.clone(),
             commands: CommandPalette::default(),
             home: false,
+            guided: guided_view,
+            step: start_step,
+            quick_window: false,
         };
         app.doc.selection = Selection::Circuit(0, 1);
         // Abre lo que se pidió; si no, el último proyecto, si todavía existe.
@@ -275,19 +309,35 @@ impl App {
             }
             Command::Quick => {
                 self.home = false;
-                workspace::open(&mut self.dock, Tab::Quick);
+                if self.guided {
+                    self.quick_window = true;
+                } else {
+                    workspace::open(&mut self.dock, Tab::Quick);
+                }
             }
             Command::Panel(tab) => {
                 self.home = false;
+                self.guided = false;
                 workspace::open(&mut self.dock, tab);
             }
             Command::Workspace(ws) => {
                 self.home = false;
+                self.guided = false;
                 self.set_workspace(ws);
             }
             Command::ResetWorkspace => {
                 self.home = false;
+                self.guided = false;
                 self.dock = self.workspace.layout();
+            }
+            Command::Step(step) => {
+                self.home = false;
+                self.guided = true;
+                self.step = step;
+            }
+            Command::ToggleView => {
+                self.home = false;
+                self.guided = !self.guided;
             }
             Command::ToggleTheme => {
                 self.dark = !self.dark;
@@ -297,7 +347,14 @@ impl App {
             Command::Select(selection) => {
                 self.home = false;
                 self.doc.selection = selection;
-                workspace::open(&mut self.dock, Tab::Schedule);
+                if self.guided {
+                    self.step = match selection {
+                        Selection::Circuit(..) => Step::Circuits,
+                        _ => Step::Panels,
+                    };
+                } else {
+                    workspace::open(&mut self.dock, Tab::Schedule);
+                }
             }
         }
     }
@@ -621,7 +678,11 @@ impl App {
 
     fn perform(&mut self, action: Pending) {
         match action {
-            Pending::New => self.set_project(empty_project(), None),
+            Pending::New => {
+                self.set_project(empty_project(), None);
+                // Un proyecto nuevo empieza por sus datos generales.
+                self.step = Step::Project;
+            }
             Pending::Open => self.open_dialog(),
             Pending::OpenPath(path) => self.load(path),
             Pending::Example => self.set_project(example::house(), None),
@@ -657,7 +718,245 @@ impl App {
 
     // ------------------------------------------------------------ barras
 
+    /// Opciones del menú Archivo; las comparten la vista guiada y la avanzada.
+    fn file_menu(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .add(
+                egui::Button::new(format!("{}  Nuevo proyecto", icon::FILE_PLUS))
+                    .shortcut_text("Ctrl+N"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.request(Pending::New);
+        }
+        if ui
+            .add(
+                egui::Button::new(format!("{}  Abrir…", icon::FOLDER_OPEN)).shortcut_text("Ctrl+O"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.request(Pending::Open);
+        }
+        let recent: Vec<PathBuf> = self.recent.clone();
+        // En el navegador no hay rutas a las que volver.
+        if !files::WEB {
+            ui.add_enabled_ui(!recent.is_empty(), |ui| {
+                ui.menu_button("     Abrir reciente", |ui| {
+                    for path in &recent {
+                        let name = path.file_name().map_or_else(
+                            || path.display().to_string(),
+                            |n| n.to_string_lossy().into_owned(),
+                        );
+                        let exists = path.exists();
+                        let response = ui
+                            .add_enabled(exists, egui::Button::new(name))
+                            .on_hover_text(path.display().to_string())
+                            .on_disabled_hover_text(format!("Ya no existe: {}", path.display()));
+                        if response.clicked() {
+                            ui.close();
+                            self.request(Pending::OpenPath(path.clone()));
+                        }
+                    }
+                    ui.separator();
+                    if ui.button("Borrar la lista").clicked() {
+                        ui.close();
+                        self.recent.clear();
+                    }
+                });
+            });
+        }
+        if ui
+            .add(
+                egui::Button::new(if files::WEB {
+                    format!("{}  Descargar proyecto", icon::FLOPPY_DISK)
+                } else {
+                    format!("{}  Guardar", icon::FLOPPY_DISK)
+                })
+                .shortcut_text("Ctrl+S"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.save(false);
+        }
+        // En el navegador «Guardar» ya descarga con el nombre del proyecto.
+        if !files::WEB
+            && ui
+                .add(egui::Button::new("     Guardar como…").shortcut_text("Ctrl+Mayús+S"))
+                .clicked()
+        {
+            ui.close();
+            self.save(true);
+        }
+        ui.separator();
+        if ui
+            .add(
+                egui::Button::new(format!("{}  Exportar memoria en PDF…", icon::FILE_PDF))
+                    .shortcut_text("Ctrl+E"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.export_pdf(false);
+        }
+        if ui
+            .button("     Exportar hoja del cálculo rápido…")
+            .clicked()
+        {
+            ui.close();
+            self.export_pdf(true);
+        }
+        if ui
+            .button("     Exportar unifilar a DXF…")
+            .on_hover_text(
+                "Líneas y textos en capas, para abrirlo en AutoCAD u otro programa de CAD",
+            )
+            .clicked()
+        {
+            ui.close();
+            self.export_dxf();
+        }
+        ui.separator();
+        if ui
+            .button(format!(
+                "{}  Exportar cuadro de cargas a Excel…",
+                icon::FILE_XLS
+            ))
+            .on_hover_text("Tableros, circuitos y resultados en un libro .xlsx")
+            .clicked()
+        {
+            ui.close();
+            self.export_excel();
+        }
+        if ui
+            .button("     Importar cuadro de cargas de Excel…")
+            .on_hover_text("Agrega o actualiza tableros y circuitos por su ID. No borra nada.")
+            .clicked()
+        {
+            ui.close();
+            self.import_excel();
+        }
+        ui.separator();
+        if ui
+            .button(format!("{}  Inicio", icon::HOUSE_LINE))
+            .on_hover_text("Nuevo, abrir, ejemplo, cálculo rápido y proyectos recientes")
+            .clicked()
+        {
+            ui.close();
+            self.home = true;
+        }
+        if ui.button("     Abrir el proyecto de ejemplo").clicked() {
+            ui.close();
+            self.request(Pending::Example);
+        }
+        // En el navegador se cierra la pestaña; el proyecto ya quedó guardado.
+        if !files::WEB {
+            ui.separator();
+            if ui
+                .add(egui::Button::new("     Salir").shortcut_text("Alt+F4"))
+                .clicked()
+            {
+                ui.close();
+                self.request(Pending::Quit);
+            }
+        }
+    }
+
+    /// Barra superior de la vista guiada: marca, Archivo, los cinco pasos y
+    /// lo que siempre debe estar a la mano.
+    fn guided_bar(&mut self, ui: &mut egui::Ui) {
+        let p = self.shared.palette;
+        ui.horizontal(|ui| {
+            ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+            ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+            ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+            ui.label(RichText::new(icon::LIGHTNING).size(17.0).color(p.accent));
+            ui.label(strong("IEEStudio").size(14.0));
+            let dirty = if self.doc.dirty { " •" } else { "" };
+            ui.add(
+                egui::Label::new(muted(&p, format!("· {}{dirty}", self.doc.project.name)))
+                    .truncate(),
+            )
+            .on_hover_text("Proyecto abierto; • significa cambios sin guardar");
+            ui.add_space(6.0);
+            ui.menu_button("Archivo", |ui| self.file_menu(ui));
+            if ui
+                .add_enabled(
+                    self.doc.can_undo(),
+                    egui::Button::new(RichText::new(icon::ARROW_COUNTER_CLOCKWISE).size(14.0)),
+                )
+                .on_hover_text("Deshacer (Ctrl+Z)")
+                .clicked()
+            {
+                self.doc.undo();
+            }
+            if ui
+                .add_enabled(
+                    self.doc.can_redo(),
+                    egui::Button::new(RichText::new(icon::ARROW_CLOCKWISE).size(14.0)),
+                )
+                .on_hover_text("Rehacer (Ctrl+Y)")
+                .clicked()
+            {
+                self.doc.redo();
+            }
+            ui.add_space(18.0);
+            if let Some(step) = guided::step_bar(ui, &p, if self.home { Step::ALL[0] } else { self.step }, &self.doc) {
+                self.step = step;
+                self.home = false;
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let (glyph, tip) = if self.dark {
+                    (icon::SUN, "Cambiar a tema claro")
+                } else {
+                    (icon::MOON, "Cambiar a tema oscuro")
+                };
+                if ui
+                    .add(egui::Button::new(RichText::new(glyph).size(15.0)).frame(false))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    self.dark = !self.dark;
+                    self.restyle(ui.ctx());
+                }
+                if ui
+                    .button(RichText::new(format!("{}  Vista avanzada", icon::LAYOUT)).color(p.ink2))
+                    .on_hover_text("Paneles acoplables y espacios de trabajo, para quien ya domina el programa")
+                    .clicked()
+                {
+                    self.guided = false;
+                    self.home = false;
+                }
+                if ui
+                    .button(RichText::new(format!("{}  Buscar", icon::MAGNIFYING_GLASS)).color(p.ink2))
+                    .on_hover_text("Comandos, pasos, tableros y circuitos por su nombre (Ctrl+K)")
+                    .clicked()
+                {
+                    self.commands.toggle();
+                }
+                ui.scope(|ui| {
+                    let w = &mut ui.style_mut().visuals.widgets;
+                    w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
+                    w.inactive.weak_bg_fill = p.panel;
+                    if ui
+                        .button(format!("{}  Cálculo rápido", icon::CALCULATOR))
+                        .on_hover_text("Un circuito suelto, sin proyecto (F8)")
+                        .clicked()
+                    {
+                        self.run_command(Command::Quick);
+                    }
+                });
+            });
+        });
+    }
+
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
+        if self.guided {
+            self.guided_bar(ui);
+            return;
+        }
         let p = self.shared.palette;
         ui.horizontal(|ui| {
             // Menús de texto sin marco, como en las aplicaciones de escritorio.
@@ -668,156 +967,7 @@ impl App {
             ui.label(strong("IEEStudio").size(14.0));
             ui.add_space(10.0);
 
-            ui.menu_button("Archivo", |ui| {
-                if ui
-                    .add(
-                        egui::Button::new(format!("{}  Nuevo proyecto", icon::FILE_PLUS))
-                            .shortcut_text("Ctrl+N"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.request(Pending::New);
-                }
-                if ui
-                    .add(
-                        egui::Button::new(format!("{}  Abrir…", icon::FOLDER_OPEN))
-                            .shortcut_text("Ctrl+O"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.request(Pending::Open);
-                }
-                let recent: Vec<PathBuf> = self.recent.clone();
-                // En el navegador no hay rutas a las que volver.
-                if !files::WEB {
-                    ui.add_enabled_ui(!recent.is_empty(), |ui| {
-                        ui.menu_button("     Abrir reciente", |ui| {
-                            for path in &recent {
-                                let name = path.file_name().map_or_else(
-                                    || path.display().to_string(),
-                                    |n| n.to_string_lossy().into_owned(),
-                                );
-                                let exists = path.exists();
-                                let response = ui
-                                    .add_enabled(exists, egui::Button::new(name))
-                                    .on_hover_text(path.display().to_string())
-                                    .on_disabled_hover_text(format!(
-                                        "Ya no existe: {}",
-                                        path.display()
-                                    ));
-                                if response.clicked() {
-                                    ui.close();
-                                    self.request(Pending::OpenPath(path.clone()));
-                                }
-                            }
-                            ui.separator();
-                            if ui.button("Borrar la lista").clicked() {
-                                ui.close();
-                                self.recent.clear();
-                            }
-                        });
-                    });
-                }
-                if ui
-                    .add(
-                        egui::Button::new(if files::WEB {
-                            format!("{}  Descargar proyecto", icon::FLOPPY_DISK)
-                        } else {
-                            format!("{}  Guardar", icon::FLOPPY_DISK)
-                        })
-                        .shortcut_text("Ctrl+S"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.save(false);
-                }
-                // En el navegador «Guardar» ya descarga con el nombre del proyecto.
-                if !files::WEB
-                    && ui
-                        .add(egui::Button::new("     Guardar como…").shortcut_text("Ctrl+Mayús+S"))
-                        .clicked()
-                {
-                    ui.close();
-                    self.save(true);
-                }
-                ui.separator();
-                if ui
-                    .add(
-                        egui::Button::new(format!("{}  Exportar memoria en PDF…", icon::FILE_PDF))
-                            .shortcut_text("Ctrl+E"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.export_pdf(false);
-                }
-                if ui
-                    .button("     Exportar hoja del cálculo rápido…")
-                    .clicked()
-                {
-                    ui.close();
-                    self.export_pdf(true);
-                }
-                if ui
-                    .button("     Exportar unifilar a DXF…")
-                    .on_hover_text(
-                        "Líneas y textos en capas, para abrirlo en AutoCAD u otro programa de CAD",
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.export_dxf();
-                }
-                ui.separator();
-                if ui
-                    .button(format!(
-                        "{}  Exportar cuadro de cargas a Excel…",
-                        icon::FILE_XLS
-                    ))
-                    .on_hover_text("Tableros, circuitos y resultados en un libro .xlsx")
-                    .clicked()
-                {
-                    ui.close();
-                    self.export_excel();
-                }
-                if ui
-                    .button("     Importar cuadro de cargas de Excel…")
-                    .on_hover_text(
-                        "Agrega o actualiza tableros y circuitos por su ID. No borra nada.",
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.import_excel();
-                }
-                ui.separator();
-                if ui
-                    .button(format!("{}  Inicio", icon::HOUSE_LINE))
-                    .on_hover_text("Nuevo, abrir, ejemplo, cálculo rápido y proyectos recientes")
-                    .clicked()
-                {
-                    ui.close();
-                    self.home = true;
-                }
-                if ui.button("     Abrir el proyecto de ejemplo").clicked() {
-                    ui.close();
-                    self.request(Pending::Example);
-                }
-                // En el navegador se cierra la pestaña; el proyecto ya quedó guardado.
-                if !files::WEB {
-                    ui.separator();
-                    if ui
-                        .add(egui::Button::new("     Salir").shortcut_text("Alt+F4"))
-                        .clicked()
-                    {
-                        ui.close();
-                        self.request(Pending::Quit);
-                    }
-                }
-            });
+            ui.menu_button("Archivo", |ui| self.file_menu(ui));
 
             ui.menu_button("Edición", |ui| {
                 if ui
@@ -979,6 +1129,13 @@ impl App {
             // Lo que más se usa fuera de los menús: el cálculo de un circuito
             // suelto y la búsqueda de comandos.
             ui.add_space(14.0);
+            if ui
+                .button(RichText::new(format!("{}  Vista guiada", icon::LIST_NUMBERS)).color(p.accent_text))
+                .on_hover_text("Volver a los cinco pasos: Proyecto, Tableros, Circuitos, Revisar y Memoria")
+                .clicked()
+            {
+                self.guided = true;
+            }
             ui.scope(|ui| {
                 let w = &mut ui.style_mut().visuals.widgets;
                 w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
@@ -1368,11 +1525,18 @@ impl eframe::App for App {
         let mut start = None;
         let home = self.home;
         let recent = self.recent.clone();
+        let guided_view = self.guided;
+        let step = self.step;
+        let mut guided_out = (None, None);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(p.bg))
             .show(ui, |ui| {
                 if home {
                     start = home_screen(ui, &p, &recent, &viewer.doc.project.name);
+                    return;
+                }
+                if guided_view {
+                    guided_out = guided::show(ui, step, viewer.doc, viewer.shared);
                     return;
                 }
                 let rect = ui.max_rect();
@@ -1394,6 +1558,16 @@ impl eframe::App for App {
             None => {}
         }
         let export = viewer.export_report;
+        let (go, request) = guided_out;
+        if let Some(step) = go {
+            self.step = step;
+        }
+        match request {
+            Some(guided::Export::Pdf) => self.export_pdf(false),
+            Some(guided::Export::Excel) => self.export_excel(),
+            Some(guided::Export::Dxf) => self.export_dxf(),
+            None => {}
+        }
         match start {
             Some(Start::New) => self.request(Pending::New),
             Some(Start::Open) => self.request(Pending::Open),
@@ -1424,8 +1598,22 @@ impl eframe::App for App {
             self.notice = None;
             self.done = Some(done);
         }
+        if self.quick_window {
+            let mut open = true;
+            egui::Window::new(format!("{}  Cálculo rápido", icon::CALCULATOR))
+                .open(&mut open)
+                .default_size([1100.0, 700.0])
+                .default_pos([160.0, 70.0])
+                .collapsible(false)
+                .show(&ctx, |ui| self.shared.quick.ui(ui, &p));
+            self.quick_window = open;
+        }
         if let Some(input) = self.shared.quick.take_request() {
             self.quick_to_project(&input);
+            if self.guided {
+                self.quick_window = false;
+                self.step = Step::Circuits;
+            }
         }
         // El historial registra un cambio cuando la interacción terminó.
         let settled = !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none());
@@ -1448,6 +1636,8 @@ impl eframe::App for App {
             columns: self.shared.columns.clone(),
             diagram_zoom: self.shared.diagram_zoom,
             recent: self.recent.clone(),
+            guided: self.guided,
+            step: self.step,
         };
         if let Ok(text) = serde_json::to_string(&prefs) {
             storage.set_string(STORAGE_KEY, text);

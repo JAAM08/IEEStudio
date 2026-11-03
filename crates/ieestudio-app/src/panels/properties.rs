@@ -169,8 +169,19 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
         changed |= combo(ui, "sistema", &mut project.source.system, &SYSTEMS);
     });
 
-    let s = &mut project.settings;
     section(ui, p, "Criterios de diseño");
+    changed |= criteria_inputs(ui, p, &mut project.settings);
+    changed
+}
+
+/// Criterios de diseño del proyecto: límites de caída, ambiente, conductor,
+/// canalización y tablas opcionales.
+pub(crate) fn criteria_inputs(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    s: &mut ieestudio_project::Settings,
+) -> bool {
+    let mut changed = false;
     property(ui, p, "Caída en derivado", |ui| {
         changed |= number(ui, &mut s.branch_drop_limit_percent, 0.1, 0.5, 10.0, " %");
     });
@@ -237,7 +248,7 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     changed
 }
 
-fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> bool {
+pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> bool {
     let mut changed = false;
     let others = doc.feeder_candidates(i);
     let source_name = doc.project.source.name.clone();
@@ -461,7 +472,7 @@ fn secondary_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> 
 
 /// Tipo de inmueble o de área de la Tabla 220-12. `none` es el texto de la
 /// opción vacía: «Sin elegir» o el tipo del proyecto.
-fn occupancy_combo(
+pub(crate) fn occupancy_combo(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash + std::fmt::Debug,
     value: &mut Option<String>,
@@ -495,6 +506,20 @@ fn occupancy_combo(
 }
 
 fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: usize) -> bool {
+    circuit_form(ui, doc, p, i, c, false)
+}
+
+/// Datos de un circuito. En la vista guiada solo quedan a la vista los
+/// esenciales; el identificador, el factor de potencia, la carga continua,
+/// el neutro y las decisiones de diseño van en «Opciones avanzadas».
+pub(crate) fn circuit_form(
+    ui: &mut egui::Ui,
+    doc: &mut Doc,
+    p: &Palette,
+    i: usize,
+    c: usize,
+    guided: bool,
+) -> bool {
     let mut changed = false;
     let settings = doc.project.settings.clone();
     let id_problem = doc.circuit_id_problem(i, c);
@@ -504,13 +529,10 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
         .and_then(|r| r.circuits.get(c))
         .map(|r| r.load_w);
     let circuit = &mut doc.project.panels[i].circuits[c];
-    section(ui, p, "Circuito");
-    property(ui, p, "ID", |ui| {
-        changed |= ui
-            .add(egui::TextEdit::singleline(&mut circuit.id).desired_width(80.0))
-            .changed();
-    });
-    if let Some(problem) = id_problem {
+    if !guided {
+        section(ui, p, "Circuito");
+        changed |= id_field(ui, p, &mut circuit.id, id_problem);
+    } else if let Some(problem) = &id_problem {
         ui.label(RichText::new(format!("{} {problem}", icon::WARNING)).color(p.warn));
     }
     property(ui, p, "Descripción", |ui| {
@@ -580,20 +602,8 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
             changed |= number(ui, &mut circuit.load.power_w, 10.0, 0.0, 5.0e6, " W");
         });
     }
-    property(ui, p, "Factor de potencia", |ui| {
-        changed |= ui
-            .add(
-                egui::DragValue::new(&mut circuit.load.power_factor)
-                    .speed(0.005)
-                    .range(0.1..=1.0)
-                    .fixed_decimals(2),
-            )
-            .changed();
-    });
-    if !equipment {
-        changed |= ui
-            .checkbox(&mut circuit.load.continuous, "Carga continua (3 h o más)")
-            .changed();
+    if !guided {
+        changed |= load_details(ui, p, &mut circuit.load, equipment);
     }
     let three_phase = circuit.kind == CircuitKind::ThreePhase;
     if let (LoadKind::Motor, Some(motor)) = (circuit.load.kind, circuit.load.motor.as_mut()) {
@@ -624,7 +634,7 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
             }
         }
     });
-    if circuit.kind != ieestudio_core::CircuitKind::LineToNeutral {
+    if !guided && circuit.kind != ieestudio_core::CircuitKind::LineToNeutral {
         changed |= ui
             .checkbox(&mut circuit.has_neutral, "Lleva neutro")
             .changed();
@@ -633,7 +643,72 @@ fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: us
     property(ui, p, "Longitud", |ui| {
         changed |= number(ui, &mut circuit.length_m, 0.5, 0.0, 5000.0, " m");
     });
-    changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
+    if !guided {
+        changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
+        return changed;
+    }
+    ui.add_space(6.0);
+    egui::CollapsingHeader::new(
+        RichText::new("Opciones avanzadas").color(p.ink2),
+    )
+    .id_salt(("avanzadas", i, c))
+    .show(ui, |ui| {
+        ui.label(
+            muted(
+                p,
+                "Identificador, factor de potencia, carga continua, neutro, cable o interruptor fijados, material y tubería.",
+            )
+            .size(11.0),
+        );
+        changed |= id_field(ui, p, &mut circuit.id, None);
+        changed |= load_details(ui, p, &mut circuit.load, equipment);
+        if circuit.kind != ieestudio_core::CircuitKind::LineToNeutral {
+            changed |= ui
+                .checkbox(&mut circuit.has_neutral, "Lleva neutro")
+                .changed();
+        }
+        changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
+    });
+    changed
+}
+
+/// Identificador de un circuito, con el aviso si se repite.
+fn id_field(ui: &mut egui::Ui, p: &Palette, id: &mut String, problem: Option<&str>) -> bool {
+    let mut changed = false;
+    property(ui, p, "ID", |ui| {
+        changed |= ui
+            .add(egui::TextEdit::singleline(id).desired_width(80.0))
+            .changed();
+    });
+    if let Some(problem) = problem {
+        ui.label(RichText::new(format!("{} {problem}", icon::WARNING)).color(p.warn));
+    }
+    changed
+}
+
+/// Factor de potencia y carga continua.
+fn load_details(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    load: &mut ieestudio_project::Load,
+    equipment: bool,
+) -> bool {
+    let mut changed = false;
+    property(ui, p, "Factor de potencia", |ui| {
+        changed |= ui
+            .add(
+                egui::DragValue::new(&mut load.power_factor)
+                    .speed(0.005)
+                    .range(0.1..=1.0)
+                    .fixed_decimals(2),
+            )
+            .changed();
+    });
+    if !equipment {
+        changed |= ui
+            .checkbox(&mut load.continuous, "Carga continua (3 h o más)")
+            .changed();
+    }
     changed
 }
 

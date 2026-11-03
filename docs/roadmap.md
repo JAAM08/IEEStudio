@@ -53,11 +53,17 @@
 - Rediseño de la interfaz, fase 1 (decisión 0019): pantalla de inicio,
   encabezado del tablero, barra contextual, trazabilidad visible en
   Resultados, valores heredados en gris y paleta de comandos (Ctrl+K).
+- Vista guiada en cinco pasos como vista de omisión (decisión 0020):
+  Proyecto, Tableros, Circuitos, Revisar y Memoria; la vista avanzada con
+  paneles queda a un clic.
 
 ## Pendiente, en orden
 
-- Rediseño, fases 2 y 3: tablet y teléfono. Antes, una prueba en un
-  teléfono real de egui en el navegador (teclado virtual, desplazamiento).
+- Rediseño, fases 2 y 3: tablet y teléfono, llevando la vista guiada a una
+  vista por paso. Antes, una prueba en un teléfono real de egui en el
+  navegador (teclado virtual, desplazamiento).
+- Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
+  plantillas de circuito.
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
 
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e

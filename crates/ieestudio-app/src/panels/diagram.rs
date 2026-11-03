@@ -50,7 +50,7 @@ pub fn show(
         .inner
 }
 
-fn paint(
+pub fn paint(
     ui: &mut egui::Ui,
     p: &Palette,
     diagram: &Diagram,

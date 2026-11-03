@@ -3,13 +3,14 @@
 //!
 //! Uso en escritorio: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
 //! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--inicio] [--comandos]
-//! [--captura imagen.png]`
+//! [--paso proyecto|tableros|circuitos|revisar|memoria] [--avanzada] [--captura imagen.png]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
 mod commands;
 mod files;
+mod guided;
 mod panels;
 mod state;
 mod theme;
@@ -35,6 +36,8 @@ fn main() -> eframe::Result {
         properties: None,
         home: false,
         palette: false,
+        step: None,
+        advanced: false,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -44,6 +47,16 @@ fn main() -> eframe::Result {
             "--seleccion" => options.select = args.next(),
             "--inicio" => options.home = true,
             "--comandos" => options.palette = true,
+            "--avanzada" => options.advanced = true,
+            "--paso" => {
+                options.step = match args.next().as_deref() {
+                    Some("proyecto") => Some(guided::Step::Project),
+                    Some("tableros") => Some(guided::Step::Panels),
+                    Some("revisar") => Some(guided::Step::Review),
+                    Some("memoria") => Some(guided::Step::Report),
+                    _ => Some(guided::Step::Circuits),
+                }
+            }
             "--captura" => options.capture = args.next().map(PathBuf::from),
             "--espacio" => {
                 options.workspace = match args.next().as_deref() {
@@ -175,6 +188,8 @@ fn main() {
         properties: None,
         home: false,
         palette: false,
+        step: None,
+        advanced: false,
     };
     wasm_bindgen_futures::spawn_local(async move {
         let canvas = web_sys::window()
