@@ -31,7 +31,7 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 
 | Proyecto | Fuente, tableros y subtableros, circuitos y cargas en un archivo JSON |
 | Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
-| Interfaz gráfica | Paneles acoplables y espacios de trabajo (Cálculo, Diagrama, Documentación); navegador del proyecto; cuadro de cargas con filtros y columnas configurables; propiedades separadas en Datos, Resultados y Normativa; vista previa de la memoria. Recalcula con cada cambio y recuerda el acomodo |
+| Interfaz gráfica | Paneles acoplables y espacios de trabajo (Cálculo, Diagrama, Documentación); navegador del proyecto; cuadro de cargas con filtros y columnas configurables; propiedades separadas en Datos, Resultados y Normativa, con el artículo que respalda cada resultado a la vista; barra contextual del circuito seleccionado; pantalla de inicio; paleta de comandos (Ctrl+K); vista previa de la memoria. Recalcula con cada cambio y recuerda el acomodo |
 | Procedimiento | Cada circuito y alimentador del proyecto muestra su procedimiento paso a paso: fórmula, valores sustituidos y la tabla o artículo de la norma |
 | Diagrama unifilar | Se dibuja solo a partir del proyecto: fuente, alimentadores, tableros, subtableros y circuitos con interruptor, conductores, tubería y caída de tensión. En la pestaña Unifilar, en la memoria y en DXF para AutoCAD u otro programa de CAD (`ieestudio dxf`) |
 | Excel | El cuadro de cargas se exporta a un libro con tableros, circuitos y resultados, y se importa de vuelta: agrega o actualiza por ID, informa las filas con errores y se puede deshacer. Desde el menú Archivo o con `ieestudio excel` y `ieestudio importar` |

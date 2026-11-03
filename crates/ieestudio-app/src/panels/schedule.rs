@@ -7,7 +7,8 @@
 use eframe::egui::{self, Align, Layout, RichText, Sense, Vec2};
 use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
-use ieestudio_project::{RunResult, Status};
+use ieestudio_core::CircuitKind;
+use ieestudio_project::{Phase, RunResult, Status};
 use serde::{Deserialize, Serialize};
 
 use super::Shared;
@@ -319,69 +320,97 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     let panel = &doc.project.panels[panel_index];
 
     // ---------------------------------------------------------- encabezado
+    let statuses: Vec<Status> = std::iter::once(result.feeder.status)
+        .chain(result.secondary.iter().map(|s| s.status))
+        .chain(result.circuits.iter().map(|c| c.status))
+        .collect();
+    let count = |s: Status| statuses.iter().filter(|&&x| x == s).count();
+    let system = doc.bus_system(panel_index);
+    let feeds_from = panel
+        .parent
+        .as_ref()
+        .map_or_else(|| doc.project.source.name.clone(), |id| id.clone());
     egui::Frame::new()
-        .inner_margin(egui::Margin::symmetric(10, 6))
+        .inner_margin(egui::Margin {
+            left: 12,
+            right: 12,
+            top: 10,
+            bottom: 8,
+        })
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(strong(format!("{} · {}", panel.id, panel.name)).size(15.0));
-                if doc.project.panels.len() > 1 {
-                    let mut chosen = panel_index;
-                    egui::ComboBox::from_id_salt("tablero-activo")
-                        .selected_text("Cambiar tablero")
-                        .show_ui(ui, |ui| {
-                            for (i, other) in doc.project.panels.iter().enumerate() {
-                                ui.selectable_value(
-                                    &mut chosen,
-                                    i,
-                                    format!("{} · {}", other.id, other.name),
-                                );
-                            }
-                        });
-                    if chosen != panel_index {
-                        doc.selection = Selection::Feeder(chosen);
+                ui.label(strong(format!("{} · {}", panel.id, panel.name)).size(17.0));
+                ui.add_space(6.0);
+                ui.label(
+                    muted(
+                        &p,
+                        format!(
+                            "{} · se alimenta de {feeds_from}",
+                            label_of(&crate::widgets::SYSTEMS, system)
+                        ),
+                    )
+                    .size(11.5),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if doc.project.panels.len() > 1 {
+                        let mut chosen = panel_index;
+                        egui::ComboBox::from_id_salt("tablero-activo")
+                            .selected_text(format!("{} Cambiar tablero", icon::SWAP))
+                            .show_ui(ui, |ui| {
+                                for (i, other) in doc.project.panels.iter().enumerate() {
+                                    ui.selectable_value(
+                                        &mut chosen,
+                                        i,
+                                        format!("{} · {}", other.id, other.name),
+                                    );
+                                }
+                            });
+                        if chosen != panel_index {
+                            doc.selection = Selection::Feeder(chosen);
+                        }
+                        ui.add_space(8.0);
                     }
-                }
+                    // Conteo por estado: lo primero que se busca al revisar.
+                    let tally = [
+                        (
+                            Status::NotEvaluated,
+                            count(Status::NotEvaluated),
+                            "sin evaluar",
+                        ),
+                        (Status::Fails, count(Status::Fails), "no cumplen"),
+                        (Status::Complies, count(Status::Complies), "cumplen"),
+                    ];
+                    for (status, n, label) in tally {
+                        if n == 0 && status != Status::Complies {
+                            continue;
+                        }
+                        ui.label(
+                            RichText::new(format!(
+                                "{} {n} {label}",
+                                crate::widgets::status_icon(status)
+                            ))
+                            .color(status_color(&p, status))
+                            .size(12.0),
+                        );
+                        ui.add_space(4.0);
+                    }
+                });
             });
-            ui.add_space(4.0);
-            summary_strip(ui, &p, &result);
+            ui.add_space(8.0);
+            summary_strip(ui, &p, &result, worst(statuses.iter().copied()));
         });
     ui.separator();
 
     // ---------------------------------------------------------- herramientas
-    let statuses: Vec<Status> = std::iter::once(result.feeder.status)
-        .chain(result.circuits.iter().map(|c| c.status))
-        .collect();
-    let count = |s: Status| statuses.iter().filter(|&&x| x == s).count();
     let mut action = None;
     ui.horizontal(|ui| {
-        ui.add_space(6.0);
+        ui.add_space(8.0);
         if ui
             .button(format!("{} Circuito", icon::PLUS))
             .on_hover_text("Agregar un circuito a este tablero")
             .clicked()
         {
             action = Some(Action::Add);
-        }
-        let on_circuit = matches!(doc.selection, Selection::Circuit(..));
-        if ui
-            .add_enabled(
-                on_circuit,
-                egui::Button::new(format!("{} Duplicar", icon::COPY)),
-            )
-            .on_hover_text("Duplicar el circuito seleccionado (Ctrl+D)")
-            .clicked()
-        {
-            action = Some(Action::Duplicate);
-        }
-        if ui
-            .add_enabled(
-                on_circuit,
-                egui::Button::new(format!("{} Eliminar", icon::TRASH)),
-            )
-            .on_hover_text("Eliminar el circuito seleccionado (Supr)")
-            .clicked()
-        {
-            action = Some(Action::Remove);
         }
         if ui
             .button(format!("{} Balancear fases", icon::SCALES))
@@ -423,7 +452,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             .color(p.warn),
         );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(6.0);
+            ui.add_space(8.0);
             ui.menu_button(format!("{} Columnas", icon::COLUMNS), |ui| {
                 for col in Col::ALL {
                     if matches!(col, Col::Id | Col::Status) {
@@ -449,6 +478,12 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             });
         });
     });
+    ui.add_space(4.0);
+
+    // ---------------------------------------------------------- contexto
+    // Acciones del elemento seleccionado, junto a la tabla: lo que se puede
+    // hacer con él sin ir a otro panel.
+    let context = context_bar(ui, doc, &p, panel_index, &result);
     ui.add_space(2.0);
 
     // ---------------------------------------------------------- filas
@@ -641,10 +676,26 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         }
     }
 
+    match context {
+        Some(Context::Duplicate) => doc.duplicate_circuit(),
+        Some(Context::Remove) => doc.remove_selected(),
+        Some(Context::Phases(phases)) => {
+            if let Selection::Circuit(i, c) = doc.selection {
+                doc.project.panels[i].circuits[c].phases = phases;
+                doc.edited();
+            }
+        }
+        Some(Context::Size(size)) => {
+            if let Some(ov) = doc.selected_overrides_mut() {
+                ov.size = size;
+                doc.edited();
+            }
+        }
+        Some(Context::Procedure) => shared.open_tab = Some(crate::workspace::Tab::Procedure),
+        None => {}
+    }
     match action {
         Some(Action::Add) => doc.add_circuit(panel_index),
-        Some(Action::Duplicate) => doc.duplicate_circuit(),
-        Some(Action::Remove) => doc.remove_selected(),
         Some(Action::Balance) => {
             shared.done = Some(match doc.balance_phases(panel_index) {
                 Some((before, after)) => {
@@ -659,22 +710,186 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
 
 enum Action {
     Add,
-    Duplicate,
-    Remove,
     Balance,
 }
 
-/// Franja de resumen del tablero: densa, en una línea, sin tarjetas.
-fn summary_strip(ui: &mut egui::Ui, p: &Palette, r: &ieestudio_project::PanelResult) {
-    ui.horizontal(|ui| {
-        let figure = |ui: &mut egui::Ui, label: &str, value: String| {
-            ui.vertical(|ui| {
-                ui.label(RichText::new(label).size(10.5).color(p.ink3));
-                ui.label(RichText::new(value).monospace().size(14.0));
+/// Lo que se pidió desde la barra contextual.
+enum Context {
+    Duplicate,
+    Remove,
+    Phases(Vec<Phase>),
+    /// Fijar un calibre, o `None` para que lo vuelva a proponer IEEStudio.
+    Size(Option<ieestudio_core::Size>),
+    Procedure,
+}
+
+/// Fases que se pueden elegir para una conexión: una o un par.
+fn phase_choices(kind: CircuitKind) -> &'static [&'static [Phase]] {
+    match kind {
+        CircuitKind::LineToNeutral => &[&[Phase::A], &[Phase::B], &[Phase::C]],
+        CircuitKind::LineToLine => &[
+            &[Phase::A, Phase::B],
+            &[Phase::B, Phase::C],
+            &[Phase::C, Phase::A],
+        ],
+        CircuitKind::ThreePhase => &[],
+    }
+}
+
+fn phases_text(phases: &[Phase]) -> String {
+    phases.iter().map(|ph| format!("{ph:?}")).collect()
+}
+
+/// Barra con las acciones del elemento seleccionado del tablero. No aparece
+/// si lo seleccionado es otro tablero o el proyecto.
+fn context_bar(
+    ui: &mut egui::Ui,
+    doc: &Doc,
+    p: &Palette,
+    panel_index: usize,
+    result: &ieestudio_project::PanelResult,
+) -> Option<Context> {
+    let panel = &doc.project.panels[panel_index];
+    let (label, item, circuit) = match doc.selection {
+        Selection::Feeder(i) if i == panel_index => {
+            (format!("Alimentador de {}", panel.id), &result.feeder, None)
+        }
+        Selection::Secondary(i) if i == panel_index => (
+            "Secundario del transformador".to_string(),
+            result.secondary.as_ref()?,
+            None,
+        ),
+        Selection::Circuit(i, c) if i == panel_index => {
+            let circuit = &panel.circuits[c];
+            (
+                format!("{} · {}", circuit.id, circuit.name),
+                result.circuits.get(c)?,
+                Some(circuit),
+            )
+        }
+        _ => return None,
+    };
+    let mut chosen = None;
+    egui::Frame::new()
+        .fill(p.raise)
+        .stroke(egui::Stroke::new(1.0, p.line))
+        .corner_radius(4)
+        .inner_margin(egui::Margin::symmetric(8, 4))
+        .outer_margin(egui::Margin::symmetric(8, 0))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(crate::widgets::status_glyph(p, item.status));
+                ui.add(egui::Label::new(strong(&label)).truncate())
+                    .on_hover_text(&label);
+                ui.add_space(6.0);
+                ui.separator();
+                if circuit.is_some() {
+                    if ui
+                        .button(format!("{} Duplicar", icon::COPY))
+                        .on_hover_text("Duplicar el circuito (Ctrl+D)")
+                        .clicked()
+                    {
+                        chosen = Some(Context::Duplicate);
+                    }
+                    if ui
+                        .button(RichText::new(format!("{} Eliminar", icon::TRASH)))
+                        .on_hover_text("Eliminar el circuito (Supr). Se puede deshacer con Ctrl+Z.")
+                        .clicked()
+                    {
+                        chosen = Some(Context::Remove);
+                    }
+                }
+                if let Some(c) = circuit {
+                    let choices = phase_choices(c.kind);
+                    if !choices.is_empty() {
+                        ui.separator();
+                        ui.label(muted(p, "Fase"));
+                        for choice in choices {
+                            let on = c.phases.as_slice() == *choice;
+                            if ui
+                                .selectable_label(on, phases_text(choice))
+                                .on_hover_text("Conectar el circuito a esta fase")
+                                .clicked()
+                                && !on
+                            {
+                                chosen = Some(Context::Phases(choice.to_vec()));
+                            }
+                        }
+                    }
+                }
+                if let Some(run) = &item.run {
+                    ui.separator();
+                    if run.forced {
+                        if ui
+                            .button(format!(
+                                "{} Liberar {}",
+                                icon::LOCK_SIMPLE_OPEN,
+                                ieestudio_project::size_label(&run.size)
+                            ))
+                            .on_hover_text("Que IEEStudio vuelva a proponer el calibre")
+                            .clicked()
+                        {
+                            chosen = Some(Context::Size(None));
+                        }
+                    } else if ui
+                        .button(format!(
+                            "{} Fijar {}",
+                            icon::LOCK_SIMPLE,
+                            ieestudio_project::size_label(&run.size)
+                        ))
+                        .on_hover_text("Conservar este calibre aunque cambien los datos; IEEStudio lo seguirá verificando")
+                        .clicked()
+                    {
+                        chosen = Some(Context::Size(Some(run.size.clone())));
+                    }
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .button(format!("{} Procedimiento", icon::LIST_BULLETS))
+                        .on_hover_text("Ver cómo se calculó, paso a paso, con su referencia (F6)")
+                        .clicked()
+                    {
+                        chosen = Some(Context::Procedure);
+                    }
+                });
             });
-            ui.add_space(14.0);
+        });
+    chosen
+}
+
+/// Franja de resumen del tablero: una línea de cifras grandes separadas por
+/// líneas finas, sin tarjetas. Cada cifra explica de dónde sale al pasar el
+/// cursor.
+fn summary_strip(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    r: &ieestudio_project::PanelResult,
+    status: Status,
+) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let divider = |ui: &mut egui::Ui| {
+            ui.add_space(16.0);
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(1.0, 34.0), Sense::hover());
+            ui.painter().rect_filled(rect, 0.0, p.line);
+            ui.add_space(16.0);
         };
-        figure(ui, "CONECTADA", format!("{:.0} W", r.connected_w));
+        let figure = |ui: &mut egui::Ui, label: &str, value: String, unit: &str, color| {
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
+                ui.label(RichText::new(label).size(10.5).color(p.ink3));
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 3.0;
+                    ui.label(RichText::new(value).monospace().size(19.0).color(color));
+                    ui.label(RichText::new(unit).size(11.0).color(p.ink2));
+                });
+            })
+            .response
+        };
+        figure(ui, "CONECTADA", format!("{:.0}", r.connected_w), "W", p.ink)
+            .on_hover_text("Suma de las cargas de este tablero y sus subtableros");
+        divider(ui);
         let detail = r
             .demand
             .iter()
@@ -686,27 +901,54 @@ fn summary_strip(ui: &mut egui::Ui, p: &Palette, r: &ieestudio_project::PanelRes
             })
             .collect::<Vec<_>>()
             .join("\n");
-        ui.vertical(|ui| {
-            ui.label(RichText::new("CALCULADA").size(10.5).color(p.ink3));
-            ui.label(
-                RichText::new(format!("{:.0} VA", r.demanded_va))
-                    .monospace()
-                    .size(14.0),
-            );
-        })
-        .response
+        figure(
+            ui,
+            "CALCULADA",
+            format!("{:.0}", r.demanded_va),
+            "VA",
+            p.ink,
+        )
         .on_hover_text(format!(
             "Carga del alimentador según el artículo 220 (factor resultante {:.2}):\n{detail}",
             r.demand_factor
         ));
-        ui.add_space(14.0);
+        divider(ui);
         if let Some(run) = &r.feeder.run {
-            figure(ui, "CORRIENTE ALIM.", format!("{:.2} A", run.nominal_a));
+            figure(ui, "CORRIENTE", format!("{:.2}", run.nominal_a), "A", p.ink)
+                .on_hover_text("Corriente nominal del alimentador");
+            divider(ui);
         }
-        figure(ui, "FP", format!("{:.2}", r.power_factor));
+        figure(ui, "FP", format!("{:.2}", r.power_factor), "", p.ink)
+            .on_hover_text("Factor de potencia de la carga conectada");
+        divider(ui);
+        // La caída mayor del tablero: la que manda al revisar.
+        let worst_drop = r
+            .circuits
+            .iter()
+            .filter_map(|c| c.run.as_ref().map(|run| (c, run.cumulative_drop_percent)))
+            .max_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((c, drop)) = worst_drop {
+            let fails = c
+                .checks
+                .iter()
+                .any(|k| k.name == "Caída acumulada" && k.status == Status::Fails);
+            figure(
+                ui,
+                "CAÍDA MÁXIMA",
+                format!("{drop:.2}"),
+                "%",
+                if fails { p.bad } else { p.ink },
+            )
+            .on_hover_text(format!(
+                "Caída acumulada mayor del tablero: {} · {}",
+                c.id, c.name
+            ));
+            divider(ui);
+        }
 
-        // Balance de fases: tres barras, no una gráfica de dona.
+        // Balance de fases: tres barras con su carga, no una gráfica de dona.
         ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 3.0;
             let title = match r.imbalance_percent {
                 Some(i) => format!("FASES · DESBALANCE {i:.1} %"),
                 None => "FASES · SIN ASIGNAR".to_string(),
@@ -718,27 +960,30 @@ fn summary_strip(ui: &mut egui::Ui, p: &Palette, r: &ieestudio_project::PanelRes
                     .color(if warn { p.warn } else { p.ink3 }),
             );
             let max = r.phase_va.iter().cloned().fold(1.0, f64::max);
-            ui.horizontal(|ui| {
-                for (name, va) in ["A", "B", "C"].iter().zip(r.phase_va) {
-                    ui.label(RichText::new(*name).size(11.0).color(p.ink2));
-                    let (rect, resp) = ui.allocate_exact_size(Vec2::new(54.0, 6.0), Sense::hover());
-                    ui.painter().rect_filled(rect, 2.0, p.raise);
+            for (name, va) in ["A", "B", "C"].iter().zip(r.phase_va) {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 5.0;
+                    ui.label(RichText::new(*name).size(10.5).color(p.ink2));
+                    let (rect, resp) = ui.allocate_exact_size(Vec2::new(90.0, 5.0), Sense::hover());
+                    ui.painter().rect_filled(rect, 2.0, p.selected);
                     let mut fill = rect;
                     fill.set_width(rect.width() * (va / max) as f32);
                     ui.painter().rect_filled(fill, 2.0, p.ink2);
+                    ui.label(
+                        RichText::new(format!("{:.1} kVA", va / 1000.0))
+                            .monospace()
+                            .size(10.5)
+                            .color(p.ink2),
+                    );
                     resp.on_hover_text(format!("Fase {name}: {va:.0} VA"));
-                    ui.add_space(6.0);
-                }
-            });
+                });
+            }
         });
-        ui.add_space(14.0);
-
-        let all: Vec<Status> = std::iter::once(r.feeder.status)
-            .chain(r.circuits.iter().map(|c| c.status))
-            .collect();
+        divider(ui);
         ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 4.0;
             ui.label(RichText::new("ESTE TABLERO").size(10.5).color(p.ink3));
-            ui.label(status_text(p, worst(all.iter().copied())));
+            ui.label(status_text(p, status).size(15.0));
         });
     });
 }

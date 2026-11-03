@@ -16,8 +16,8 @@ use crate::state::{Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{
     combo, combo_override, load_kind_hint, motor_hp_combo, muted, number, optional_number,
-    property, section, source_badge, status_text, strong, Source, CONDUITS, INSULATIONS, KINDS,
-    LOAD_KINDS, MATERIALS, MOTOR_TYPES, SYSTEMS,
+    property, proposed_text, reset_button, section, source_badge, status_text, strong, Source,
+    CONDUITS, INSULATIONS, KINDS, LOAD_KINDS, MATERIALS, MOTOR_TYPES, SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -97,7 +97,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                     project_results(ui, doc, &p);
                     false
                 }
-                (PropsTab::Results, _) => run_results(ui, doc, &p),
+                (PropsTab::Results, _) => run_results(ui, doc, &p, &mut shared.props_tab),
                 (PropsTab::Normative, Selection::Project) => {
                     profile_references(ui, doc, &p);
                     false
@@ -740,7 +740,7 @@ fn decisions(
         let text = ov
             .size
             .as_ref()
-            .map_or("Lo propone IEEStudio".to_string(), size_label);
+            .map_or_else(|| proposed_text(ui), |s| size_label(s).into());
         egui::ComboBox::from_id_salt(("calibre", id))
             .selected_text(text)
             .show_ui(ui, |ui| {
@@ -759,11 +759,14 @@ fn decisions(
                         .changed();
                 }
             });
+        if ov.size.is_some() {
+            changed |= reset_button(ui, "Que lo proponga IEEStudio", || ov.size = None);
+        }
     });
     property(ui, p, "Interruptor", |ui| {
         let text = ov
             .breaker_a
-            .map_or("Lo propone IEEStudio".to_string(), |b| format!("{b:.0} A"));
+            .map_or_else(|| proposed_text(ui), |b| format!("{b:.0} A").into());
         egui::ComboBox::from_id_salt(("interruptor", id))
             .selected_text(text)
             .height(320.0)
@@ -785,12 +788,15 @@ fn decisions(
                         .changed();
                 }
             });
+        if ov.breaker_a.is_some() {
+            changed |= reset_button(ui, "Que lo proponga IEEStudio", || ov.breaker_a = None);
+        }
     })
     .on_hover_text("IEEStudio verifica el interruptor que fijes; no lo cambia.");
     property(ui, p, "Conductores por fase", |ui| {
         let text = ov
             .conductors_per_phase
-            .map_or("Lo propone IEEStudio".to_string(), |n| n.to_string());
+            .map_or_else(|| proposed_text(ui), |n| n.to_string().into());
         egui::ComboBox::from_id_salt(("por-fase", id))
             .selected_text(text)
             .show_ui(ui, |ui| {
@@ -803,6 +809,11 @@ fn decisions(
                         .changed();
                 }
             });
+        if ov.conductors_per_phase.is_some() {
+            changed |= reset_button(ui, "Que lo proponga IEEStudio", || {
+                ov.conductors_per_phase = None
+            });
+        }
     })
     .on_hover_text(
         "IEEStudio propone conductores en paralelo cuando uno solo no cumple, no cabe en un tubo o rebasa el calibre máximo de los criterios.",
@@ -874,7 +885,95 @@ fn result_row(ui: &mut egui::Ui, p: &Palette, label: &str, value: String, source
     });
 }
 
-fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
+/// Verificaciones que respaldan cada sección de Resultados, por su nombre.
+const TRACE: [(&str, &[&str]); 4] = [
+    (
+        "Protección",
+        &[
+            "Protección",
+            "Protección del primario",
+            "Protección del secundario",
+        ],
+    ),
+    ("Conductor", &["Ampacidad"]),
+    ("Tubería", &["Tubería"]),
+    ("Caída de tensión", &["Caída de tensión", "Caída acumulada"]),
+];
+
+/// Encabezado de sección con su trazabilidad a la derecha: el estado de las
+/// verificaciones que la respaldan y los artículos que las piden. Al tocar
+/// los artículos se abre la pestaña Normativa con el detalle.
+fn traced_section(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    title: &str,
+    item: &RunResult,
+    tab: &mut PropsTab,
+) {
+    let names = TRACE
+        .iter()
+        .find(|(t, _)| *t == title)
+        .map_or(&[][..], |(_, n)| *n);
+    let backing: Vec<&ieestudio_project::Check> = item
+        .checks
+        .iter()
+        .filter(|c| names.contains(&c.name.as_str()))
+        .collect();
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(title.to_uppercase())
+                .size(10.5)
+                .color(p.ink3)
+                .family(crate::theme::semibold()),
+        );
+        if backing.is_empty() {
+            return;
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let status = crate::widgets::worst(backing.iter().map(|c| c.status));
+            let mut clauses: Vec<String> = Vec::new();
+            for c in &backing {
+                for r in &c.references {
+                    if let Some(clause) = &r.clause {
+                        if !clauses.contains(clause) {
+                            clauses.push(clause.clone());
+                        }
+                    }
+                }
+            }
+            let cite = if clauses.is_empty() {
+                "ver normativa".to_string()
+            } else {
+                clauses.join("; ")
+            };
+            let detail = backing
+                .iter()
+                .map(|c| format!("{} · {}: {}", c.name, c.status.label(), c.detail))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let link = ui
+                .add(
+                    egui::Button::new(
+                        RichText::new(format!("{} {}", crate::widgets::status_icon(status), cite))
+                            .size(11.0)
+                            .color(crate::widgets::status_color(p, status)),
+                    )
+                    .frame(false)
+                    .truncate(),
+                )
+                .on_hover_text(format!(
+                    "{detail}\n\nClic para ver la verificación completa en Normativa."
+                ));
+            if link.clicked() {
+                *tab = PropsTab::Normative;
+            }
+        });
+    });
+    ui.add_space(1.0);
+}
+
+fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab) -> bool {
     let Some(item) = doc.selected_run().cloned() else {
         return false;
     };
@@ -904,7 +1003,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     section(ui, p, "Corriente");
     result_row(ui, p, "Nominal", format!("{:.2} A", run.nominal_a), calc);
     result_row(ui, p, "De diseño", format!("{:.2} A", run.design_a), calc);
-    section(ui, p, "Protección");
+    traced_section(ui, p, "Protección", &item, tab);
     result_row(
         ui,
         p,
@@ -912,7 +1011,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
         format!("{}P-{:.0} A", run.poles, run.breaker_a),
         calc,
     );
-    section(ui, p, "Conductor");
+    traced_section(ui, p, "Conductor", &item, tab);
     let size = if run.conductors_per_phase > 1 {
         format!(
             "{} × {} por fase",
@@ -1005,7 +1104,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
             }
         });
 
-    section(ui, p, "Tubería");
+    traced_section(ui, p, "Tubería", &item, tab);
     let conduit = run.conduit.as_ref().map_or("—".to_string(), |c| {
         format!("{} ({}\")", c.label(), c.trade_size)
     });
@@ -1013,7 +1112,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     if let Some(c) = &run.conduit {
         result_row(ui, p, "Ocupación", format!("{:.1} %", c.fill_percent), calc);
     }
-    section(ui, p, "Caída de tensión");
+    traced_section(ui, p, "Caída de tensión", &item, tab);
     result_row(
         ui,
         p,
@@ -1028,6 +1127,32 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
         format!("{:.2} %", run.cumulative_drop_percent),
         calc,
     );
+
+    // Lo demás que se verificó (carga, transformador, datos del equipo…),
+    // también con su estado y su referencia.
+    let traced: Vec<&str> = TRACE.iter().flat_map(|(_, n)| n.iter().copied()).collect();
+    let others: Vec<&ieestudio_project::Check> = item
+        .checks
+        .iter()
+        .filter(|c| !traced.contains(&c.name.as_str()))
+        .collect();
+    if !others.is_empty() {
+        section(ui, p, "Otras verificaciones");
+        for c in others {
+            ui.horizontal(|ui| {
+                crate::widgets::fixed_label(ui, p, &c.name);
+                ui.label(status_text(p, c.status).size(12.0))
+                    .on_hover_text(&c.detail);
+            });
+            if let Some(cite) = cite_all(&c.references) {
+                ui.label(
+                    RichText::new(format!("{} {cite}", icon::BOOK_OPEN))
+                        .size(10.5)
+                        .color(p.ink3),
+                );
+            }
+        }
+    }
 
     if let Some(size) = set_size {
         match doc.selection {

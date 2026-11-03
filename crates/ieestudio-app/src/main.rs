@@ -2,11 +2,13 @@
 //! navegador.
 //!
 //! Uso en escritorio: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
-//! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--captura imagen.png]`
+//! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--inicio] [--comandos]
+//! [--captura imagen.png]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod commands;
 mod files;
 mod panels;
 mod state;
@@ -31,6 +33,8 @@ fn main() -> eframe::Result {
         no_panels: false,
         select: None,
         properties: None,
+        home: false,
+        palette: false,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -38,6 +42,8 @@ fn main() -> eframe::Result {
             "--claro" => options.light = true,
             "--propiedades" => options.properties = args.next(),
             "--seleccion" => options.select = args.next(),
+            "--inicio" => options.home = true,
+            "--comandos" => options.palette = true,
             "--captura" => options.capture = args.next().map(PathBuf::from),
             "--espacio" => {
                 options.workspace = match args.next().as_deref() {
@@ -167,6 +173,8 @@ fn main() {
         no_panels: false,
         select: None,
         properties: None,
+        home: false,
+        palette: false,
     };
     wasm_bindgen_futures::spawn_local(async move {
         let canvas = web_sys::window()

@@ -24,5 +24,6 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0016 | [Transformadores dentro del proyecto](0016-transformador.md) | Aceptada; cortocircuito retirado por 0018 |
 | 0017 | [La aplicación en el navegador](0017-version-web.md) | Aceptada |
 | 0018 | [El cortocircuito sale de IEEStudio y pasa a la suite](0018-cortocircuito-fuera-de-alcance.md) | Aceptada |
+| 0019 | [Rediseño de la interfaz, fase 1: escritorio](0019-rediseno-fase-1.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

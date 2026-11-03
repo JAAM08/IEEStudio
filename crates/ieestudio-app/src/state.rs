@@ -195,6 +195,42 @@ impl Doc {
         }
     }
 
+    /// Decisiones de diseño del tramo seleccionado, para cambiarlas.
+    pub fn selected_overrides_mut(&mut self) -> Option<&mut Overrides> {
+        match self.selection {
+            Selection::Feeder(p) => Some(&mut self.project.panels[p].feeder.overrides),
+            Selection::Secondary(p) => self.project.panels[p]
+                .transformer
+                .as_mut()
+                .map(|t| &mut t.secondary_overrides),
+            Selection::Circuit(p, c) => Some(&mut self.project.panels[p].circuits[c].overrides),
+            Selection::Project => None,
+        }
+    }
+
+    /// Sistema de las barras de un tablero: el de la fuente o el del
+    /// secundario del transformador más cercano aguas arriba.
+    pub fn bus_system(&self, panel: usize) -> System {
+        let panels = &self.project.panels;
+        let mut at = panel;
+        // Cada paso sube un tablero; el proyecto calculado no tiene ciclos,
+        // pero el límite evita quedarse aquí si los tuviera.
+        for _ in 0..=panels.len() {
+            if let Some(t) = &panels[at].transformer {
+                return t.secondary;
+            }
+            match panels[at]
+                .parent
+                .as_ref()
+                .and_then(|id| panels.iter().position(|p| &p.id == id))
+            {
+                Some(parent) => at = parent,
+                None => break,
+            }
+        }
+        self.project.source.system
+    }
+
     /// Clave estable de la selección, para recordar qué grupos se abrieron.
     pub fn selection_key(&self) -> (u8, usize, usize) {
         match self.selection {

@@ -50,7 +50,15 @@
   (decisión 0017). El programa avisa en pantalla si no puede arrancar, en
   escritorio y en el navegador.
 
+- Rediseño de la interfaz, fase 1 (decisión 0019): pantalla de inicio,
+  encabezado del tablero, barra contextual, trazabilidad visible en
+  Resultados, valores heredados en gris y paleta de comandos (Ctrl+K).
+
 ## Pendiente, en orden
+
+- Rediseño, fases 2 y 3: tablet y teléfono. Antes, una prueba en un
+  teléfono real de egui en el navegador (teclado virtual, desplazamiento).
+- Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
 
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.

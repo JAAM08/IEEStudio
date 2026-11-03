@@ -9,6 +9,7 @@ use egui_phosphor::regular as icon;
 use ieestudio_project::{example, Project};
 use serde::{Deserialize, Serialize};
 
+use crate::commands::{Command, CommandPalette};
 use crate::files::{self, Filter, Inbox, Picked, Purpose, Saved};
 use crate::panels::{schedule, Shared, Viewer};
 use crate::state::{empty_project, Doc, Selection};
@@ -94,6 +95,11 @@ pub struct App {
     /// Archivos elegidos para abrir; en el navegador llegan un momento después.
     inbox: Inbox,
     ctx: egui::Context,
+    /// Paleta de comandos (Ctrl+K).
+    commands: CommandPalette,
+    /// Pantalla de inicio en lugar de los paneles: al arrancar sin nada que
+    /// abrir, o cuando el usuario la pide.
+    home: bool,
 }
 
 #[derive(Clone)]
@@ -109,10 +115,15 @@ pub struct Options {
     pub select: Option<String>,
     /// Pestaña inicial de Propiedades: `datos`, `resultados` o `normativa`.
     pub properties: Option<String>,
+    /// Empieza en la pantalla de inicio, para revisarla.
+    pub home: bool,
+    /// Empieza con la paleta de comandos abierta, para revisarla.
+    pub palette: bool,
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>, options: Options) -> Self {
+        let capturing = options.capture.is_some();
         theme::install_fonts(&cc.egui_ctx);
         // Las capturas de prueba ignoran lo guardado para ser reproducibles.
         let prefs: Option<Prefs> = if options.capture.is_some() {
@@ -168,12 +179,16 @@ impl App {
             recent,
             inbox: Inbox::default(),
             ctx: cc.egui_ctx.clone(),
+            commands: CommandPalette::default(),
+            home: false,
         };
         app.doc.selection = Selection::Circuit(0, 1);
         // Abre lo que se pidió; si no, el último proyecto, si todavía existe.
         let last = app.recent.first().filter(|p| p.exists()).cloned();
+        let mut resumed = false;
         if let Some(path) = options.open.or(last) {
             app.load(path);
+            resumed = true;
         } else if files::WEB {
             // En el navegador se retoma el proyecto en el que se trabajaba.
             let saved = cc
@@ -182,7 +197,14 @@ impl App {
                 .and_then(|text| Project::from_json(&text).ok());
             if let Some(project) = saved {
                 app.set_project(project, None);
+                resumed = true;
             }
+        }
+        // Sin nada que retomar se empieza en la pantalla de inicio; las
+        // capturas de prueba solo la muestran si se pide.
+        app.home = options.home || (!resumed && !capturing);
+        if options.palette {
+            app.commands.toggle();
         }
         if let Some(id) = &options.select {
             if id == "proyecto" {
@@ -218,6 +240,66 @@ impl App {
 
     fn set_project(&mut self, project: Project, path: Option<PathBuf>) {
         self.doc = Doc::new(project, path);
+        self.home = false;
+    }
+
+    /// Hace lo que se eligió en la paleta de comandos.
+    fn run_command(&mut self, command: Command) {
+        match command {
+            Command::Home => self.home = true,
+            Command::New => self.request(Pending::New),
+            Command::Open => self.request(Pending::Open),
+            Command::Save => self.save(false),
+            Command::Example => self.request(Pending::Example),
+            Command::ExportPdf => self.export_pdf(false),
+            Command::ExportExcel => self.export_excel(),
+            Command::ImportExcel => self.import_excel(),
+            Command::ExportDxf => self.export_dxf(),
+            Command::Undo => self.doc.undo(),
+            Command::Redo => self.doc.redo(),
+            Command::AddCircuit => match self.doc.panel_index() {
+                Some(p) => self.doc.add_circuit(p),
+                None => {
+                    self.notice = Some("El proyecto no tiene tableros: agrega uno primero.".into())
+                }
+            },
+            Command::AddPanel => self.doc.add_panel(),
+            Command::Duplicate => self.doc.duplicate_circuit(),
+            Command::Remove => self.doc.remove_selected(),
+            Command::Balance => {
+                if let Some(p) = self.doc.panel_index() {
+                    self.done = self.doc.balance_phases(p).map(|(before, after)| {
+                        format!("Fases balanceadas: desbalance de {before:.1} % a {after:.1} %")
+                    });
+                }
+            }
+            Command::Quick => {
+                self.home = false;
+                workspace::open(&mut self.dock, Tab::Quick);
+            }
+            Command::Panel(tab) => {
+                self.home = false;
+                workspace::open(&mut self.dock, tab);
+            }
+            Command::Workspace(ws) => {
+                self.home = false;
+                self.set_workspace(ws);
+            }
+            Command::ResetWorkspace => {
+                self.home = false;
+                self.dock = self.workspace.layout();
+            }
+            Command::ToggleTheme => {
+                self.dark = !self.dark;
+                let ctx = self.ctx.clone();
+                self.restyle(&ctx);
+            }
+            Command::Select(selection) => {
+                self.home = false;
+                self.doc.selection = selection;
+                workspace::open(&mut self.dock, Tab::Schedule);
+            }
+        }
     }
 
     fn load(&mut self, path: PathBuf) {
@@ -712,6 +794,14 @@ impl App {
                     self.import_excel();
                 }
                 ui.separator();
+                if ui
+                    .button(format!("{}  Inicio", icon::HOUSE_LINE))
+                    .on_hover_text("Nuevo, abrir, ejemplo, cálculo rápido y proyectos recientes")
+                    .clicked()
+                {
+                    ui.close();
+                    self.home = true;
+                }
                 if ui.button("     Abrir el proyecto de ejemplo").clicked() {
                     ui.close();
                     self.request(Pending::Example);
@@ -870,9 +960,45 @@ impl App {
             });
 
             ui.menu_button("Ayuda", |ui| {
+                if ui
+                    .add(
+                        egui::Button::new(format!("{}  Buscar un comando", icon::MAGNIFYING_GLASS))
+                            .shortcut_text("Ctrl+K"),
+                    )
+                    .clicked()
+                {
+                    ui.close();
+                    self.commands.toggle();
+                }
                 if ui.button("Acerca de IEEStudio").clicked() {
                     ui.close();
                     self.about = true;
+                }
+            });
+
+            // Lo que más se usa fuera de los menús: el cálculo de un circuito
+            // suelto y la búsqueda de comandos.
+            ui.add_space(14.0);
+            ui.scope(|ui| {
+                let w = &mut ui.style_mut().visuals.widgets;
+                w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
+                w.inactive.weak_bg_fill = p.panel;
+                if ui
+                    .button(format!("{}  Cálculo rápido", icon::CALCULATOR))
+                    .on_hover_text("Un circuito suelto, sin proyecto: caída de tensión, conductor e interruptor con su procedimiento (F8)")
+                    .clicked()
+                {
+                    self.run_command(Command::Quick);
+                }
+                if ui
+                    .button(
+                        RichText::new(format!("{}  Buscar   Ctrl+K", icon::MAGNIFYING_GLASS))
+                            .color(p.ink2),
+                    )
+                    .on_hover_text("Comandos, paneles, tableros y circuitos por su nombre")
+                    .clicked()
+                {
+                    self.commands.toggle();
                 }
             });
 
@@ -995,6 +1121,9 @@ impl App {
         }
         if pressed(Modifiers::COMMAND, Key::E) {
             self.export_pdf(false);
+        }
+        if pressed(Modifiers::COMMAND, Key::K) {
+            self.commands.toggle();
         }
         let typing = ctx.memory(|m| m.focused().is_some());
         if !typing {
@@ -1236,9 +1365,16 @@ impl eframe::App for App {
         };
         let empty = workspace::main_is_empty(&self.dock);
         let mut restore = None;
+        let mut start = None;
+        let home = self.home;
+        let recent = self.recent.clone();
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(p.bg))
             .show(ui, |ui| {
+                if home {
+                    start = home_screen(ui, &p, &recent, &viewer.doc.project.name);
+                    return;
+                }
                 let rect = ui.max_rect();
                 DockArea::new(&mut self.dock)
                     .style(style)
@@ -1251,21 +1387,39 @@ impl eframe::App for App {
                     restore = no_panels(&mut child, &p, self.workspace);
                 }
             });
+
         match restore {
             Some(Restore::Workspace) => self.dock = self.workspace.layout(),
             Some(Restore::Panel(tab)) => workspace::open(&mut self.dock, tab),
             None => {}
         }
         let export = viewer.export_report;
+        match start {
+            Some(Start::New) => self.request(Pending::New),
+            Some(Start::Open) => self.request(Pending::Open),
+            Some(Start::Example) => self.request(Pending::Example),
+            Some(Start::Quick) => self.run_command(Command::Quick),
+            Some(Start::Recent(path)) => self.request(Pending::OpenPath(path)),
+            Some(Start::Back) => self.home = false,
+            None => {}
+        }
         if self.doc.revision != revision {
             self.done = None;
         }
         if export {
             self.export_pdf(false);
         }
+        if self.pending.is_none() {
+            if let Some(command) = self.commands.show(&ctx, &p, &self.doc) {
+                self.run_command(command);
+            }
+        }
         self.about_window(&ctx);
         self.confirm_window(&ctx);
         self.import_window(&ctx);
+        if let Some(tab) = self.shared.open_tab.take() {
+            workspace::open(&mut self.dock, tab);
+        }
         if let Some(done) = self.shared.done.take() {
             self.notice = None;
             self.done = Some(done);
@@ -1359,6 +1513,163 @@ fn no_panels(ui: &mut egui::Ui, p: &Palette, ws: Workspace) -> Option<Restore> {
                 let used = ui.cursor().left() - start;
                 ui.ctx().data_mut(|d| d.insert_temp(id, used));
             },
+        );
+    });
+    chosen
+}
+
+/// Qué se eligió en la pantalla de inicio.
+enum Start {
+    New,
+    Open,
+    Example,
+    Quick,
+    Recent(PathBuf),
+    /// Volver al proyecto abierto.
+    Back,
+}
+
+/// Tarjeta de la pantalla de inicio: ícono, título y una línea de qué hace.
+fn start_card(ui: &mut egui::Ui, p: &Palette, glyph: &str, title: &str, hint: &str) -> bool {
+    let size = egui::vec2(172.0, 118.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let hovered = response.hovered();
+    ui.painter().rect(
+        rect,
+        6.0,
+        if hovered { p.raise } else { p.panel },
+        egui::Stroke::new(1.0, if hovered { p.ink3 } else { p.line }),
+        egui::StrokeKind::Inside,
+    );
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect.shrink(14.0))
+            .layout(Layout::top_down(Align::Min)),
+    );
+    child.label(RichText::new(glyph).size(24.0).color(p.accent_text));
+    child.add_space(6.0);
+    child.label(strong(title).size(14.0));
+    child.add(egui::Label::new(muted(p, hint).size(11.0)).wrap());
+    if hovered {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    response.clicked()
+}
+
+/// Pantalla de inicio: lo que se puede hacer al abrir el programa, sin
+/// paneles vacíos alrededor.
+fn home_screen(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    recent: &[PathBuf],
+    open_name: &str,
+) -> Option<Start> {
+    let mut chosen = None;
+    let width = 4.0 * 172.0 + 3.0 * 12.0;
+    ui.vertical_centered(|ui| {
+        ui.add_space((ui.available_height() * 0.12).max(24.0));
+        ui.label(RichText::new(icon::LIGHTNING).size(40.0).color(p.accent));
+        ui.label(strong("IEEStudio").size(28.0));
+        ui.label(muted(
+            p,
+            "Cálculo de instalaciones eléctricas de baja tensión · NOM-001-SEDE-2012",
+        ));
+        ui.add_space(26.0);
+    });
+    let left = ((ui.available_width() - width) / 2.0).max(16.0);
+    ui.horizontal(|ui| {
+        ui.add_space(left);
+        ui.spacing_mut().item_spacing.x = 12.0;
+        if start_card(
+            ui,
+            p,
+            icon::FILE_PLUS,
+            "Nuevo proyecto",
+            "Un tablero vacío para empezar · Ctrl+N",
+        ) {
+            chosen = Some(Start::New);
+        }
+        if start_card(
+            ui,
+            p,
+            icon::FOLDER_OPEN,
+            "Abrir proyecto",
+            "Un archivo .iees que ya tienes · Ctrl+O",
+        ) {
+            chosen = Some(Start::Open);
+        }
+        if start_card(
+            ui,
+            p,
+            icon::HOUSE,
+            "Proyecto de ejemplo",
+            "Una casa con seis circuitos para conocer el programa",
+        ) {
+            chosen = Some(Start::Example);
+        }
+        if start_card(
+            ui,
+            p,
+            icon::CALCULATOR,
+            "Cálculo rápido",
+            "Un circuito suelto con su procedimiento · F8",
+        ) {
+            chosen = Some(Start::Quick);
+        }
+    });
+    ui.add_space(26.0);
+    let existing: Vec<&PathBuf> = recent.iter().filter(|p| p.exists()).take(6).collect();
+    if !files::WEB && !existing.is_empty() {
+        ui.horizontal(|ui| {
+            ui.add_space(left);
+            ui.vertical(|ui| {
+                ui.set_width(width);
+                ui.label(
+                    RichText::new("RECIENTES")
+                        .size(10.5)
+                        .color(p.ink3)
+                        .family(theme::semibold()),
+                );
+                ui.add_space(2.0);
+                for path in existing {
+                    let name = path.file_name().map_or_else(
+                        || path.display().to_string(),
+                        |n| n.to_string_lossy().into_owned(),
+                    );
+                    let folder = path
+                        .parent()
+                        .map_or_else(String::new, |d| d.display().to_string());
+                    let row = ui
+                        .horizontal(|ui| {
+                            ui.label(RichText::new(icon::FILE).color(p.ink2));
+                            ui.label(RichText::new(name));
+                            ui.label(muted(p, folder).size(11.0));
+                        })
+                        .response
+                        .interact(egui::Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if row.clicked() {
+                        chosen = Some(Start::Recent(path.clone()));
+                    }
+                }
+            });
+        });
+        ui.add_space(18.0);
+    }
+    ui.vertical_centered(|ui| {
+        if ui
+            .button(format!("{}  Volver a «{open_name}»", icon::ARROW_LEFT))
+            .clicked()
+        {
+            chosen = Some(Start::Back);
+        }
+        ui.add_space(14.0);
+        ui.label(
+            muted(
+                p,
+                "Ctrl+K busca cualquier comando, tablero o circuito. IEEStudio calcula y verifica; la aprobación es de quien firma.",
+            )
+            .size(11.0),
         );
     });
     chosen

@@ -107,7 +107,9 @@ pub fn combo<T: PartialEq + Copy>(
     changed
 }
 
-/// Lista desplegable con «del proyecto» como primera opción.
+/// Lista desplegable con «del proyecto» como primera opción. El valor
+/// heredado se ve en gris; uno propio lleva al lado un botón para volver al
+/// del proyecto.
 pub fn combo_override<T: PartialEq + Copy>(
     ui: &mut egui::Ui,
     id: impl std::hash::Hash + std::fmt::Debug,
@@ -116,21 +118,50 @@ pub fn combo_override<T: PartialEq + Copy>(
     inherited: &str,
 ) -> bool {
     let mut changed = false;
-    let text = match value {
-        Some(v) => label_of(options, *v).to_string(),
-        None => format!("{inherited} · proyecto"),
+    let weak = ui.visuals().weak_text_color();
+    let text: egui::WidgetText = match value {
+        Some(v) => RichText::new(label_of(options, *v)).into(),
+        None => RichText::new(format!("{inherited} · del proyecto"))
+            .color(weak)
+            .into(),
     };
     egui::ComboBox::from_id_salt(id)
         .selected_text(text)
         .show_ui(ui, |ui| {
             changed |= ui
-                .selectable_value(value, None, format!("{inherited} · proyecto"))
+                .selectable_value(value, None, format!("{inherited} · del proyecto"))
                 .changed();
             for (label, option) in options {
                 changed |= ui.selectable_value(value, Some(*option), *label).changed();
             }
         });
+    if value.is_some() {
+        changed |= reset_button(ui, &format!("Volver al del proyecto: {inherited}"), || {
+            *value = None
+        });
+    }
     changed
+}
+
+/// Botón pequeño para deshacer una decisión propia y volver a lo heredado
+/// o a lo que propone IEEStudio.
+pub fn reset_button(ui: &mut egui::Ui, tip: &str, reset: impl FnOnce()) -> bool {
+    let clicked = ui
+        .add(egui::Button::new(RichText::new(icon::ARROW_COUNTER_CLOCKWISE).size(12.0)).small())
+        .on_hover_text(tip)
+        .clicked();
+    if clicked {
+        reset();
+    }
+    clicked
+}
+
+/// Texto de una decisión que aún toma IEEStudio: en gris, para que se
+/// distinga de lo que fijó el usuario.
+pub fn proposed_text(ui: &egui::Ui) -> egui::WidgetText {
+    RichText::new("Lo propone IEEStudio")
+        .color(ui.visuals().weak_text_color())
+        .into()
 }
 
 pub fn number(
