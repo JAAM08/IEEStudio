@@ -364,8 +364,6 @@ pub fn fixed_label(ui: &mut egui::Ui, p: &Palette, label: &str) {
 fn step_group(title: &str) -> &'static str {
     if title.starts_with("Carga") {
         "Carga (artículo 220)"
-    } else if title.starts_with("Cortocircuito") {
-        "Cortocircuito"
     } else if title.starts_with("Corriente") {
         "Corriente"
     } else if title.starts_with("Interruptor") || title.starts_with("Relevador") {
@@ -458,7 +456,9 @@ pub fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
             Calculation::Incomplete => "Cálculo incompleto",
         },
         match verdict.compliance {
-            Compliance::Conforms => "Conforme",
+            // Con verificaciones fuera de alcance nunca es conforme a secas.
+            Compliance::Conforms if verdict.out_of_scope.is_empty() => "Conforme",
+            Compliance::Conforms => "Conforme en lo evaluado",
             Compliance::DoesNotConform => "No conforme",
             Compliance::Pending => "Verificación pendiente",
         },

@@ -251,6 +251,12 @@ fn verdict_table(out: &mut String, verdict: &Verdict, code: &str) {
         let explanation = detail
             .split_once(": ")
             .map_or(String::new(), |(_, e)| e.to_string());
+        // «Conforme en lo evaluado con NOM-…» no cabe en la columna del
+        // estado: la norma pasa al inicio de la explicación.
+        let (label, explanation) = match label.split_once(" con ") {
+            Some((state, code)) => (state.to_string(), format!("Con {code}: {explanation}")),
+            None => (label, explanation),
+        };
         let _ = writeln!(
             out,
             "  text(fill: gris, {}), text(font: \"IBM Plex Sans SmBld\", fill: if {} == \"Cumple\" {{ bien }} else if {} == \"No cumple\" {{ mal }} else {{ duda }}, {}), {},",
@@ -408,28 +414,18 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                         format!("{} ({} VA/m², Tabla 220-12)", o.label, o.va_per_m2)
                     }),
             ),
-            ("Cortocircuito de la fuente", {
-                let motors = result
-                    .motor_fault_ka
-                    .filter(|m| *m > 0.0)
-                    .map_or(String::new(), |m| {
-                        format!(", más {:.2} kA de aportación de motores", m)
-                    });
-                match (result.source_fault_ka, &project.source.fault) {
-                        (Some(ka), f) if f.available_ka.is_some() => format!(
-                            "{ka:.2} kA: {} kA disponibles (dato de la compañía suministradora){motors}",
-                            f.available_ka.unwrap_or_default()
-                        ),
-                        (Some(ka), f) => format!(
-                            "{ka:.2} kA: transformador de {} kVA con {} % de impedancia{motors}",
-                            f.transformer_kva.unwrap_or_default(),
-                            f.transformer_impedance_percent.unwrap_or_default()
-                        ),
-                        (None, _) => {
-                            "Sin datos: no se verificó la capacidad interruptiva".to_string()
-                        }
-                    }
-            }),
+            // Lo que la norma pide y este cálculo no verifica, para que nadie
+            // lo dé por revisado (decisión 0018).
+            (
+                "Fuera de alcance",
+                result
+                    .verdict
+                    .out_of_scope
+                    .iter()
+                    .map(|o| format!("{}: {}", o.label(), o.resolve_with))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            ),
             (
                 "Conductor al electrodo de puesta a tierra",
                 result.grounding_electrode.as_ref().map_or(
@@ -512,11 +508,9 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     for panel in &result.panels {
         let _ = writeln!(out, "\n== Cuadro de cargas · #{};", q(&panel.name));
         let [a, b, c] = panel.phase_va;
-        let mut fault = panel.fault_ka.map_or(String::new(), |ka| {
-            format!(" Corriente de cortocircuito en barras: {ka:.2} kA.")
-        });
+        let mut transformer = String::new();
         if let Some(t) = &panel.transformer {
-            fault.push_str(&format!(
+            transformer.push_str(&format!(
                 " Se alimenta por un transformador de {} kVA (primario {}, secundario {}), cargado al {:.0} %.",
                 t.kva,
                 t.primary_a.map_or("—".into(), |a| format!("{a:.2} A")),
@@ -534,7 +528,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             out,
             "#text(fill: gris, {})",
             q(&format!(
-                "Carga conectada de {:.0} W y carga calculada del alimentador de {:.0} VA ({:.0} W, factor resultante {:.2}), factor de potencia {:.2}.{balance}{fault}",
+                "Carga conectada de {:.0} W y carga calculada del alimentador de {:.0} VA ({:.0} W, factor resultante {:.2}), factor de potencia {:.2}.{balance}{transformer}",
                 panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
             ))
         );

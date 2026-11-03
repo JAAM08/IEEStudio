@@ -174,6 +174,12 @@ fn print_report(result: &ProjectResult) {
     for (level, _, detail) in result.verdict.lines("la norma") {
         println!("{level}: {detail}");
     }
+    // Conforme ya lo dice en su línea; en los demás casos se aclara aparte.
+    if result.verdict.compliance != ieestudio_project::verdict::Compliance::Conforms {
+        if let Some(note) = result.verdict.out_of_scope_text() {
+            println!("{note}");
+        }
+    }
 }
 
 fn print_panel(panel: &PanelResult) {

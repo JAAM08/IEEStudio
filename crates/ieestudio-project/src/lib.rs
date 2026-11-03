@@ -7,7 +7,6 @@ pub mod balance;
 mod calc;
 mod demand;
 pub mod example;
-mod fault;
 mod model;
 mod motors;
 mod procedure;
@@ -22,7 +21,7 @@ pub use calc::{
 pub use demand::DemandLine;
 pub use model::{
     Area, Circuit, CompressorLoad, Demand, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel,
-    Phase, Project, ProjectInfo, Settings, Source, SourceFault, Transformer, FORMAT_VERSION,
+    Phase, Project, ProjectInfo, Settings, Source, Transformer, FORMAT_VERSION,
 };
 pub use motors::hp_label;
 pub use procedure::{insulation_name, material_name, size_label, Step};

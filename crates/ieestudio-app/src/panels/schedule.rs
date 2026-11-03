@@ -34,12 +34,11 @@ pub enum Col {
     Ampacity,
     Drop,
     Cumulative,
-    Fault,
     Status,
 }
 
 impl Col {
-    pub const ALL: [Col; 19] = [
+    pub const ALL: [Col; 18] = [
         Col::Id,
         Col::Name,
         Col::Kind,
@@ -57,7 +56,6 @@ impl Col {
         Col::Ampacity,
         Col::Drop,
         Col::Cumulative,
-        Col::Fault,
         Col::Status,
     ];
 
@@ -80,7 +78,6 @@ impl Col {
             Col::Ampacity => "Amp. A",
             Col::Drop => "e %",
             Col::Cumulative => "Σe %",
-            Col::Fault => "Icc kA",
             Col::Status => "Estado",
         }
     }
@@ -105,7 +102,6 @@ impl Col {
             Col::Ampacity => "Ampacidad permitida, A",
             Col::Drop => "Caída del tramo, %",
             Col::Cumulative => "Caída acumulada, %",
-            Col::Fault => "Cortocircuito en las terminales del interruptor, kA",
             Col::Status => "Estado",
         }
     }
@@ -121,7 +117,6 @@ impl Col {
                 | Col::Ampacity
                 | Col::Drop
                 | Col::Cumulative
-                | Col::Fault
         )
     }
 
@@ -141,8 +136,70 @@ impl Col {
 }
 
 /// Columnas visibles. Se guarda entre sesiones.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Columns(pub Vec<Col>);
+
+/// Columnas como se guardaron, incluidas las que ya no existen: así unas
+/// preferencias de una versión anterior se siguen leyendo y solo se descarta
+/// la columna retirada, no todo lo guardado.
+#[derive(Deserialize)]
+enum SavedCol {
+    Id,
+    Name,
+    Kind,
+    Connection,
+    Phases,
+    Load,
+    PowerFactor,
+    Current,
+    Design,
+    Length,
+    Size,
+    Ground,
+    Conduit,
+    Breaker,
+    Ampacity,
+    Drop,
+    Cumulative,
+    /// «Icc kA», retirada con el cortocircuito (decisión 0018).
+    Fault,
+    Status,
+}
+
+impl SavedCol {
+    fn current(self) -> Option<Col> {
+        Some(match self {
+            SavedCol::Id => Col::Id,
+            SavedCol::Name => Col::Name,
+            SavedCol::Kind => Col::Kind,
+            SavedCol::Connection => Col::Connection,
+            SavedCol::Phases => Col::Phases,
+            SavedCol::Load => Col::Load,
+            SavedCol::PowerFactor => Col::PowerFactor,
+            SavedCol::Current => Col::Current,
+            SavedCol::Design => Col::Design,
+            SavedCol::Length => Col::Length,
+            SavedCol::Size => Col::Size,
+            SavedCol::Ground => Col::Ground,
+            SavedCol::Conduit => Col::Conduit,
+            SavedCol::Breaker => Col::Breaker,
+            SavedCol::Ampacity => Col::Ampacity,
+            SavedCol::Drop => Col::Drop,
+            SavedCol::Cumulative => Col::Cumulative,
+            SavedCol::Fault => return None,
+            SavedCol::Status => Col::Status,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Columns {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let saved = Vec::<SavedCol>::deserialize(deserializer)?;
+        Ok(Columns(
+            saved.into_iter().filter_map(SavedCol::current).collect(),
+        ))
+    }
+}
 
 impl Default for Columns {
     fn default() -> Self {
@@ -153,7 +210,6 @@ impl Default for Columns {
                     !matches!(
                         c,
                         Col::Kind
-                            | Col::Fault
                             | Col::Connection
                             | Col::PowerFactor
                             | Col::Design
@@ -214,9 +270,6 @@ fn cell(col: Col, row: &Row) -> String {
         Col::Ampacity => run.map_or_else(dash, |r| format!("{:.1}", r.allowable_ampacity_a)),
         Col::Drop => run.map_or_else(dash, |r| format!("{:.2}", r.drop_percent)),
         Col::Cumulative => run.map_or_else(dash, |r| format!("{:.2}", r.cumulative_drop_percent)),
-        Col::Fault => run
-            .and_then(|r| r.fault_ka)
-            .map_or_else(dash, |k| format!("{k:.2}")),
         Col::Status => String::new(),
     }
 }
@@ -688,4 +741,21 @@ fn summary_strip(ui: &mut egui::Ui, p: &Palette, r: &ieestudio_project::PanelRes
             ui.label(status_text(p, worst(all.iter().copied())));
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Unas preferencias con la columna de cortocircuito se siguen leyendo;
+    /// solo esa columna se descarta.
+    #[test]
+    fn saved_columns_drop_the_retired_fault_column() {
+        let saved = r#"["Id","Name","Fault","Status"]"#;
+        let columns: Columns = serde_json::from_str(saved).unwrap();
+        assert_eq!(columns.0, vec![Col::Id, Col::Name, Col::Status]);
+        let again: Columns =
+            serde_json::from_str(&serde_json::to_string(&columns).unwrap()).unwrap();
+        assert_eq!(again.0, columns.0);
+    }
 }

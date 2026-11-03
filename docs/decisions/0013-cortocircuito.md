@@ -1,6 +1,7 @@
 # 0013. Cortocircuito y capacidad interruptiva
 
-**Estado:** aceptada (octubre de 2026).
+**Estado:** sustituida por la 0018 (noviembre de 2026): el cortocircuito sale
+de IEEStudio y pasa a un programa aparte de la suite.
 
 ## Contexto
 

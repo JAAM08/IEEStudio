@@ -110,7 +110,7 @@ fn tools() -> Value {
         },
         {
             "name": "calcular_proyecto",
-            "description": "Calcula un proyecto completo: carga de cada alimentador según el artículo 220, corriente, interruptor, conductor, puesta a tierra, tubería, caída de tensión, cortocircuito y el veredicto en tres niveles. Sin `detalle` omite el procedimiento paso a paso.",
+            "description": "Calcula un proyecto completo: carga de cada alimentador según el artículo 220, corriente, interruptor, conductor, puesta a tierra, tubería, caída de tensión y el veredicto en tres niveles, con lo que queda fuera de su alcance (la capacidad interruptiva, que requiere un estudio de cortocircuito aparte). Sin `detalle` omite el procedimiento paso a paso.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

@@ -27,7 +27,6 @@ fn export_and_import_round_trip() {
     let (a, b) = (&house.panels[0], &target.panels[0]);
     assert_eq!(a.name, b.name);
     assert_eq!(a.feeder.length_m, b.feeder.length_m);
-    assert_eq!(a.interrupting_ka, b.interrupting_ka);
     for (x, y) in a.circuits.iter().zip(&b.circuits) {
         assert_eq!(x.id, y.id);
         assert_eq!(x.name, y.name);

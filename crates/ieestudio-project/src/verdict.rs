@@ -6,10 +6,49 @@
 //!    es «conforme» cuando todo cumple y no queda nada sin evaluar.
 //! 3. **Aprobación profesional**: siempre pendiente. La otorga quien firma el
 //!    proyecto; el programa nunca la emite.
+//!
+//! La conformidad es siempre **en lo evaluado**: hay verificaciones de la
+//! norma que IEEStudio no hace y que se declaran fuera de su alcance, con su
+//! referencia, para que nadie las dé por revisadas (decisión 0018).
 
+use ieestudio_rules::{cite_all, Profile, Rule, RuleReference};
 use serde::Serialize;
 
 use crate::Status;
+
+/// Verificación de la norma que IEEStudio no hace y que debe resolverse con
+/// otro estudio.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct OutOfScope {
+    /// Qué no se verifica.
+    pub name: String,
+    /// Con qué se resuelve.
+    pub resolve_with: String,
+    pub references: Vec<RuleReference>,
+}
+
+impl OutOfScope {
+    /// `capacidad interruptiva (NOM-001-SEDE-2012: 110-9, 110-10)`.
+    pub fn label(&self) -> String {
+        match cite_all(&self.references) {
+            Some(cite) => format!("{} ({cite})", self.name),
+            None => self.name.clone(),
+        }
+    }
+}
+
+/// Verificaciones fuera del alcance de IEEStudio.
+///
+/// La capacidad interruptiva de los interruptores exige conocer la corriente
+/// de cortocircuito en cada punto; ese estudio se hará en otro programa de la
+/// suite (decisión 0018).
+pub fn out_of_scope(profile: &Profile) -> Vec<OutOfScope> {
+    vec![OutOfScope {
+        name: "Capacidad interruptiva".into(),
+        resolve_with: "requiere estudio de cortocircuito".into(),
+        references: vec![profile.reference(Rule::InterruptingRating)],
+    }]
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Calculation {
@@ -21,7 +60,8 @@ pub enum Calculation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Compliance {
-    /// Todas las verificaciones cumplen y ninguna quedó sin evaluar.
+    /// Todas las verificaciones que hace el programa cumplen y ninguna quedó
+    /// sin evaluar. Las que están fuera de su alcance no cuentan.
     Conforms,
     /// Al menos una verificación no cumple.
     DoesNotConform,
@@ -41,6 +81,8 @@ pub struct Verdict {
     pub failed_checks: usize,
     /// Verificaciones sin evaluar.
     pub pending_checks: usize,
+    /// Verificaciones de la norma que el programa no hace.
+    pub out_of_scope: Vec<OutOfScope>,
 }
 
 impl Verdict {
@@ -74,7 +116,28 @@ impl Verdict {
             uncalculated,
             failed_checks: failed,
             pending_checks: pending,
+            out_of_scope: Vec::new(),
         }
+    }
+
+    /// Agrega las verificaciones fuera del alcance del programa.
+    pub fn with_out_of_scope(mut self, profile: &Profile) -> Self {
+        self.out_of_scope = out_of_scope(profile);
+        self
+    }
+
+    /// `Fuera de alcance: capacidad interruptiva (…), requiere estudio de
+    /// cortocircuito.` `None` si no hay nada fuera de alcance.
+    pub fn out_of_scope_text(&self) -> Option<String> {
+        if self.out_of_scope.is_empty() {
+            return None;
+        }
+        let items: Vec<String> = self
+            .out_of_scope
+            .iter()
+            .map(|o| format!("{}, {}", lowercase_first(&o.label()), o.resolve_with))
+            .collect();
+        Some(format!("Fuera de alcance: {}.", items.join("; ")))
     }
 
     /// Las tres líneas del veredicto: nivel, estado y explicación.
@@ -99,7 +162,14 @@ impl Verdict {
         let compliance = match self.compliance {
             Compliance::Conforms => (
                 Status::Complies,
-                format!("Conforme con {profile_code}: todo cumple y nada quedó sin evaluar."),
+                match self.out_of_scope_text() {
+                    Some(note) => format!(
+                        "Conforme en lo evaluado con {profile_code}: lo que el programa verifica cumple y nada quedó sin evaluar. {note}"
+                    ),
+                    None => format!(
+                        "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar."
+                    ),
+                },
             ),
             Compliance::DoesNotConform => (
                 Status::Fails,
@@ -150,6 +220,15 @@ impl Verdict {
                     .to_string(),
             ),
         ]
+    }
+}
+
+/// `Capacidad` → `capacidad`.
+fn lowercase_first(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_lowercase().chain(chars).collect(),
+        None => String::new(),
     }
 }
 

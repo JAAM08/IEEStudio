@@ -168,26 +168,6 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Sistema", |ui| {
         changed |= combo(ui, "sistema", &mut project.source.system, &SYSTEMS);
     });
-    section(ui, p, "Cortocircuito de la fuente");
-    ui.label(
-        muted(
-            p,
-            "La corriente disponible que da la compañía suministradora o, si no la tienes, los datos del transformador.",
-        )
-        .size(11.0),
-    );
-    let fault = &mut project.source.fault;
-    property(ui, p, "Icc disponible", |ui| {
-        changed |= optional_number(ui, &mut fault.available_ka, 10.0, " kA");
-    })
-    .on_hover_text("Corriente de cortocircuito simétrica en el punto de conexión. Si la capturas, manda sobre el transformador.");
-    property(ui, p, "Transformador", |ui| {
-        changed |= optional_number(ui, &mut fault.transformer_kva, 75.0, " kVA");
-    });
-    property(ui, p, "Impedancia", |ui| {
-        changed |= optional_number(ui, &mut fault.transformer_impedance_percent, 3.5, " %");
-    })
-    .on_hover_text("Impedancia de placa del transformador. Se toma el primario como fuente infinita: da la corriente mayor.");
 
     let s = &mut project.settings;
     section(ui, p, "Criterios de diseño");
@@ -222,10 +202,6 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
             });
     })
     .on_hover_text("Calibre mayor que IEEStudio propone con un conductor por fase; arriba de él propone conductores en paralelo.");
-    property(ui, p, "Aporte de motores", |ui| {
-        changed |= number(ui, &mut s.motor_fault_multiplier, 0.5, 0.0, 10.0, " × In");
-    })
-    .on_hover_text("Los motores alimentan la falla con varias veces su corriente a plena carga. Se suma la de todos los motores en cada tablero, del lado seguro.");
     property(ui, p, "Conductor", |ui| {
         changed |= combo(ui, "material", &mut s.material, &MATERIALS);
     });
@@ -294,10 +270,6 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
     property(ui, p, "Nombre", |ui| {
         changed |= ui.text_edit_singleline(&mut panel.name).changed();
     });
-    property(ui, p, "Cap. interruptiva", |ui| {
-        changed |= optional_number(ui, &mut panel.interrupting_ka, 10.0, " kA");
-    })
-    .on_hover_text("De los interruptores de este tablero: los de sus circuitos y los de los alimentadores de sus subtableros (110-9).");
     property(ui, p, "Se alimenta de", |ui| {
         let current = panel.parent.clone().unwrap_or_else(|| source_name.clone());
         egui::ComboBox::from_id_salt("padre")
@@ -327,14 +299,6 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
     changed |= ui
         .checkbox(&mut panel.feeder.has_neutral, "Lleva neutro")
         .changed();
-    property(ui, p, "Cap. interruptiva", |ui| {
-        changed |= optional_number(ui, &mut panel.feeder.interrupting_ka, 10.0, " kA");
-    })
-    .on_hover_text(if panel.parent.is_some() {
-        "Del interruptor de este alimentador. Sin dato, toma la del tablero de donde sale."
-    } else {
-        "Del interruptor de este alimentador, en la fuente."
-    });
 
     section(ui, p, "Transformador");
     let mut has_transformer = panel.transformer.is_some();
@@ -351,7 +315,6 @@ fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> boo
             secondary_length_m: 3.0,
             secondary_has_neutral: true,
             secondary_overrides: Overrides::default(),
-            secondary_interrupting_ka: None,
         });
         changed = true;
     }
@@ -492,10 +455,6 @@ fn secondary_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> 
     changed |= ui
         .checkbox(&mut t.secondary_has_neutral, "Lleva neutro")
         .changed();
-    property(ui, p, "Cap. interruptiva", |ui| {
-        changed |= optional_number(ui, &mut t.secondary_interrupting_ka, 10.0, " kA");
-    })
-    .on_hover_text("Del interruptor del secundario. Sin dato, toma la del tablero.");
     changed |= decisions(ui, p, &mut t.secondary_overrides, "secundario", &settings);
     changed
 }
@@ -1054,24 +1013,6 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     if let Some(c) = &run.conduit {
         result_row(ui, p, "Ocupación", format!("{:.1} %", c.fill_percent), calc);
     }
-    if let Some(fault) = run.fault_ka {
-        section(ui, p, "Cortocircuito");
-        result_row(
-            ui,
-            p,
-            "Disponible",
-            format!("{fault:.2} kA"),
-            Source::Calculated,
-        );
-        result_row(
-            ui,
-            p,
-            "Cap. interruptiva",
-            run.interrupting_ka
-                .map_or("Sin capturar".to_string(), |k| format!("{k} kA")),
-            Source::Calculated,
-        );
-    }
     section(ui, p, "Caída de tensión");
     result_row(
         ui,
@@ -1161,16 +1102,22 @@ fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
         ui.label(RichText::new(detail).color(color));
         ui.add_space(4.0);
     }
-    section(ui, p, "Acometida");
-    if let Some(ka) = result.source_fault_ka {
-        result_row(
-            ui,
-            p,
-            "Cortocircuito",
-            format!("{ka:.2} kA"),
-            Source::Calculated,
+    if !result.verdict.out_of_scope.is_empty() {
+        section(ui, p, "Fuera de alcance");
+        ui.label(
+            muted(
+                p,
+                "La norma lo pide, pero IEEStudio no lo verifica. Resuélvelo con otro estudio antes de firmar.",
+            )
+            .size(11.0),
         );
+        for item in &result.verdict.out_of_scope {
+            ui.label(RichText::new(format!("{} {}", icon::INFO, item.label())).color(p.ink2));
+            ui.label(muted(p, crate::widgets::capitalize(&item.resolve_with)).size(11.0));
+            ui.add_space(4.0);
+        }
     }
+    section(ui, p, "Acometida");
     match &result.grounding_electrode {
         Some(gec) => {
             result_row(

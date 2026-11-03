@@ -4,7 +4,7 @@
 use ieestudio_core::{CircuitKind, Size, System};
 use ieestudio_project::{
     calculate, example, Area, Circuit, Demand, Feeder, Load, LoadKind, Overrides, Panel, Project,
-    RunResult, SourceFault, Status,
+    RunResult, Status,
 };
 
 fn close(actual: f64, expected: f64) {
@@ -167,10 +167,8 @@ fn industrial() -> Project {
                 demand: Demand::Custom(0.8),
                 demand_factor: None,
                 has_neutral: true,
-                interrupting_ka: None,
                 overrides: Overrides::default(),
             },
-            interrupting_ka: None,
             transformer: None,
             areas: vec![],
             circuits: vec![],
@@ -185,10 +183,8 @@ fn industrial() -> Project {
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: false,
-                interrupting_ka: None,
                 overrides: Overrides::default(),
             },
-            interrupting_ka: None,
             transformer: None,
             areas: vec![],
             circuits: vec![Circuit {
@@ -270,9 +266,6 @@ fn a_case_the_tables_do_not_cover_is_not_evaluated() {
     // Un circuito trifásico en un servicio de una fase no se puede calcular.
     let mut project = example::house();
     project.source.system = System::SINGLE_127;
-    // Sin datos de cortocircuito: aquí solo interesa el caso que no cubren
-    // las tablas.
-    project.source.fault = Default::default();
     let result = calculate(&project).unwrap();
     let panel = &result.panels[0];
     assert_eq!(panel.feeder.status, Status::NotEvaluated);
@@ -291,12 +284,11 @@ fn every_run_carries_its_procedure() {
     let panel = &result.panels[0];
     for item in std::iter::once(&panel.feeder).chain(&panel.circuits) {
         let run = item.run.as_ref().unwrap();
-        // El alimentador empieza con su carga según el artículo 220 y
-        // termina con el cortocircuito.
+        // El alimentador empieza con su carga según el artículo 220.
         let steps: Vec<_> = run
             .steps
             .iter()
-            .filter(|s| !s.title.starts_with("Carga") && !s.title.starts_with("Cortocircuito"))
+            .filter(|s| !s.title.starts_with("Carga"))
             .collect();
         assert_eq!(steps.len(), 12, "{}", item.id);
         assert!(
@@ -352,6 +344,16 @@ fn verdict_keeps_three_levels_apart() {
     let conforms = calculate(&project).unwrap().verdict;
     assert_eq!(conforms.compliance, Compliance::Conforms);
     assert!(!conforms.professionally_approved);
+    // Es conforme en lo evaluado: la capacidad interruptiva queda fuera del
+    // alcance del programa, con su referencia (decisión 0018).
+    let [_, (_, _, compliance), _] = conforms.lines("NOM-001-SEDE-2012");
+    assert!(
+        compliance.starts_with("Conforme en lo evaluado"),
+        "{compliance}"
+    );
+    assert!(compliance.contains("Fuera de alcance: capacidad interruptiva"));
+    assert!(compliance.contains("110-9"), "{compliance}");
+    assert!(compliance.contains("requiere estudio de cortocircuito"));
 
     // Un proyecto sin circuitos no tiene nada calculado.
     project.panels[0].circuits.clear();
@@ -420,10 +422,8 @@ fn motor_panel() -> Project {
             demand: Demand::Article220,
             demand_factor: None,
             has_neutral: false,
-            interrupting_ka: Some(10.0),
             overrides: Overrides::default(),
         },
-        interrupting_ka: Some(10.0),
         transformer: None,
         areas: vec![Area {
             description: "Nave".to_string(),
@@ -549,82 +549,41 @@ fn a_motor_without_data_is_not_evaluated() {
     assert_eq!(m10.status, Status::NotEvaluated);
 }
 
-/// 110-9: cada interruptor se compara con la corriente de falla en sus
-/// terminales de línea: el del alimentador, con la del punto de donde sale; los
-/// de los circuitos, con la de su tablero.
+/// La capacidad interruptiva está fuera del alcance del programa: ningún
+/// tramo la verifica, y el veredicto la declara aparte (decisión 0018).
 #[test]
-fn interrupting_rating_follows_the_fault_downstream() {
-    let mut project = industrial();
-    project.source.fault = SourceFault {
-        available_ka: Some(25.0),
-        ..SourceFault::default()
-    };
-    project.panels[0].feeder.interrupting_ka = Some(35.0);
-    project.panels[0].interrupting_ka = Some(22.0);
-    let result = calculate(&project).unwrap();
-    close(result.source_fault_ka.unwrap(), 25.0);
-    let general = result.panels.iter().find(|p| p.id == "TGN").unwrap();
-    let force = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
-    let g = general.fault_ka.unwrap();
-    let f = force.fault_ka.unwrap();
-    assert!(g < 25.0 && f < g, "{g} {f}");
-    let rating = |item: &RunResult| {
-        item.checks
-            .iter()
-            .find(|c| c.name == "Capacidad interruptiva")
-            .unwrap()
-            .clone()
-    };
-    // El general sale de la fuente con 25 kA: 35 kA cumple.
-    assert_eq!(rating(&general.feeder).status, Status::Complies);
-    close(general.feeder.run.as_ref().unwrap().fault_ka.unwrap(), 25.0);
-    // El de fuerza sale del general: toma sus 22 kA.
-    assert_eq!(rating(&force.feeder).status, Status::Complies);
-    close(force.feeder.run.as_ref().unwrap().fault_ka.unwrap(), g);
-    // Los circuitos del tablero de fuerza no tienen capacidad capturada.
-    let oven = circuit(&force.circuits, "F-01");
-    assert_eq!(rating(oven).status, Status::NotEvaluated);
-    assert!(rating(oven).detail.contains("falta la capacidad"));
-
-    // Con interruptores de menos capacidad que la falla del tablero general,
-    // el alimentador de fuerza no cumple.
-    project.panels[0].interrupting_ka = Some(g / 2.0);
-    project.panels[1].interrupting_ka = Some(65.0);
-    let result = calculate(&project).unwrap();
-    let force = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
-    assert_eq!(rating(&force.feeder).status, Status::Fails);
-    assert_eq!(
-        rating(circuit(&force.circuits, "F-01")).status,
-        Status::Complies
-    );
-
-    // Sin datos de la fuente solo el alimentador principal lo señala.
-    project.source.fault = SourceFault::default();
-    let result = calculate(&project).unwrap();
-    let general = result.panels.iter().find(|p| p.id == "TGN").unwrap();
-    let force = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
-    assert_eq!(rating(&general.feeder).status, Status::NotEvaluated);
-    assert!(force
-        .feeder
-        .checks
-        .iter()
-        .all(|c| c.name != "Capacidad interruptiva"));
-    assert!(result.source_fault_ka.is_none());
+fn interrupting_rating_is_out_of_scope() {
+    for project in [example::house(), industrial(), transformer_project()] {
+        let result = calculate(&project).unwrap();
+        for panel in &result.panels {
+            for run in panel.runs() {
+                assert!(
+                    run.checks
+                        .iter()
+                        .all(|c| c.name != "Capacidad interruptiva"),
+                    "{}: {}",
+                    panel.id,
+                    run.id
+                );
+                if let Some(r) = &run.run {
+                    assert!(r.steps.iter().all(|s| !s.title.contains("Cortocircuito")));
+                }
+            }
+        }
+        let out = &result.verdict.out_of_scope;
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].name, "Capacidad interruptiva");
+        assert_eq!(
+            out[0].references[0].clause.as_deref(),
+            Some("110-9, 110-10")
+        );
+    }
 }
 
-/// La corriente en el tablero sale de la impedancia de la fuente más la del
-/// alimentador, con la resistencia a 25 °C, más la aportación de motores.
+/// 250-66: el conductor al electrodo sale del mayor conductor de la acometida.
 #[test]
-fn bus_fault_adds_the_feeder_impedance() {
+fn grounding_electrode_follows_the_service_conductor() {
     let result = calculate(&example::house()).unwrap();
-    let panel = &result.panels[0];
-    // Fuente: 75 kVA, 3.5 %, 220 V: 5623.54 A; Zf = j 127.017 / 5623.54.
-    // Alimentador: 12 m de 10 AWG en acero, R = 3.9 Ω/km a 75 °C
-    // (3.2702 a 25 °C), X = 0.207 Ω/km: 0.039242 + j 0.002484 Ω.
-    // Icc = 127.017 / |0.039242 + j 0.025071| = 2727.5 A, más 4 veces la
-    // corriente de los motores: 4 · 3770.3 / (3 · 127.017) = 39.6 A.
-    close(result.source_fault_ka.unwrap(), 5.66314);
-    close(panel.fault_ka.unwrap(), 2.76722);
     // Acometida de 10 AWG: 2 AWG o menor, conductor al electrodo de 8 AWG.
     let gec = result.grounding_electrode.as_ref().unwrap();
     assert_eq!(gec.size, Size::new("8"));
@@ -685,18 +644,11 @@ fn large_feeders_go_parallel() {
 /// inmediato superior al 125 %, nota 1) y 1/0 AWG (150 A a 75 °C).
 fn transformer_project() -> Project {
     let mut project = industrial();
-    project.source.fault = SourceFault {
-        available_ka: Some(30.0),
-        ..SourceFault::default()
-    };
-    project.panels[0].feeder.interrupting_ka = Some(65.0);
-    project.panels[0].interrupting_ka = Some(35.0);
     let force = &mut project.panels[1];
     force.name = "Tablero de servicios".into();
     force.circuits[0].load.power_w = 20_000.0;
     force.circuits[0].load.continuous = false;
     force.feeder.length_m = 20.0;
-    force.interrupting_ka = Some(10.0);
     force.transformer = Some(ieestudio_project::Transformer {
         kva: 45.0,
         impedance_percent: 3.0,
@@ -705,7 +657,6 @@ fn transformer_project() -> Project {
         secondary_length_m: 3.0,
         secondary_has_neutral: true,
         secondary_overrides: Overrides::default(),
-        secondary_interrupting_ka: Some(10.0),
     });
     project
 }
@@ -751,17 +702,6 @@ fn transformer_sizes_both_sides_by_its_rating() {
         oven.cumulative_drop_percent,
         run.drop_percent + oven.drop_percent,
     );
-
-    // Cortocircuito: la impedancia hasta el primario (fuente de 30 kA, 40 m
-    // de 12 AWG y 20 m de 4 AWG) es 0.238469 + j0.022098 Ω a 277 V; referida
-    // al secundario, por (127.017 / 277.128)² = 0.21007: 0.050095 +
-    // j0.004642 Ω. El transformador suma j 0.03 · 3 · 127.017² / 45 000 =
-    // j0.032267 Ω. En las terminales del secundario:
-    // 127.017 / |0.050095 + j0.036909| = 2.04 kA, menos que su límite
-    // In / Z = 118.09 / 0.03 = 3.94 kA.
-    let terminals = run.fault_ka.unwrap();
-    close(terminals, 2.0413);
-    assert!(panel.fault_ka.unwrap() < terminals);
 }
 
 /// Un transformador chico para la carga no cumple, y sin protección en el

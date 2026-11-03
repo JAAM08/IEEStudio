@@ -257,7 +257,6 @@ calc = [
     ("Protecciones", "Interruptor normalizado inmediato superior a la corriente de diseño, o el que tú fijes, verificado contra el conductor."),
     ("Caída de tensión", "Por impedancia con la Tabla 9, por tramo y acumulada desde la fuente, con la longitud máxima permitida."),
     ("Carga del alimentador", "Artículo 220: alumbrado por área según el tipo de inmueble, contactos, aparatos fijos y cocina, con sus factores de demanda."),
-    ("Cortocircuito", "Corriente de falla en cada tablero por el método de impedancias, con aportación de motores, y capacidad interruptiva de cada interruptor."),
     ("Motores y clima", "Corrientes de las tablas 430-248 y 430-250, conductor al 125 %, interruptor, relevador de sobrecarga y el motor mayor en el alimentador."),
     ("Transformadores", "Hasta 600 V: primario y secundario, protección de la Tabla 450-3(b), tensión propia del tablero y falla a través del transformador."),
     ("Puesta a tierra", "Conductor de puesta a tierra de equipos (Tabla 250-122) y conductor al electrodo de la acometida (Tabla 250-66)."),
@@ -338,7 +337,7 @@ funciones = head(p, "Funciones", "Qué calcula IEEStudio, cómo muestra cada pas
         </div>
         <div class="show-text">
           <h3>El unifilar se dibuja solo</h3>
-          <p>Acometida, alimentadores, tableros y circuitos con su interruptor, conductores, tubería, caída de tensión y cortocircuito. Cambia un dato y el diagrama se actualiza.</p>
+          <p>Acometida, alimentadores, tableros y circuitos con su interruptor, conductores, tubería y caída de tensión. Cambia un dato y el diagrama se actualiza.</p>
           <ul>
             <li>Se exporta a DXF para seguir dibujando en AutoCAD.</li>
             <li>Va incluido en la memoria de cálculo.</li>
@@ -413,7 +412,7 @@ write("funciones", funciones)
 steps = [
     ("paso-1", "Abre IEEStudio", "La app abre con un proyecto de ejemplo: una casa habitación con un tablero y seis circuitos. A la izquierda está el navegador del proyecto; haz clic en cualquier elemento y las demás vistas lo siguen.",
      ["Para empezar el tuyo: Archivo, Nuevo proyecto.", "El ejemplo siempre está en Archivo, Abrir el proyecto de ejemplo."]),
-    ("paso-2", "Datos de la obra y la acometida", "Selecciona el proyecto para capturar el cliente, la ubicación, quién elaboró y quién firma, el tipo de inmueble, el sistema de la acometida y los datos de cortocircuito de la compañía o del transformador.",
+    ("paso-2", "Datos de la obra y la acometida", "Selecciona el proyecto para capturar el cliente, la ubicación, quién elaboró y quién firma, el tipo de inmueble, y el sistema de la acometida.",
      ["Los datos de la obra van a la portada de la memoria; no cambian el cálculo.", "Los límites de caída de tensión se ajustan aquí."]),
     ("paso-3", "Tableros y carga del alimentador", "En cada tablero eliges de dónde se alimenta, su conexión, la longitud del alimentador y las áreas que atiende. Con eso se calcula la carga según el artículo 220, con el detalle de cada grupo en el procedimiento.",
      ["Si el tablero se alimenta por un transformador, márcalo y captura sus datos.", "Las áreas definen la carga mínima de alumbrado (Tabla 220-12)."]),
@@ -421,7 +420,7 @@ steps = [
      ["Ctrl+D duplica el circuito seleccionado y Supr lo elimina.", "«Balancear fases» reparte los circuitos entre A, B y C."]),
     ("paso-5", "Revisa los resultados", "En Propiedades, la pestaña Resultados muestra lo que calculó el programa para el circuito seleccionado. Si fijaste un calibre o un interruptor, te dice qué habría propuesto y por qué.",
      ["Puedes fijar calibre, interruptor y conductores por fase, o dejar que IEEStudio proponga el menor que cumple."]),
-    ("paso-6", "Revisa la normativa", "La pestaña Normativa lista cada verificación —ampacidad, protección, caída, tubería, capacidad interruptiva— con su estado y el artículo que aplica.",
+    ("paso-6", "Revisa la normativa", "La pestaña Normativa lista cada verificación —ampacidad, protección, caída, tubería— con su estado y el artículo que aplica. En los resultados del proyecto, lo que la norma pide y el programa no verifica, como la capacidad interruptiva, aparece como fuera de alcance.",
      ["Abajo, el Procedimiento muestra la fórmula y los valores de cada paso."]),
     ("paso-7", "El diagrama unifilar", "El espacio de trabajo Diagrama muestra el unifilar dibujado a partir del proyecto. No se dibuja a mano: cualquier cambio en el cuadro de cargas se refleja aquí.",
      ["Archivo, Exportar unifilar a DXF, para seguir en AutoCAD."]),
