@@ -138,11 +138,13 @@ impl QuickResult {
             Ok(p) => p.status,
             Err(_) => Status::NotEvaluated,
         };
-        Verdict::new(
+        let mut verdict = Verdict::new(
             1,
             usize::from(self.protection.is_err()),
             [protection, self.status],
-        )
+        );
+        verdict.out_of_scope = self.out_of_scope.clone();
+        verdict
     }
 }
 
@@ -160,6 +162,8 @@ pub struct QuickResult {
     pub steps: Vec<Step>,
     pub recommendations: Vec<Recommendation>,
     pub warnings: Vec<String>,
+    /// Verificaciones de la norma que el programa no hace.
+    pub out_of_scope: Vec<crate::verdict::OutOfScope>,
 }
 
 fn drop_input(input: &QuickInput, current_a: f64) -> VoltageDropInput {
@@ -451,6 +455,7 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
         max_length_m: max_length,
         drop,
         warnings,
+        out_of_scope: crate::verdict::out_of_scope(profile),
     })
 }
 

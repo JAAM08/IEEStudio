@@ -18,10 +18,13 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0010 | [Interfaz por paneles acoplables y espacios de trabajo](0010-interfaz-profesional.md) | Aceptada |
 | 0011 | [Motores y motocompresores](0011-motores.md) | Aceptada |
 | 0012 | [Carga de los alimentadores según el artículo 220](0012-carga-articulo-220.md) | Aceptada |
-| 0013 | [Cortocircuito y capacidad interruptiva](0013-cortocircuito.md) | Aceptada |
+| 0013 | [Cortocircuito y capacidad interruptiva](0013-cortocircuito.md) | Sustituida por 0018 |
 | 0014 | [Cuadro de cargas de ida y vuelta con Excel](0014-excel.md) | Aceptada |
 | 0015 | [Conductores en paralelo propuestos por el programa](0015-paralelos.md) | Aceptada |
-| 0016 | [Transformadores dentro del proyecto](0016-transformador.md) | Aceptada |
+| 0016 | [Transformadores dentro del proyecto](0016-transformador.md) | Aceptada; cortocircuito retirado por 0018 |
 | 0017 | [La aplicación en el navegador](0017-version-web.md) | Aceptada |
+| 0018 | [El cortocircuito sale de IEEStudio y pasa a la suite](0018-cortocircuito-fuera-de-alcance.md) | Aceptada |
+| 0019 | [Rediseño de la interfaz, fase 1: escritorio](0019-rediseno-fase-1.md) | Aceptada; vale dentro de la vista avanzada |
+| 0020 | [Vista guiada en cinco pasos](0020-flujo-guiado.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

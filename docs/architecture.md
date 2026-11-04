@@ -12,9 +12,9 @@ ieestudio-core          tipos del dominio, unidades, errores, validación
    ↑
 ieestudio-rules         perfiles normativos: tablas, parámetros y referencias (data/)
    ↑
-ieestudio-electrical    fórmulas: corriente, caída, conductor, protección, tierra, tubería, cortocircuito
+ieestudio-electrical    fórmulas: corriente, caída, conductor, protección, tierra, tubería
    ↑
-ieestudio-project       modelo del proyecto, carga del artículo 220, cuadro de cargas, cortocircuito, procedimiento, cálculo rápido, veredicto
+ieestudio-project       modelo del proyecto, carga del artículo 220, cuadro de cargas, procedimiento, cálculo rápido, veredicto
    ↑
 ieestudio-diagrams      diagrama unifilar como trazos y textos; exporta SVG
    ↑

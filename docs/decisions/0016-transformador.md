@@ -1,6 +1,7 @@
 # 0016. Transformadores dentro del proyecto
 
-**Estado:** aceptada (octubre de 2026).
+**Estado:** aceptada (octubre de 2026). El punto de cortocircuito lo retira
+la 0018.
 
 ## Contexto
 

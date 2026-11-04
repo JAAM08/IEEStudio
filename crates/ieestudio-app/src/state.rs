@@ -50,7 +50,6 @@ pub fn empty_project() -> Project {
         source: Source {
             name: "Acometida".to_string(),
             system: System::WYE_220_127,
-            fault: Default::default(),
         },
         panels: vec![new_panel("TG-1", "Tablero general", None)],
     }
@@ -67,10 +66,8 @@ fn new_panel(id: &str, name: &str, parent: Option<String>) -> Panel {
             demand: Default::default(),
             demand_factor: None,
             has_neutral: true,
-            interrupting_ka: None,
             overrides: Overrides::default(),
         },
-        interrupting_ka: None,
         transformer: None,
         areas: vec![],
         circuits: vec![],
@@ -196,6 +193,42 @@ impl Doc {
             Selection::Circuit(p, c) => self.panel_result(p)?.circuits.get(c),
             Selection::Project => None,
         }
+    }
+
+    /// Decisiones de diseño del tramo seleccionado, para cambiarlas.
+    pub fn selected_overrides_mut(&mut self) -> Option<&mut Overrides> {
+        match self.selection {
+            Selection::Feeder(p) => Some(&mut self.project.panels[p].feeder.overrides),
+            Selection::Secondary(p) => self.project.panels[p]
+                .transformer
+                .as_mut()
+                .map(|t| &mut t.secondary_overrides),
+            Selection::Circuit(p, c) => Some(&mut self.project.panels[p].circuits[c].overrides),
+            Selection::Project => None,
+        }
+    }
+
+    /// Sistema de las barras de un tablero: el de la fuente o el del
+    /// secundario del transformador más cercano aguas arriba.
+    pub fn bus_system(&self, panel: usize) -> System {
+        let panels = &self.project.panels;
+        let mut at = panel;
+        // Cada paso sube un tablero; el proyecto calculado no tiene ciclos,
+        // pero el límite evita quedarse aquí si los tuviera.
+        for _ in 0..=panels.len() {
+            if let Some(t) = &panels[at].transformer {
+                return t.secondary;
+            }
+            match panels[at]
+                .parent
+                .as_ref()
+                .and_then(|id| panels.iter().position(|p| &p.id == id))
+            {
+                Some(parent) => at = parent,
+                None => break,
+            }
+        }
+        self.project.source.system
     }
 
     /// Clave estable de la selección, para recordar qué grupos se abrieron.

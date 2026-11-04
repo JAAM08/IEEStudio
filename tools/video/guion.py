@@ -18,8 +18,8 @@ SEGMENTS = [
     },
     {
         "id": "obra",
-        "say": "Aquí capturas los datos de la obra: el cliente, la ubicación y quién firma. También el sistema de la acometida y los datos de cortocircuito de la compañía.",
-        "sub": "Aquí capturas los datos de la obra: el cliente, la ubicación y quién firma. También el sistema de la acometida y los datos de cortocircuito de la compañía.",
+        "say": "Aquí capturas los datos de la obra: el cliente, la ubicación y quién firma. También el sistema de la acometida.",
+        "sub": "Aquí capturas los datos de la obra: el cliente, la ubicación y quién firma. También el sistema de la acometida.",
         "actions": [["click", 110, 112]],
         "spots": [[1128, 66, 1440, 520]],
     },

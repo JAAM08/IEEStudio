@@ -75,10 +75,8 @@ fn feeder_load_cases() {
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: true,
-                interrupting_ka: None,
                 overrides: Overrides::default(),
             },
-            interrupting_ka: None,
             transformer: None,
             areas: area
                 .map(|m2| {

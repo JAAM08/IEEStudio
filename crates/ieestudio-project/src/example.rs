@@ -4,7 +4,7 @@ use ieestudio_core::{CircuitKind, Size, System};
 
 use crate::model::{
     Area, Circuit, CompressorLoad, Demand, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel,
-    Phase, Project, ProjectInfo, Settings, Source, SourceFault, FORMAT_VERSION,
+    Phase, Project, ProjectInfo, Settings, Source, FORMAT_VERSION,
 };
 
 #[allow(clippy::too_many_arguments)] // constructor interno del ejemplo
@@ -104,12 +104,6 @@ pub fn house() -> Project {
         source: Source {
             name: "Acometida".to_string(),
             system: System::WYE_220_127,
-            // Transformador de la compañía de 75 kVA con 3.5 % de impedancia.
-            fault: SourceFault {
-                available_ka: None,
-                transformer_kva: Some(75.0),
-                transformer_impedance_percent: Some(3.5),
-            },
         },
         panels: vec![Panel {
             id: "TG-1".to_string(),
@@ -121,10 +115,8 @@ pub fn house() -> Project {
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: true,
-                interrupting_ka: Some(10.0),
                 overrides: Overrides::default(),
             },
-            interrupting_ka: Some(10.0),
             transformer: None,
             areas: vec![Area {
                 description: "Planta baja y planta alta".to_string(),

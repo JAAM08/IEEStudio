@@ -24,14 +24,14 @@
 - Carga de los alimentadores según el artículo 220: tipo de inmueble, áreas
   por tablero, mínimas de alumbrado y de contactos, y factores de demanda por
   grupo (ver la decisión 0012).
-- Cortocircuito en cada tablero y capacidad interruptiva de cada interruptor
-  (110-9, 110-10; ver la decisión 0013).
+- Cortocircuito retirado del programa (decisión 0018): la capacidad
+  interruptiva queda fuera de alcance y el veredicto lo dice como «Conforme
+  en lo evaluado».
 - Datos de la obra en la memoria (cliente, ubicación, revisión, responsable
   y cédula) y cuadro de cargas de ida y vuelta con Excel (decisión 0014).
 - Transformadores de 600 V o menos dentro del proyecto: tensión por tablero,
   primario y secundario dimensionados con la capacidad del transformador,
-  protección de la Tabla 450-3(b), caída desde el secundario y cortocircuito
-  a través del transformador (decisión 0016).
+  protección de la Tabla 450-3(b) y caída desde el secundario (decisión 0016).
 - Conductor al electrodo de puesta a tierra de la acometida (Tabla 250-66,
   con el área equivalente de los paralelos) y balanceo automático de fases
   por tablero (todas las combinaciones hasta 10 circuitos; búsqueda local
@@ -50,7 +50,21 @@
   (decisión 0017). El programa avisa en pantalla si no puede arrancar, en
   escritorio y en el navegador.
 
+- Rediseño de la interfaz, fase 1 (decisión 0019): pantalla de inicio,
+  encabezado del tablero, barra contextual, trazabilidad visible en
+  Resultados, valores heredados en gris y paleta de comandos (Ctrl+K).
+- Vista guiada en cinco pasos como vista de omisión (decisión 0020):
+  Proyecto, Tableros, Circuitos, Revisar y Memoria; la vista avanzada con
+  paneles queda a un clic.
+
 ## Pendiente, en orden
+
+- Rediseño, fases 2 y 3: tablet y teléfono, llevando la vista guiada a una
+  vista por paso. Antes, una prueba en un teléfono real de egui en el
+  navegador (teclado virtual, desplazamiento).
+- Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
+  plantillas de circuito.
+- Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
 
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.
@@ -62,6 +76,14 @@ industriales en baja tensión, con motores.
 
 Acometida y transformadores en media tensión (Tabla 450-3(a)); lo que
 falta del artículo 220 (estufas y secadoras, calefacción, neutro del
-alimentador, métodos opcionales); falla de fase a tierra; coordinación de
-protecciones; charola; sistemas fotovoltaicos; sistemas de tierra y otros
+alimentador, métodos opcionales); charola; sistemas fotovoltaicos y otros
 perfiles normativos.
+
+## Suite eléctrica
+
+Programas aparte, reimplementados desde las normas públicas (decisión 0018):
+
+- **Cortocircuito**: falla trifásica y de fase a tierra, coordinación de
+  protecciones. Al existir, IEEStudio importará la corriente de falla de cada
+  tablero para volver a verificar la capacidad interruptiva (110-9).
+- **Malla de tierras**: sistemas de tierra y potenciales de paso y contacto.

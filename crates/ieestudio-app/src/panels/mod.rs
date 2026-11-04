@@ -28,6 +28,9 @@ pub struct Shared {
     pub preview: report::Preview,
     /// Aviso de una acción terminada, para la barra de estado.
     pub done: Option<String>,
+    /// Panel que otro panel pidió abrir, por ejemplo el procedimiento desde
+    /// la barra contextual del cuadro de cargas.
+    pub open_tab: Option<Tab>,
 }
 
 impl Shared {
@@ -41,6 +44,7 @@ impl Shared {
             diagram_zoom: 1.3,
             quick: quick::QuickView::default(),
             done: None,
+            open_tab: None,
             preview: report::Preview::default(),
         }
     }

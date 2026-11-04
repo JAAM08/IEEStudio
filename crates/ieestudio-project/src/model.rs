@@ -11,8 +11,13 @@ use serde::{Deserialize, Serialize};
 /// Versión del formato de archivo. La 2 agrega los datos de motores y
 /// motocompresores y el interruptor fijado. La 3 agrega el tipo de inmueble,
 /// las áreas de cada tablero, los contactos, el método de demanda del
-/// alimentador, los datos de cortocircuito, los datos de la obra y los
-/// transformadores. Lee los archivos de la 1 y la 2.
+/// alimentador, los datos de la obra y los transformadores. Lee los archivos
+/// de la 1 y la 2.
+///
+/// Los archivos de la versión 3 escritos antes de retirar el cortocircuito
+/// (decisión 0018) traen campos de falla y de capacidad interruptiva; al
+/// leerlos se ignoran y ya no se escriben. Por eso el formato sigue siendo el 3:
+/// un programa anterior abre sin error lo que escribe este.
 pub const FORMAT_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -81,9 +86,6 @@ pub struct Settings {
     pub include_iec_ratings: bool,
     /// Desbalance entre fases a partir del cual se emite un aviso, en porciento.
     pub imbalance_warning_percent: f64,
-    /// Aportación de los motores a la corriente de cortocircuito, en veces su
-    /// corriente a plena carga.
-    pub motor_fault_multiplier: f64,
     /// Calibre mayor que el programa propone para un solo conductor por fase;
     /// arriba de él propone conductores en paralelo.
     pub largest_single_size: Size,
@@ -104,7 +106,6 @@ impl Default for Settings {
             resistance_temperature_c: None,
             include_iec_ratings: false,
             imbalance_warning_percent: 5.0,
-            motor_fault_multiplier: 4.0,
             largest_single_size: Size::new("500"),
         }
     }
@@ -115,25 +116,6 @@ impl Default for Settings {
 pub struct Source {
     pub name: String,
     pub system: System,
-    /// Datos para la corriente de cortocircuito de la fuente.
-    #[serde(default)]
-    pub fault: SourceFault,
-}
-
-/// Corriente de cortocircuito de la fuente: el dato de la compañía
-/// suministradora o el transformador. Si están los dos, manda el primero.
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SourceFault {
-    /// Corriente simétrica disponible en el punto de conexión, en kA.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub available_ka: Option<f64>,
-    /// Potencia del transformador, en kVA.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transformer_kva: Option<f64>,
-    /// Impedancia del transformador, en porciento.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transformer_impedance_percent: Option<f64>,
 }
 
 /// Fase de un sistema.
@@ -159,10 +141,6 @@ pub struct Panel {
     /// carga mínima de alumbrado (220-12). Las de sus subtableros se suman.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub areas: Vec<Area>,
-    /// Capacidad interruptiva de los interruptores de este tablero, en kA:
-    /// los de sus circuitos y los de los alimentadores de sus subtableros.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub interrupting_ka: Option<f64>,
     /// Transformador entre el alimentador y el tablero. El alimentador es su
     /// primario; el tablero y sus circuitos quedan con la tensión del
     /// secundario.
@@ -192,9 +170,6 @@ pub struct Transformer {
     pub secondary_has_neutral: bool,
     #[serde(default)]
     pub secondary_overrides: Overrides,
-    /// Capacidad interruptiva del interruptor del secundario, en kA.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub secondary_interrupting_ka: Option<f64>,
 }
 
 /// Superficie de piso que atiende un tablero.
@@ -234,10 +209,6 @@ pub struct Feeder {
     /// El alimentador lleva neutro.
     #[serde(default = "yes")]
     pub has_neutral: bool,
-    /// Capacidad interruptiva del interruptor del alimentador, en kA. `None`
-    /// toma la del tablero de donde sale.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub interrupting_ka: Option<f64>,
     #[serde(default)]
     pub overrides: Overrides,
 }
@@ -428,6 +399,38 @@ mod tests {
         let read = Project::from_json(&json).unwrap();
         assert_eq!(read.panels[0].feeder.demand, Demand::Article220);
         assert!(!read.to_json().contains("demand_factor"));
+    }
+
+    /// Un archivo escrito con el cortocircuito (antes de la decisión 0018)
+    /// abre sin error; sus datos de falla se ignoran y no se vuelven a escribir.
+    #[test]
+    fn old_fault_data_is_ignored() {
+        let project = crate::example::house();
+        let json = project
+            .to_json()
+            .replacen(
+                "\"source\": {",
+                "\"source\": {\n    \"fault\": { \"available_ka\": 10.0 },",
+                1,
+            )
+            .replacen(
+                "\"imbalance_warning_percent\"",
+                "\"motor_fault_multiplier\": 4.0,\n    \"imbalance_warning_percent\"",
+                1,
+            )
+            .replacen(
+                "\"has_neutral\": true,",
+                "\"has_neutral\": true,\n      \"interrupting_ka\": 10.0,",
+                1,
+            );
+        assert!(json.contains("available_ka"));
+        assert!(json.contains("motor_fault_multiplier"));
+        assert!(json.contains("interrupting_ka"));
+        let read = Project::from_json(&json).unwrap();
+        assert_eq!(read, project);
+        let written = read.to_json();
+        assert!(!written.contains("fault"));
+        assert!(!written.contains("interrupting"));
     }
 
     #[test]

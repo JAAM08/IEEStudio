@@ -110,14 +110,13 @@ fn parse_bool(text: &str) -> Option<bool> {
 // ------------------------------------------------------------------ exportar
 
 /// Columnas de la hoja de tableros.
-const PANEL_COLUMNS: [(&str, f64); 7] = [
+const PANEL_COLUMNS: [(&str, f64); 6] = [
     ("Tablero", 10.0),
     ("Nombre", 28.0),
     ("Se alimenta de", 16.0),
     ("Conexión", 10.0),
     ("Longitud del alimentador m", 14.0),
     ("Área m²", 10.0),
-    ("Cap. interruptiva kA", 12.0),
 ];
 
 /// Columnas de la hoja del cuadro de cargas.
@@ -142,7 +141,7 @@ const CIRCUIT_COLUMNS: [(&str, f64); 18] = [
     ("Interruptor fijado A", 11.0),
 ];
 
-const RESULT_COLUMNS: [(&str, f64); 15] = [
+const RESULT_COLUMNS: [(&str, f64); 14] = [
     ("Tablero", 10.0),
     ("ID", 8.0),
     ("Descripción", 30.0),
@@ -155,7 +154,6 @@ const RESULT_COLUMNS: [(&str, f64); 15] = [
     ("Tubo", 12.0),
     ("e %", 8.0),
     ("Σe %", 8.0),
-    ("Icc kA", 8.0),
     ("Estado", 12.0),
     ("Observaciones", 60.0),
 ];
@@ -210,7 +208,6 @@ fn build(project: &Project, result: Option<&ProjectResult>) -> Result<Vec<u8>, X
         number(sheet, r, 4, Some(panel.feeder.length_m))?;
         let area: f64 = panel.areas.iter().map(|a| a.m2).sum();
         number(sheet, r, 5, (area > 0.0).then_some(area))?;
-        number(sheet, r, 6, panel.interrupting_ka)?;
     }
     let kinds = DataValidation::new().allow_list_strings(&["1 fase", "2 fases", "3 fases"])?;
     sheet.add_data_validation(1, 3, 2000, 3, &kinds)?;
@@ -305,21 +302,15 @@ fn build(project: &Project, result: Option<&ProjectResult>) -> Result<Vec<u8>, X
                         11,
                         Some((run.cumulative_drop_percent * 100.0).round() / 100.0),
                     )?;
-                    number(
-                        sheet,
-                        r,
-                        12,
-                        run.fault_ka.map(|k| (k * 100.0).round() / 100.0),
-                    )?;
                 }
-                text(sheet, r, 13, item.status.label())?;
+                text(sheet, r, 12, item.status.label())?;
                 let notes: Vec<String> = item
                     .checks
                     .iter()
                     .filter(|c| c.status != ieestudio_project::Status::Complies)
                     .map(|c| format!("{}: {}", c.name, c.detail))
                     .collect();
-                text(sheet, r, 14, &notes.join("; "))?;
+                text(sheet, r, 13, &notes.join("; "))?;
                 r += 1;
             }
         }
@@ -507,12 +498,10 @@ fn new_panel(id: &str) -> Panel {
             demand: Demand::Article220,
             demand_factor: None,
             has_neutral: true,
-            interrupting_ka: None,
             overrides: Overrides::default(),
         },
         transformer: None,
         areas: vec![],
-        interrupting_ka: None,
         circuits: vec![],
     }
 }
@@ -541,13 +530,9 @@ fn import_panels(project: &mut Project, sheet: &Sheet, report: &mut ImportReport
                 "longitud del alimentador",
             )?;
             let area = optional_number(sheet.get(row, "Área m²"), "área")?;
-            let ka = optional_number(
-                sheet.get(row, "Cap. interruptiva kA"),
-                "capacidad interruptiva",
-            )?;
-            Ok((kind, length, area, ka))
+            Ok((kind, length, area))
         })();
-        let (kind, length, area, ka) = match parsed {
+        let (kind, length, area) = match parsed {
             Ok(v) => v,
             Err(e) => {
                 report.errors.push(format!("Tableros, fila {line}: {e}"));
@@ -603,9 +588,6 @@ fn import_panels(project: &mut Project, sheet: &Sheet, report: &mut ImportReport
                 }
                 _ => panel.areas.clear(),
             }
-        }
-        if let Some(ka) = ka {
-            panel.interrupting_ka = ka;
         }
     }
 }
