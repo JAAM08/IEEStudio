@@ -10,7 +10,7 @@ pub mod schedule;
 
 use eframe::egui::{self, Id, RichText, WidgetText};
 use egui_dock::TabViewer;
-use ieestudio_diagrams::single_line;
+use ieestudio_diagrams::{single_line_with, Mode, Options};
 
 use crate::state::{Doc, Selection};
 use crate::theme::Palette;
@@ -34,6 +34,8 @@ pub struct Shared {
     /// Tablero al que se va a agregar un circuito: mientras tenga valor está
     /// abierta la ventana «¿Qué vas a conectar?».
     pub choose_load: Option<usize>,
+    /// Unifilar como revisión (colores) o como plano (hoja para imprimir).
+    pub diagram_mode: ieestudio_diagrams::Mode,
 }
 
 impl Shared {
@@ -49,6 +51,7 @@ impl Shared {
             done: None,
             open_tab: None,
             choose_load: None,
+            diagram_mode: ieestudio_diagrams::Mode::Review,
             preview: report::Preview::default(),
         }
     }
@@ -93,15 +96,24 @@ impl TabViewer for Viewer<'_> {
             Tab::Procedure => padded(ui, |ui| procedure::show(ui, self.doc, self.shared)),
             Tab::Diagram => padded(ui, |ui| match &self.doc.result {
                 Ok(result) => {
-                    let d = single_line(&self.doc.project, result);
+                    let options = match self.shared.diagram_mode {
+                        Mode::Review => Options::REVIEW,
+                        Mode::Plan => Options::PLAN,
+                    };
+                    let d = single_line_with(&self.doc.project, result, options);
                     let selected = match self.doc.selection {
                         Selection::Feeder(i) | Selection::Secondary(i) => Some((i, None)),
                         Selection::Circuit(i, c) => Some((i, Some(c))),
                         Selection::Project => None,
                     };
-                    if let Some(hit) =
-                        diagram::show(ui, &p, &d, &mut self.shared.diagram_zoom, selected)
-                    {
+                    if let Some(hit) = diagram::show(
+                        ui,
+                        &p,
+                        &d,
+                        &mut self.shared.diagram_zoom,
+                        &mut self.shared.diagram_mode,
+                        selected,
+                    ) {
                         self.doc.selection = match hit {
                             (i, Some(c)) => Selection::Circuit(i, c),
                             (i, None) => Selection::Feeder(i),

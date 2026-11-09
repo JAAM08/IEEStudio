@@ -12,7 +12,7 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0004 | [Licencia doble MIT o Apache-2.0](0004-licencia.md) | Aceptada |
 | 0005 | [Criterios de cálculo](0005-criterios-de-calculo.md) | Aceptada |
 | 0006 | [Memoria en PDF con Typst](0006-memoria-typst.md) | Aceptada |
-| 0007 | [Unifilar como trazos independientes del dibujo](0007-unifilar.md) | Aceptada |
+| 0007 | [Unifilar como trazos independientes del dibujo](0007-unifilar.md) | Aceptada; ampliada por 0022 |
 | 0008 | [Reglas y referencias normativas separadas](0008-referencias-normativas.md) | Aceptada |
 | 0009 | [Veredicto en tres niveles](0009-veredicto.md) | Aceptada |
 | 0010 | [Interfaz por paneles acoplables y espacios de trabajo](0010-interfaz-profesional.md) | Aceptada |
@@ -27,5 +27,6 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0019 | [Rediseño de la interfaz, fase 1: escritorio](0019-rediseno-fase-1.md) | Aceptada; vale dentro de la vista avanzada |
 | 0020 | [Vista guiada en cinco pasos](0020-flujo-guiado.md) | Aceptada |
 | 0021 | [Agregar un circuito eligiendo primero qué se conecta](0021-agregar-por-tipo-de-carga.md) | Aceptada |
+| 0022 | [El unifilar con el formato de un plano eléctrico](0022-unifilar-como-plano.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

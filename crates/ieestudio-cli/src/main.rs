@@ -110,7 +110,7 @@ fn dxf(path: &str, output: Option<&str>) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("no se pudo leer {path}: {e}"))?;
     let project = Project::from_json(&text)?;
     let result = calculate(&project)?;
-    let bytes = ieestudio_diagrams::single_line(&project, &result).to_dxf();
+    let bytes = ieestudio_diagrams::plan(&project, &result).to_dxf();
     let output = match output {
         Some(output) => std::path::PathBuf::from(output),
         None => std::path::Path::new(path).with_extension("dxf"),

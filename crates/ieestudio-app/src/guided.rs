@@ -1555,7 +1555,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             .id_salt("unifilar-guiado")
                             .max_height(360.0)
                             .show(ui, |ui| {
-                                if let Some(hit) = crate::panels::diagram::paint(ui, p, &diagram, zoom, None) {
+                                if let Some(hit) = crate::panels::diagram::paint(ui, p, &diagram, zoom, false, None) {
                                     doc.selection = match hit {
                                         (i, Some(c)) => Selection::Circuit(i, c),
                                         (i, None) => Selection::Feeder(i),

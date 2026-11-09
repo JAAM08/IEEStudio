@@ -1,6 +1,6 @@
 # 0007. Unifilar como trazos independientes del dibujo
 
-**Estado:** aceptada.
+**Estado:** aceptada; el formato y las filas los amplía la 0022.
 
 ## Decisión
 

@@ -285,7 +285,7 @@ fn call(name: &str, args: &Value) -> Result<String, String> {
         "exportar_dxf" => {
             let project = load_project(args)?;
             let result = calculate(&project)?;
-            let bytes = ieestudio_diagrams::single_line(&project, &result).to_dxf();
+            let bytes = ieestudio_diagrams::plan(&project, &result).to_dxf();
             let out = output(args)?;
             std::fs::write(out, bytes).map_err(|e| format!("no se pudo escribir {out}: {e}"))?;
             Ok(format!("Diagrama unifilar escrito en {out}"))

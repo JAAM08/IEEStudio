@@ -60,12 +60,13 @@
   conectar?» con motor y aire acondicionado a la vista, ficha que pide
   primero los datos del equipo, símbolos por tipo y aviso en Revisar cuando
   un circuito parece motor o aire acondicionado.
+- Unifilar con el formato de un plano (decisión 0022): bloques de acometida,
+  transformador, alimentadores y protecciones, recuadro y encabezado de cada
+  tablero, símbolos por carga, subtableros abajo, filas, y modos Revisión y
+  Plano con simbología, notas y cajetín.
 
 ## Pendiente, en orden
 
-- Unifilar con el formato de plano: simbología NMX-J-136, bloques de
-  acometida, subestación, alimentadores y protecciones (I.1 a I.4), cajetín y
-  modos Plano y Revisión.
 - Capacidad interruptiva por bus infinito con aportación de motores y datos
   de catálogo de los interruptores; por decidir cómo cuenta en el veredicto
   (ver la decisión 0018).
