@@ -64,12 +64,15 @@
   transformador, alimentadores y protecciones, recuadro y encabezado de cada
   tablero, símbolos por carga, subtableros abajo, filas, y modos Revisión y
   Plano con simbología, notas y cajetín.
+- Capacidad interruptiva con la falla estimada por bus infinito (decisión
+  0023): dato de la suministradora o subestación, tolerancia de la
+  impedancia, aportación de motores a la vista, «cumple con un método
+  conservador» o «no concluyente»; datos de catálogo de acometida,
+  subestación, transformadores, tableros e interruptores, y posiciones
+  propuestas en el tablero.
 
 ## Pendiente, en orden
 
-- Capacidad interruptiva por bus infinito con aportación de motores y datos
-  de catálogo de los interruptores; por decidir cómo cuenta en el veredicto
-  (ver la decisión 0018).
 
 - Rediseño, fases 2 y 3: tablet y teléfono, llevando la vista guiada a una
   vista por paso. Antes, una prueba en un teléfono real de egui en el
@@ -77,6 +80,10 @@
 - Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
   plantillas de circuito.
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
+- Cotejar los símbolos del unifilar con el texto de la NMX-J-136-ANCE-2019 y
+  agregar la tabla de impedancias de la NMX-J-116 para transformadores sin
+  dato de placa.
+- Unifilar fase 3: bloques con atributos en el DXF y tamaños de hoja.
 
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.

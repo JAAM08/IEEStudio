@@ -12,11 +12,14 @@ fn industrial() -> Project {
     project.source.system = System::WYE_480_277;
     project.panels = vec![
         Panel {
+            board: Default::default(),
+            interrupting_ka: Default::default(),
             id: "TGN".to_string(),
             name: "Tablero general".to_string(),
             parent: None,
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
+                interrupting_ka: Default::default(),
                 length_m: 40.0,
                 demand: ieestudio_project::Demand::Custom(0.8),
                 demand_factor: None,
@@ -28,11 +31,14 @@ fn industrial() -> Project {
             circuits: vec![],
         },
         Panel {
+            board: Default::default(),
+            interrupting_ka: Default::default(),
             id: "TF-1".to_string(),
             name: "Tablero de fuerza".to_string(),
             parent: Some("TGN".to_string()),
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
+                interrupting_ka: Default::default(),
                 length_m: 60.0,
                 demand: ieestudio_project::Demand::Article220,
                 demand_factor: None,
@@ -99,7 +105,8 @@ fn single_line_diagram_covers_every_run() {
     // Encabezado del tablero con carga instalada y demandada.
     assert!(t.iter().any(|s| s.ends_with("INSTALADOS")));
     assert!(t.iter().any(|s| s.contains("DEMANDADOS, F.D.")));
-    assert!(t.iter().any(|s| s == "220/127 V, 3F-4H"));
+    assert!(t.iter().any(|s| s == "220/127 V, 3F-4H, 60 Hz"));
+    assert!(t.iter().any(|s| s == "ACOMETIDA EN BAJA TENSIÓN · CFE"));
     // Una zona por circuito y una por tablero, para seleccionar desde el diagrama.
     assert_eq!(diagram.hotspots.len(), 7);
     assert!(diagram.hotspots.iter().any(|h| h.circuit == Some(4)));
@@ -119,7 +126,7 @@ fn single_line_diagram_covers_every_run() {
     // El subtablero se alimenta desde una columna del tablero general.
     assert!(t.iter().any(|s| s.starts_with("ALIM. TF-1 · ")));
     assert!(t.iter().any(|s| s == "F-01"));
-    assert!(t.iter().any(|s| s == "480/277 V, 3F-4H"));
+    assert!(t.iter().any(|s| s == "480/277 V, 3F-4H, 60 Hz"));
     // El subtablero se selecciona desde su columna y desde su propio dibujo.
     let tf = nave.panels.iter().position(|p| p.id == "TF-1").unwrap();
     assert!(
@@ -249,4 +256,62 @@ fn dxf_has_every_line_and_text() {
     assert_eq!(text.matches("\n  0\nLINE\n").count(), segments);
     // Los caracteres fuera de Windows-1252 van escapados.
     assert!(!text.contains('Σ'));
+}
+
+/// Con los datos de catálogo y de la subestación, el unifilar lleva la
+/// subestación (I.2), los interruptores con marco, disparo, modelo, kA y
+/// marca (I.4), el tablero con sus barras, la corriente de falla y la
+/// posición de cada interruptor.
+#[test]
+fn catalog_data_and_fault_current_are_drawn() {
+    let mut house = example::house();
+    house.source.substation = Some(ieestudio_project::Substation {
+        kva: 112.5,
+        impedance_percent: 3.0,
+        primary_kv: Some(13.2),
+        connection: Some(ieestudio_project::Connection::DeltaWye),
+        mounting: Some(ieestudio_project::Mounting::Pole),
+        brand: "Imem".into(),
+    });
+    let panel = &mut house.panels[0];
+    panel.board.bus_a = Some(225.0);
+    panel.board.interrupting_ka = Some(22.0);
+    panel.board.model = "NQ304AB225S".into();
+    panel.board.brand = "Square D".into();
+    let breaker = &mut panel.circuits[1].overrides.breaker;
+    breaker.frame_a = Some(100.0);
+    breaker.model = "QOB120".into();
+    breaker.brand = "Square D".into();
+    let result = calculate(&house).unwrap();
+    let diagram = plan(&house, &result);
+    let t = texts(&diagram);
+    for expected in [
+        "SUBESTACIÓN DE 112.5 kVA, Z = 3 %",
+        "13.2 kV – 220/127 V, 3F-4H, 60 Hz",
+        "DELTA – ESTRELLA · TIPO POSTE · MARCA IMEM",
+        "ACOMETIDA EN MEDIA TENSIÓN, 13.2 kV · CFE",
+        "BARRAS 225 A · 22 kA · MOD. NQ304AB225S · SQUARE D",
+        "1x100 A AM",
+        "1x20 A AD",
+        "QOB120",
+        "22 kA · SQUARE D",
+    ] {
+        assert!(t.iter().any(|s| s == expected), "falta {expected}");
+    }
+    assert!(t
+        .iter()
+        .any(|s| s.starts_with("Icc = ") && s.ends_with("kA (BUS INFINITO)")));
+    assert!(t
+        .iter()
+        .any(|s| s.contains("AM: amperes de marco · AD: amperes de disparo")));
+    // Posiciones de los interruptores en el tablero.
+    assert!(t.iter().any(|s| s == "1"));
+    // Sin datos de la fuente, la nota dice que no se verificó.
+    let plain = plan(&example::house(), &calculate(&example::house()).unwrap());
+    assert!(texts(&plain)
+        .iter()
+        .any(|s| s.contains("Capacidad interruptiva no verificada")));
+    if let Ok(dir) = std::env::var("IEESTUDIO_SVG_OUT") {
+        std::fs::write(format!("{dir}/casa-catalogo.svg"), diagram.to_svg()).unwrap();
+    }
 }

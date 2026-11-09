@@ -158,11 +158,14 @@ fn industrial() -> Project {
     project.source.system = System::WYE_480_277;
     project.panels = vec![
         Panel {
+            board: Default::default(),
+            interrupting_ka: Default::default(),
             id: "TGN".to_string(),
             name: "Tablero general".to_string(),
             parent: None,
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
+                interrupting_ka: Default::default(),
                 length_m: 40.0,
                 demand: Demand::Custom(0.8),
                 demand_factor: None,
@@ -174,11 +177,14 @@ fn industrial() -> Project {
             circuits: vec![],
         },
         Panel {
+            board: Default::default(),
+            interrupting_ka: Default::default(),
             id: "TF-1".to_string(),
             name: "Tablero de fuerza".to_string(),
             parent: Some("TGN".to_string()),
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
+                interrupting_ka: Default::default(),
                 length_m: 60.0,
                 demand: Demand::Article220,
                 demand_factor: None,
@@ -413,11 +419,14 @@ fn motor_panel() -> Project {
         overrides: Overrides::default(),
     };
     project.panels = vec![Panel {
+        board: Default::default(),
+        interrupting_ka: Default::default(),
         id: "TM".to_string(),
         name: "Tablero de motores".to_string(),
         parent: None,
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
+            interrupting_ka: Default::default(),
             length_m: 10.0,
             demand: Demand::Article220,
             demand_factor: None,
@@ -549,8 +558,9 @@ fn a_motor_without_data_is_not_evaluated() {
     assert_eq!(m10.status, Status::NotEvaluated);
 }
 
-/// La capacidad interruptiva está fuera del alcance del programa: ningún
-/// tramo la verifica, y el veredicto la declara aparte (decisión 0018).
+/// Sin datos de la fuente la capacidad interruptiva queda fuera del alcance
+/// del programa: ningún tramo la verifica, y el veredicto la declara aparte
+/// (decisiones 0018 y 0023).
 #[test]
 fn interrupting_rating_is_out_of_scope() {
     for project in [example::house(), industrial(), transformer_project()] {
@@ -650,6 +660,9 @@ fn transformer_project() -> Project {
     force.circuits[0].load.continuous = false;
     force.feeder.length_m = 20.0;
     force.transformer = Some(ieestudio_project::Transformer {
+        brand: Default::default(),
+        connection: Default::default(),
+        mounting: Default::default(),
         kva: 45.0,
         impedance_percent: 3.0,
         secondary: System::WYE_220_127,
@@ -728,4 +741,142 @@ fn an_overloaded_transformer_fails() {
         .find(|c| c.name == "Protección del secundario")
         .unwrap();
     assert_eq!(protection.status, Status::NotEvaluated);
+}
+
+fn checks_named<'a>(run: &'a RunResult, name: &str) -> Vec<&'a ieestudio_project::Check> {
+    run.checks.iter().filter(|c| c.name == name).collect()
+}
+
+/// Con el transformador de la acometida, la falla por bus infinito en el
+/// punto de conexión (curso: 112.5 kVA, 220 V, Z = 3 %, 9.84 kA) con la
+/// impedancia reducida 10 %, más 4 veces la corriente de los motores del
+/// proyecto: la bomba (8.9 A) y el minisplit (12 A).
+#[test]
+fn fault_by_infinite_bus_with_motors() {
+    let mut project = example::house();
+    project.source.substation = Some(ieestudio_project::Substation {
+        kva: 112.5,
+        impedance_percent: 3.0,
+        primary_kv: Some(13.2),
+        connection: None,
+        mounting: None,
+        brand: String::new(),
+    });
+    let result = calculate(&project).unwrap();
+    let study = result.fault.as_ref().expect("con subestación hay estudio");
+    close(study.source.base_ka, 9.8412 / 0.9);
+    let motors = study.motors.as_ref().expect("el ejemplo tiene motores");
+    assert_eq!(motors.motors.len(), 2);
+    assert_eq!(motors.multiplier, 4.0);
+    close(motors.total_a, 4.0 * (8.9 + 12.0));
+    close(study.source.total_ka, 9.8412 / 0.9 + 0.0836);
+    // El tablero sin transformador ve la misma falla que el punto de conexión.
+    let panel = &result.panels[0];
+    let bus = panel.fault.as_ref().unwrap();
+    close(bus.total_ka, study.source.total_ka);
+    // El procedimiento muestra la aportación de motores.
+    assert!(bus
+        .steps
+        .iter()
+        .any(|s| s.title == "Aportación de los motores"));
+    // Sin capacidad interruptiva capturada, cada interruptor queda sin evaluar
+    // y la capacidad interruptiva ya no está fuera de alcance.
+    for run in panel.runs() {
+        let checks = checks_named(run, "Capacidad interruptiva");
+        assert_eq!(checks.len(), 1, "{}", run.id);
+        assert_eq!(checks[0].status, Status::NotEvaluated);
+        assert!(checks[0]
+            .detail
+            .starts_with("falta la capacidad interruptiva"));
+    }
+    assert!(result.verdict.out_of_scope.is_empty());
+    assert!(result.verdict.conservative_fault);
+
+    // 22 kA en el tablero y en el principal: todo cumple con el método conservador.
+    project.panels[0].board.interrupting_ka = Some(22.0);
+    project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(22.0);
+    let result = calculate(&project).unwrap();
+    for run in result.panels[0].runs() {
+        let c = checks_named(run, "Capacidad interruptiva")[0];
+        assert_eq!(c.status, Status::Complies, "{}: {}", run.id, c.detail);
+        assert!(c.detail.contains("método conservador"));
+        let clauses: Vec<_> = c
+            .references
+            .iter()
+            .filter_map(|r| r.clause.clone())
+            .collect();
+        assert!(clauses.iter().any(|x| x == "110-9, 110-10"));
+    }
+
+    // 10 kA no alcanza los 11 kA estimados: no concluyente, nunca «no cumple».
+    project.panels[0].board.interrupting_ka = Some(10.0);
+    let result = calculate(&project).unwrap();
+    let c02 = circuit(&result.panels[0].circuits, "C-02");
+    let c = checks_named(c02, "Capacidad interruptiva")[0];
+    assert_eq!(c.status, Status::NotEvaluated);
+    assert!(c.detail.starts_with("no concluyente"));
+    // El interruptor de un circuito puede tener la suya.
+    project.panels[0].circuits[1]
+        .overrides
+        .breaker
+        .interrupting_ka = Some(25.0);
+    let result = calculate(&project).unwrap();
+    let c02 = circuit(&result.panels[0].circuits, "C-02");
+    assert_eq!(
+        checks_named(c02, "Capacidad interruptiva")[0].status,
+        Status::Complies
+    );
+}
+
+/// El dato de la suministradora manda sobre la estimación con la subestación.
+#[test]
+fn supplier_fault_current_takes_precedence() {
+    let mut project = example::house();
+    project.source.substation = Some(ieestudio_project::Substation {
+        kva: 112.5,
+        impedance_percent: 3.0,
+        primary_kv: None,
+        connection: None,
+        mounting: None,
+        brand: String::new(),
+    });
+    project.source.fault.available_ka = Some(5.0);
+    let result = calculate(&project).unwrap();
+    let study = result.fault.unwrap();
+    assert_eq!(study.source.base_ka, 5.0);
+    assert_eq!(
+        study.source.origin,
+        ieestudio_project::fault::FaultOrigin::Supplier
+    );
+}
+
+/// Un tablero alimentado por un transformador del proyecto toma la falla de
+/// ese transformador (45 kVA, 220 V, Z = 3 % → 4.37 kA con la tolerancia);
+/// su alimentador se compara con la falla de donde sale.
+#[test]
+fn a_project_transformer_sets_its_own_fault() {
+    let mut project = transformer_project();
+    project.source.fault.available_ka = Some(25.0);
+    project.panels[0].board.interrupting_ka = Some(25.0);
+    project.panels[1].board.interrupting_ka = Some(10.0);
+    project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(25.0);
+    let result = calculate(&project).unwrap();
+    let tf = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
+    let bus = tf.fault.as_ref().unwrap();
+    close(bus.base_ka, 4.3738);
+    assert_eq!(
+        bus.origin,
+        ieestudio_project::fault::FaultOrigin::Transformer {
+            panel: "TF-1".into()
+        }
+    );
+    // El primario sale de las barras de TGN (25 kA, cumple con 25 kA del tablero).
+    let feeder = checks_named(&tf.feeder, "Capacidad interruptiva")[0];
+    assert_eq!(feeder.status, Status::Complies, "{}", feeder.detail);
+    assert!(feeder.detail.contains("TGN"));
+    // El secundario y los circuitos, con los 4.37 kA del transformador.
+    for run in tf.secondary.iter().chain(&tf.circuits) {
+        let c = checks_named(run, "Capacidad interruptiva")[0];
+        assert_eq!(c.status, Status::Complies, "{}: {}", run.id, c.detail);
+    }
 }

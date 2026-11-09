@@ -415,17 +415,33 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                     }),
             ),
             // Lo que la norma pide y este cálculo no verifica, para que nadie
-            // lo dé por revisado (decisión 0018).
-            (
-                "Fuera de alcance",
-                result
-                    .verdict
-                    .out_of_scope
-                    .iter()
-                    .map(|o| format!("{}: {}", o.label(), o.resolve_with))
-                    .collect::<Vec<_>>()
-                    .join("; "),
-            ),
+            // lo dé por revisado (decisión 0018). Con datos de la fuente la
+            // capacidad interruptiva se verifica por bus infinito (0023).
+            match &result.fault {
+                Some(study) => (
+                    "Capacidad interruptiva",
+                    format!(
+                        "Verificada con la corriente de falla estimada por bus infinito ({}): {:.2} kA en el punto de conexión{}. Es una cota superior; un interruptor que no la alcanza queda no concluyente y requiere estudio de cortocircuito",
+                        profile.clause(Rule::AvailableFault),
+                        study.source.total_ka,
+                        study.motors.as_ref().map_or(String::new(), |m| format!(
+                            ", con {} veces la corriente de {} motores",
+                            m.multiplier,
+                            m.motors.len()
+                        ))
+                    ),
+                ),
+                None => (
+                    "Fuera de alcance",
+                    result
+                        .verdict
+                        .out_of_scope
+                        .iter()
+                        .map(|o| format!("{}: {}", o.label(), o.resolve_with))
+                        .collect::<Vec<_>>()
+                        .join("; "),
+                ),
+            },
             (
                 "Conductor al electrodo de puesta a tierra",
                 result.grounding_electrode.as_ref().map_or(
@@ -583,6 +599,43 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     } else {
         out.push_str(&notes.join("\n"));
         out.push('\n');
+    }
+
+    if let Some(study) = &result.fault {
+        out.push_str("\n= Corriente de falla y capacidad interruptiva\n");
+        out.push_str("#text(fill: gris)[Método conservador de bus infinito: la red se toma sin impedancia y no se descuenta la de los alimentadores, así que cada valor es la corriente mayor posible. Un interruptor que la soporta cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n");
+        out.push_str("\n== Punto de conexión\n");
+        steps(&mut out, &study.source.steps);
+        if let Some(m) = &study.motors {
+            out.push_str("\n== Motores que aportan a la falla\n");
+            let rows: Vec<(&str, String)> = m
+                .motors
+                .iter()
+                .map(|x| (x.label.as_str(), format!("{:.2} A", x.full_load_a)))
+                .collect();
+            data_table(&mut out, &rows);
+        }
+        for panel in &result.panels {
+            let Some(bus) = &panel.fault else {
+                continue;
+            };
+            if let ieestudio_project::fault::FaultOrigin::Transformer { .. } = bus.origin {
+                let _ = writeln!(out, "\n== Barras de #{};", q(&panel.name));
+                steps(&mut out, &bus.steps);
+            }
+        }
+        let rows: Vec<(String, String)> = result
+            .panels
+            .iter()
+            .filter_map(|p| {
+                p.fault
+                    .as_ref()
+                    .map(|f| (p.name.clone(), format!("{:.2} kA", f.total_ka)))
+            })
+            .collect();
+        out.push_str("\n== Falla en las barras de cada tablero\n");
+        let rows: Vec<(&str, String)> = rows.iter().map(|(a, b)| (a.as_str(), b.clone())).collect();
+        data_table(&mut out, &rows);
     }
 
     out.push_str("\n= Procedimiento de cálculo\n");

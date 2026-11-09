@@ -33,7 +33,7 @@ Una flecha significa «depende de». Ningún crate depende de uno de arriba.
 | `ieestudio-rules` | core | fórmulas, proyecto, interfaz |
 | `ieestudio-electrical` | core, rules | proyecto, interfaz |
 | `ieestudio-project` | core, rules, electrical | diagramas, reportes, interfaz |
-| `ieestudio-diagrams` | project | egui, Typst |
+| `ieestudio-diagrams` | core, project | egui, Typst |
 | `ieestudio-reports` | project, diagrams, rules | egui |
 | `ieestudio-exchange` | project, rules | egui, Typst |
 | `ieestudio-cli`, `ieestudio-app` | todos los anteriores | — |

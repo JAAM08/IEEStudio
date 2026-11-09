@@ -25,3 +25,5 @@ compressor_minimum_protection_a,15
 receptacle_outlet_va,180
 appliance_demand_factor,0.75
 appliance_demand_min_count,4
+fault_motor_multiplier,4.0
+fault_impedance_tolerance,0.10

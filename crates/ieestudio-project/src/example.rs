@@ -102,15 +102,19 @@ pub fn house() -> Project {
         occupancy: Some("dwellings".to_string()),
         settings: Settings::default(),
         source: Source {
-            name: "Acometida".to_string(),
-            system: System::WYE_220_127,
+            supplier: "CFE".to_string(),
+            frequency_hz: Some(60.0),
+            ..Source::new("Acometida", System::WYE_220_127)
         },
         panels: vec![Panel {
+            board: Default::default(),
+            interrupting_ka: Default::default(),
             id: "TG-1".to_string(),
             name: "Tablero TG-1".to_string(),
             parent: None,
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
+                interrupting_ka: Default::default(),
                 length_m: 12.0,
                 demand: Demand::Article220,
                 demand_factor: None,

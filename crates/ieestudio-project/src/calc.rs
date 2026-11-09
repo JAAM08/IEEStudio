@@ -188,6 +188,9 @@ pub struct PanelResult {
     /// Conductores del secundario del transformador al tablero.
     pub secondary: Option<RunResult>,
     pub circuits: Vec<RunResult>,
+    /// Corriente de falla estimada en sus barras (decisión 0023). `None` sin
+    /// datos de la fuente.
+    pub fault: Option<crate::fault::BusFault>,
 }
 
 impl PanelResult {
@@ -236,6 +239,10 @@ pub struct ProjectResult {
     pub grounding_electrode: Option<ElectrodeConductor>,
     /// Cálculo, verificación normativa y aprobación profesional, por separado.
     pub verdict: Verdict,
+    /// Corriente de falla por bus infinito y aportación de motores. `None`
+    /// sin datos de la fuente: la capacidad interruptiva queda fuera de
+    /// alcance.
+    pub fault: Option<crate::fault::FaultStudy>,
 }
 
 /// Corriente de un tramo que ya resolvió quien llama: circuitos de motor o de
@@ -1330,6 +1337,7 @@ impl<'a> Context<'a> {
             transformer: transformer_summary,
             secondary,
             circuits,
+            fault: None,
         });
         for child in self
             .children
@@ -1473,7 +1481,8 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
     }
 
     let grounding_electrode = electrode_conductor(profile, project, &roots, &ctx.results);
-    let panels: Vec<PanelResult> = ctx.results.into_iter().flatten().collect();
+    let mut panels: Vec<PanelResult> = ctx.results.into_iter().flatten().collect();
+    let fault = crate::fault::study(profile, project, &mut panels);
     let runs: Vec<&RunResult> = panels.iter().flat_map(PanelResult::runs).collect();
     let statuses: Vec<Status> = runs.iter().map(|r| r.status).collect();
     let tally = |s: Status| statuses.iter().filter(|&&x| x == s).count();
@@ -1484,8 +1493,13 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         runs.iter()
             .filter(|r| r.run.is_some())
             .flat_map(|r| r.checks.iter().map(|c| c.status)),
-    )
-    .with_out_of_scope(profile);
+    );
+    // Con datos de la fuente la capacidad interruptiva se verifica por un
+    // método conservador; sin ellos queda fuera de alcance (decisión 0018).
+    let verdict = match &fault {
+        Some(_) => verdict.with_conservative_fault(),
+        None => verdict.with_out_of_scope(profile),
+    };
     Ok(ProjectResult {
         project: project.name.clone(),
         profile: profile.title.to_string(),
@@ -1496,5 +1510,6 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         warnings: ctx.warnings,
         grounding_electrode,
         verdict,
+        fault,
     })
 }

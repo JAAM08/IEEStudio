@@ -47,10 +47,7 @@ pub fn empty_project() -> Project {
         info: Default::default(),
         occupancy: None,
         settings: Settings::default(),
-        source: Source {
-            name: "Acometida".to_string(),
-            system: System::WYE_220_127,
-        },
+        source: Source::new("Acometida", System::WYE_220_127),
         panels: vec![new_panel("TG-1", "Tablero general", None)],
     }
 }
@@ -78,11 +75,14 @@ pub fn set_load_kind(load: &mut Load, kind: LoadKind) {
 
 fn new_panel(id: &str, name: &str, parent: Option<String>) -> Panel {
     Panel {
+        board: Default::default(),
+        interrupting_ka: Default::default(),
         id: id.to_string(),
         name: name.to_string(),
         parent,
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
+            interrupting_ka: Default::default(),
             length_m: 10.0,
             demand: Default::default(),
             demand_factor: None,

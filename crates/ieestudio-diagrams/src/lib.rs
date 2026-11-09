@@ -19,9 +19,11 @@
 use std::fmt::Write as _;
 
 use ieestudio_core::{CircuitKind, Insulation, Material, System};
+use ieestudio_project::fault::FaultOrigin;
+use ieestudio_project::positions::panel_positions;
 use ieestudio_project::{
-    insulation_name, size_label, LoadKind, Overrides, PanelResult, Project, ProjectResult,
-    RunResult, Status,
+    insulation_name, size_label, BreakerData, LoadKind, Overrides, PanelResult, Project,
+    ProjectResult, RunResult, Status,
 };
 
 /// Ancho de la columna de cada circuito.
@@ -585,12 +587,36 @@ fn conductor_lines(project: &Project, ctx: &RunContext) -> Vec<(String, Font, In
     lines
 }
 
-/// Renglones del interruptor de un tramo (requisito I.4).
-fn breaker_lines(item: &RunResult) -> Vec<String> {
-    match &item.run {
-        Some(run) => vec![format!("{}x{:.0} A", run.poles, run.breaker_a)],
-        None => vec!["—".to_string()],
+/// Renglones del interruptor de un tramo (requisito I.4): polos y amperes;
+/// con datos de catálogo, amperes de marco y de disparo, modelo, capacidad
+/// interruptiva, marca e intervalo de ajuste. `board_ka` es la capacidad
+/// interruptiva del tablero donde está, si el interruptor no tiene la suya.
+fn breaker_lines(item: &RunResult, data: &BreakerData, board_ka: Option<f64>) -> Vec<String> {
+    let Some(run) = &item.run else {
+        return vec!["—".to_string()];
+    };
+    let mut lines = Vec::new();
+    match data.frame_a {
+        Some(frame) => {
+            lines.push(format!("{}x{frame:.0} A AM", run.poles));
+            lines.push(format!("{}x{:.0} A AD", run.poles, run.breaker_a));
+        }
+        None => lines.push(format!("{}x{:.0} A", run.poles, run.breaker_a)),
     }
+    if !data.model.trim().is_empty() {
+        lines.push(data.model.trim().to_uppercase());
+    }
+    let ka = data.interrupting_ka.or(board_ka);
+    match (ka, data.brand.trim()) {
+        (Some(ka), "") => lines.push(format!("{ka} kA")),
+        (Some(ka), brand) => lines.push(format!("{ka} kA · {}", brand.to_uppercase())),
+        (None, "") => {}
+        (None, brand) => lines.push(brand.to_uppercase()),
+    }
+    if !data.trip_range.trim().is_empty() {
+        lines.push(format!("AJUSTE {}", data.trip_range.trim()));
+    }
+    lines
 }
 
 /// Encabezado del tablero: nombre, carga instalada y demandada, factor de
@@ -635,14 +661,80 @@ fn panel_header(project: &Project, panel: usize, result: &PanelResult) -> Vec<(S
         ),
         (
             format!(
-                "{}, {}",
+                "{}, {}{}",
                 voltage_label(&system),
-                kind_wires(p.kind, p.feeder.has_neutral)
+                kind_wires(p.kind, p.feeder.has_neutral),
+                frequency(project)
             ),
             Font::Regular,
             Ink::Text,
         ),
     ]
+    .into_iter()
+    .chain(board_line(&p.board))
+    .chain(result.fault.as_ref().map(|f| {
+        (
+            format!("Icc = {:.2} kA ({})", f.total_ka, origin_text(&f.origin)),
+            Font::Regular,
+            Ink::Text,
+        )
+    }))
+    .collect()
+}
+
+fn frequency(project: &Project) -> String {
+    match project.source.frequency_hz {
+        Some(hz) => format!(", {hz:.0} Hz"),
+        None => String::new(),
+    }
+}
+
+fn origin_text(origin: &FaultOrigin) -> &'static str {
+    match origin {
+        FaultOrigin::Supplier => "DATO DE LA SUMINISTRADORA",
+        FaultOrigin::Substation | FaultOrigin::Transformer { .. } => "BUS INFINITO",
+    }
+}
+
+/// `BARRAS 225 A · 10 kA · MOD. NQ304… · SQUARE D`, con lo que haya.
+fn board_line(board: &ieestudio_project::Board) -> Option<(String, Font, Ink)> {
+    let mut parts = Vec::new();
+    if let Some(a) = board.bus_a {
+        parts.push(format!("BARRAS {a:.0} A"));
+    }
+    if let Some(ka) = board.interrupting_ka {
+        parts.push(format!("{ka} kA"));
+    }
+    if !board.model.trim().is_empty() {
+        parts.push(format!("MOD. {}", board.model.trim().to_uppercase()));
+    }
+    if !board.brand.trim().is_empty() {
+        parts.push(board.brand.trim().to_uppercase());
+    }
+    (!parts.is_empty()).then(|| (parts.join(" · "), Font::Regular, Ink::Text))
+}
+
+/// Conexión, montaje y marca de un transformador, si se capturaron.
+fn transformer_extra(
+    connection: Option<ieestudio_project::Connection>,
+    mounting: Option<ieestudio_project::Mounting>,
+    brand: &str,
+) -> Vec<(String, Font, Ink)> {
+    let mut parts = Vec::new();
+    if let Some(c) = connection {
+        parts.push(c.label().to_uppercase());
+    }
+    if let Some(m) = mounting {
+        parts.push(m.label().to_uppercase());
+    }
+    if !brand.trim().is_empty() {
+        parts.push(format!("MARCA {}", brand.trim().to_uppercase()));
+    }
+    if parts.is_empty() {
+        vec![]
+    } else {
+        vec![(parts.join(" · "), Font::Regular, Ink::Text)]
+    }
 }
 
 /// Tensión y fases-hilos de una conexión en un sistema: `127 V, 1F-2H`.
@@ -682,7 +774,10 @@ impl Layout<'_> {
         if !fed {
             pt.line((feed_x, y), (feed_x, y + 18.0), 1.3);
             pt.breaker(feed_x, y + 18.0);
-            for (k, text) in breaker_lines(&result.feeder).into_iter().enumerate() {
+            for (k, text) in breaker_lines(&result.feeder, &p.feeder.overrides.breaker, None)
+                .into_iter()
+                .enumerate()
+            {
                 pt.text(
                     (feed_x - 12.0, y + 26.0 + k as f64 * LINE),
                     text,
@@ -729,15 +824,25 @@ impl Layout<'_> {
                         Font::Regular,
                         Ink::Text,
                     ),
-                ],
+                ]
+                .into_iter()
+                .chain(transformer_extra(t.connection, t.mounting, &t.brand))
+                .collect(),
             );
-            y = tc + 15.0;
+            y = tc
+                + 15.0
+                + 12.0 * transformer_extra(t.connection, t.mounting, &t.brand).len() as f64;
             if let Some(secondary) = &result.secondary {
                 pt.line((feed_x, y), (feed_x, y + 14.0), 1.3);
                 y += 14.0;
                 if t.secondary_protection {
                     pt.breaker(feed_x, y);
-                    for (k, text) in breaker_lines(secondary).into_iter().enumerate() {
+                    let lines = breaker_lines(
+                        secondary,
+                        &t.secondary_overrides.breaker,
+                        p.board.interrupting_ka,
+                    );
+                    for (k, text) in lines.into_iter().enumerate() {
                         pt.text(
                             (feed_x - 12.0, y + 8.0 + k as f64 * LINE),
                             text,
@@ -774,6 +879,16 @@ impl Layout<'_> {
 
         // Barra, interruptores y lo que cuelga de cada uno, por filas.
         let slots = slots(project, panel);
+        let (circuit_positions, subpanel_positions) = panel_positions(project, panel);
+        let position_of = |slot: &Slot| -> Option<String> {
+            match slot {
+                Slot::Circuit(c) => circuit_positions.get(*c).cloned(),
+                Slot::Subpanel(child) => children(project, panel)
+                    .iter()
+                    .position(|k| k == child)
+                    .and_then(|k| subpanel_positions.get(k).cloned()),
+            }
+        };
         let rows: Vec<&[Slot]> = if slots.is_empty() {
             vec![&[]]
         } else {
@@ -810,7 +925,12 @@ impl Layout<'_> {
                         Slot::Circuit(c) => result.circuits.get(*c),
                         Slot::Subpanel(child) => self.panel_result(*child).map(|r| &r.feeder),
                     };
-                    let mut lines = item.map_or(vec![], breaker_lines);
+                    let data = match slot {
+                        Slot::Circuit(c) => &p.circuits[*c].overrides.breaker,
+                        Slot::Subpanel(child) => &project.panels[*child].feeder.overrides.breaker,
+                    };
+                    let mut lines =
+                        item.map_or(vec![], |i| breaker_lines(i, data, p.board.interrupting_ka));
                     if let Slot::Circuit(c) = slot {
                         let phases: Vec<String> = p.circuits[*c]
                             .phases
@@ -872,6 +992,19 @@ impl Layout<'_> {
                 let x = x0 + PAD + (j as f64 + 0.5) * COLUMN;
                 pt.line((x, bus_y), (x, bus_y + 14.0), 1.3);
                 pt.breaker(x, bus_y + 14.0);
+                // Posición en el tablero, en un recuadro junto al interruptor.
+                if let Some(position) = position_of(slot) {
+                    let w = 8.0 + 4.6 * position.chars().count() as f64;
+                    pt.rect((x - 16.0 - w, bus_y + 12.0), (w, 13.0), false);
+                    pt.text_sized(
+                        (x - 16.0 - w / 2.0, bus_y + 21.5),
+                        position,
+                        7.5,
+                        Font::Mono,
+                        Ink::Text,
+                        Anchor::Middle,
+                    );
+                }
                 pt.lines(
                     (x + 7.0, bus_y + 44.0),
                     breaker_rows[j]
@@ -1055,31 +1188,114 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
         1.3,
         false,
     );
-    pt.lines(
-        (first_feed + 26.0, top + 12.0),
-        vec![
+    let source = &project.source;
+    let supplier = source.supplier.trim().to_uppercase();
+    let mut source_lines = vec![(
+        shorten(&source.name.to_uppercase(), 34),
+        Font::Bold,
+        Ink::Text,
+    )];
+    // Con subestación la acometida llega en media tensión.
+    let service = match &source.substation {
+        Some(sub) => match sub.primary_kv {
+            Some(kv) => format!("ACOMETIDA EN MEDIA TENSIÓN, {kv} kV"),
+            None => "ACOMETIDA EN MEDIA TENSIÓN".to_string(),
+        },
+        None => "ACOMETIDA EN BAJA TENSIÓN".to_string(),
+    };
+    source_lines.push((
+        if supplier.is_empty() {
+            service
+        } else {
+            format!("{service} · {supplier}")
+        },
+        Font::Regular,
+        Ink::Text,
+    ));
+    if source.substation.is_none() {
+        source_lines.push((
+            format!(
+                "{}, {}{}",
+                voltage_label(system),
+                system_wires(system),
+                frequency(project)
+            ),
+            Font::Regular,
+            Ink::Text,
+        ));
+    }
+    if let Some(study) = &result.fault {
+        if study.source.origin == FaultOrigin::Supplier {
+            source_lines.push((
+                format!(
+                    "Icc = {} kA (DATO DE LA SUMINISTRADORA)",
+                    study.source.base_ka
+                ),
+                Font::Regular,
+                Ink::Text,
+            ));
+        }
+    }
+    pt.lines((first_feed + 26.0, top + 12.0), source_lines);
+    let mut y = top + 46.0;
+
+    // Subestación (requisito I.2): el transformador que alimenta la instalación.
+    if let Some(sub) = &source.substation {
+        let tc = y + 26.0;
+        pt.line((first_feed, y), (first_feed, tc - 15.0), 1.3);
+        pt.symbol(Symbol::Transformer, (first_feed, tc));
+        let mut lines = vec![
             (
-                shorten(&project.source.name.to_uppercase(), 34),
+                format!(
+                    "SUBESTACIÓN DE {} kVA, Z = {} %",
+                    sub.kva, sub.impedance_percent
+                ),
                 Font::Bold,
                 Ink::Text,
             ),
             (
-                format!("{}, {}", voltage_label(system), system_wires(system)),
+                format!(
+                    "{}{}, {}{}",
+                    sub.primary_kv
+                        .map_or(String::new(), |kv| format!("{kv} kV – ")),
+                    voltage_label(system),
+                    system_wires(system),
+                    frequency(project)
+                ),
                 Font::Regular,
                 Ink::Text,
             ),
-        ],
-    );
-    let meter_y = top + 64.0;
-    pt.line((first_feed, top + 46.0), (first_feed, meter_y - 10.0), 1.3);
-    pt.symbol(Symbol::Meter, (first_feed, meter_y));
-    pt.text(
-        (first_feed + 18.0, meter_y + 3.0),
-        "MEDIDOR".to_string(),
-        Font::Regular,
-        Ink::Muted,
-        Anchor::Start,
-    );
+        ];
+        lines.extend(transformer_extra(sub.connection, sub.mounting, &sub.brand));
+        if let Some(study) = &result.fault {
+            if study.source.origin == FaultOrigin::Substation {
+                lines.push((
+                    format!("Icc = {:.2} kA (BUS INFINITO)", study.source.base_ka),
+                    Font::Regular,
+                    Ink::Text,
+                ));
+            }
+        }
+        let end = pt.lines((first_feed + 26.0, tc - 8.0), lines);
+        y = (tc + 15.0).max(end + 4.0);
+    }
+
+    // Medidor, si lo hay.
+    let mut meter_y = y;
+    if source.meter {
+        meter_y = y + 18.0;
+        pt.line((first_feed, y), (first_feed, meter_y - 10.0), 1.3);
+        pt.symbol(Symbol::Meter, (first_feed, meter_y));
+        pt.text(
+            (first_feed + 18.0, meter_y + 3.0),
+            "MEDIDOR".to_string(),
+            Font::Regular,
+            Ink::Muted,
+            Anchor::Start,
+        );
+    } else {
+        meter_y -= 10.0;
+    }
     let source_bottom = meter_y + 10.0;
     let panels_top = source_bottom + 18.0;
     pt.line((first_feed, source_bottom), (first_feed, panels_top), 1.3);
@@ -1105,16 +1321,51 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
 
     // Notas de las abreviaturas, siempre al pie.
     let mut y = bottom + 24.0;
-    let notes = [
-        "F: conductor de fase · N: conductor puesto a tierra (neutro) · CPT: conductor de puesta a tierra de equipos",
-        "In: corriente nominal · L: longitud · %e: caída de tensión del tramo · Σ: caída acumulada desde la acometida",
-        "Calibres en AWG o kcmil; tubo en designación métrica y, entre paréntesis, en pulgadas · F.D.: factor de demanda",
+    let mut notes: Vec<String> = vec![
+        "F: conductor de fase · N: conductor puesto a tierra (neutro) · CPT: conductor de puesta a tierra de equipos".into(),
+        "In: corriente nominal · L: longitud · %e: caída de tensión del tramo · Σ: caída acumulada desde la acometida".into(),
+        "Calibres en AWG o kcmil; tubo en designación métrica y, entre paréntesis, en pulgadas · F.D.: factor de demanda".into(),
+        "Junto a cada interruptor, su posición en el tablero".into(),
     ];
+    let any_frame = project.panels.iter().any(|p| {
+        p.feeder.overrides.breaker.frame_a.is_some()
+            || p.circuits
+                .iter()
+                .any(|c| c.overrides.breaker.frame_a.is_some())
+    });
+    if any_frame {
+        notes.push("AM: amperes de marco · AD: amperes de disparo".into());
+    }
+    match &result.fault {
+        Some(study) => {
+            let mut note = format!(
+                "Icc: corriente de falla estimada por bus infinito, con la impedancia de placa del transformador reducida {:.0} %",
+                study.impedance_tolerance * 100.0
+            );
+            if let Some(m) = &study.motors {
+                let _ = write!(
+                    note,
+                    " y {} veces la corriente de {}",
+                    m.multiplier,
+                    if m.motors.len() == 1 {
+                        "un motor".to_string()
+                    } else {
+                        format!("{} motores", m.motors.len())
+                    }
+                );
+            }
+            note.push_str("; es una cota superior. kA: capacidad interruptiva de catálogo");
+            notes.push(note);
+        }
+        None => notes.push(
+            "Capacidad interruptiva no verificada: falta la corriente de falla de la suministradora o los datos de la subestación".into(),
+        ),
+    }
     if !options.sheet {
-        for note in notes {
+        for note in &notes {
             pt.text(
                 (MARGIN, y),
-                note.to_string(),
+                note.clone(),
                 Font::Regular,
                 Ink::Muted,
                 Anchor::Start,
@@ -1142,7 +1393,7 @@ fn sheet(
     project: &Project,
     content_right: f64,
     content_bottom: f64,
-    notes: &[&str],
+    notes: &[String],
 ) -> Diagram {
     let sx = content_right + 36.0;
     let mut y = MARGIN;
