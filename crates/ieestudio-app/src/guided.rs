@@ -9,11 +9,12 @@ use eframe::egui::{self, Align, Layout, RichText, Sense, Vec2};
 use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
 use ieestudio_project::{size_label, Check, LoadKind, RunResult, Status};
-use ieestudio_rules::{cite_all, Profile};
+use ieestudio_rules::{cite_all, Profile, Rule};
 use serde::{Deserialize, Serialize};
 
 use crate::panels::{properties, report, Shared};
-use crate::state::{Doc, Selection};
+use crate::state::{set_load_kind, Doc, Selection};
+use crate::symbols::{self, Symbol};
 use crate::theme::{semibold, Palette};
 use crate::widgets::{
     label_of, muted, status_color, status_icon, status_text, steps_ui, strong, worst, KINDS,
@@ -364,7 +365,11 @@ pub fn show(
                     go = Some(s);
                 }
             }
-            Step::Circuits => circuits_step(ui, &p, doc, shared),
+            Step::Circuits => {
+                if let Some(s) = circuits_step(ui, &p, doc, shared) {
+                    go = Some(s);
+                }
+            }
             Step::Review => {
                 if let Some(s) = review_step(ui, &p, doc, shared) {
                     go = Some(s);
@@ -822,7 +827,13 @@ fn tree(
 
 // ------------------------------------------------------------ 3 · circuitos
 
-fn circuits_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Shared) {
+fn circuits_step(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    doc: &mut Doc,
+    shared: &mut Shared,
+) -> Option<Step> {
+    let mut go = None;
     let Some(panel_index) = doc.panel_index() else {
         crate::widgets::empty_state(
             ui,
@@ -831,7 +842,7 @@ fn circuits_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Sha
             "Todavía no hay tableros",
             "Agrega uno en el paso Tableros.",
         );
-        return;
+        return None;
     };
     let selected = match doc.selection {
         Selection::Circuit(i, c) if i == panel_index => Some(c),
@@ -919,8 +930,17 @@ fn circuits_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Sha
                     ui.label(RichText::new(doc.calc_error().unwrap_or_default()).color(p.bad));
                 }
             }
+            if let Some(action) = subpanel_list(ui, p, doc, panel_index) {
+                match action {
+                    SubpanelAction::Circuits(k) => doc.selection = Selection::Feeder(k),
+                    SubpanelAction::Card(k) => {
+                        doc.selection = Selection::Feeder(k);
+                        go = Some(Step::Panels);
+                    }
+                }
+            }
             if add {
-                doc.add_circuit(panel_index);
+                shared.choose_load = Some(panel_index);
             }
             if balance {
                 shared.done = doc.balance_phases(panel_index).map(|(before, after)| {
@@ -928,6 +948,87 @@ fn circuits_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Sha
                 });
             }
         });
+    go
+}
+
+enum SubpanelAction {
+    /// Ver los circuitos del subtablero.
+    Circuits(usize),
+    /// Abrir su ficha en el paso Tableros, donde se captura su alimentador.
+    Card(usize),
+}
+
+/// Subtableros que se alimentan del tablero, debajo de sus circuitos. Se
+/// leen de la estructura del proyecto: son los mismos del paso Tableros.
+fn subpanel_list(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    doc: &Doc,
+    panel_index: usize,
+) -> Option<SubpanelAction> {
+    let children = doc.subpanels(panel_index);
+    if children.is_empty() {
+        return None;
+    }
+    let mut action = None;
+    ui.add_space(16.0);
+    label_caps(
+        ui,
+        p,
+        &format!(
+            "Subtableros que alimenta {} · {}",
+            doc.project.panels[panel_index].id,
+            children.len()
+        ),
+    );
+    ui.add_space(4.0);
+    for k in children {
+        let panel = &doc.project.panels[k];
+        let status = doc.panel_result(k).map(|r| r.feeder.status);
+        egui::Frame::new()
+            .fill(p.panel)
+            .stroke(egui::Stroke::new(1.0, p.line))
+            .corner_radius(6)
+            .inner_margin(egui::Margin::symmetric(12, 8))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width() - 2.0);
+                ui.horizontal(|ui| {
+                    symbols::show(ui, Symbol::Subpanel, 22.0, p.ink);
+                    ui.add_space(4.0);
+                    ui.label(strong(&panel.id));
+                    ui.add(egui::Label::new(muted(p, &panel.name)).truncate());
+                    let n = panel.circuits.len();
+                    ui.label(muted(
+                        p,
+                        format!(
+                            "· alimentador de {} m · {n} {}",
+                            panel.feeder.length_m,
+                            if n == 1 { "circuito" } else { "circuitos" }
+                        ),
+                    ));
+                    if let Some(status) = status {
+                        ui.label(status_text(p, status));
+                    }
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui
+                            .button(format!("{} Ficha del tablero", icon::SQUARES_FOUR))
+                            .on_hover_text("Su alimentador, carga y transformador se capturan en el paso Tableros.")
+                            .clicked()
+                        {
+                            action = Some(SubpanelAction::Card(k));
+                        }
+                        if ui
+                            .button(format!("{} Ver sus circuitos", icon::LIST_BULLETS))
+                            .clicked()
+                        {
+                            action = Some(SubpanelAction::Circuits(k));
+                        }
+                    });
+                });
+            });
+        ui.add_space(4.0);
+    }
+    action
 }
 
 /// Tabla de circuitos en dos grupos: lo que se captura y lo que resuelve
@@ -942,7 +1043,7 @@ fn circuit_table(
 ) -> Option<usize> {
     let panel = &doc.project.panels[panel_index];
     let input = [
-        ("Tipo", 96.0),
+        ("Tipo", 120.0),
         ("Carga", 78.0),
         ("Fase", 42.0),
         ("Longitud", 66.0),
@@ -1038,7 +1139,8 @@ fn circuit_table(
                             ui.add(egui::Label::new(muted(p, &circuit.name)).truncate());
                         });
                         row.col(|ui| {
-                            ui.label(circuit.load.kind.label());
+                            symbols::show(ui, Symbol::Load(circuit.load.kind), 20.0, p.ink2);
+                            ui.add(egui::Label::new(circuit.load.kind.label()).truncate());
                         });
                         row.col(|ui| {
                             let load = match (&circuit.load.motor, circuit.load.kind) {
@@ -1127,6 +1229,7 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
     let item = doc.panel_result(i).and_then(|r| r.circuits.get(c)).cloned();
     let circuit = &doc.project.panels[i].circuits[c];
     let title = format!("{} · {}", circuit.id, circuit.name);
+    let load_kind = circuit.load.kind;
     let mut duplicate = false;
     let mut remove = false;
     let mut use_proposed = false;
@@ -1161,7 +1264,14 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
             }
         });
     });
-    ui.label(strong(&title).size(18.0));
+    ui.horizontal(|ui| {
+        symbols::show(ui, Symbol::Load(load_kind), 30.0, p.accent_text);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.label(strong(&title).size(18.0));
+            ui.label(muted(p, load_kind.label()).size(12.0));
+        });
+    });
     ui.add_space(8.0);
 
     if let Some(item) = &item {
@@ -1259,6 +1369,10 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
         }
     }
 
+    if let Some(item) = &item {
+        equipment_rules(ui, p, load_kind, item);
+    }
+
     ui.add_space(6.0);
     ui.separator();
     if properties::circuit_form(ui, doc, p, i, c, true) {
@@ -1290,6 +1404,67 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
     if remove {
         doc.remove_selected();
     }
+}
+
+/// Para motores y aire acondicionado, las reglas propias del equipo con su
+/// resultado: corriente, corriente de diseño e interruptor. Son los primeros
+/// pasos del procedimiento, así que dicen lo mismo que «Cómo se calculó».
+fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunResult) {
+    let title = match kind {
+        LoadKind::Motor => "Por ser motor",
+        LoadKind::AirConditioning => "Por ser aire acondicionado",
+        _ => return,
+    };
+    ui.add_space(10.0);
+    let frame = egui::Frame::new()
+        .fill(p.bg)
+        .stroke(egui::Stroke::new(1.0, p.line))
+        .corner_radius(6)
+        .inner_margin(egui::Margin {
+            left: 14,
+            right: 10,
+            top: 8,
+            bottom: 8,
+        })
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            label_caps(ui, p, title);
+            ui.add_space(2.0);
+            match &item.run {
+                Some(run) => {
+                    for step in run.steps.iter().take(3) {
+                        ui.label(RichText::new(&step.title).size(12.5));
+                        ui.add(
+                            egui::Label::new(RichText::new(&step.substitution).monospace().size(12.0))
+                                .wrap(),
+                        );
+                        if let Some(cite) = cite_all(&step.references) {
+                            ui.label(muted(p, cite).size(11.0));
+                        }
+                        ui.add_space(3.0);
+                    }
+                }
+                None => {
+                    let need = match kind {
+                        LoadKind::Motor => "Elige la potencia del motor para calcularlo.",
+                        _ => "Captura los datos de la placa de la unidad para calcularlo: la corriente nominal (RLA), o la ampacidad mínima (MCA) y la protección máxima (MOP).",
+                    };
+                    ui.add(egui::Label::new(muted(p, need).size(12.5)).wrap());
+                }
+            }
+        });
+    // Filete de acento a la izquierda del recuadro.
+    let r = frame.response.rect;
+    ui.painter().rect_filled(
+        egui::Rect::from_min_size(r.left_top(), Vec2::new(3.0, r.height())),
+        egui::CornerRadius {
+            nw: 6,
+            sw: 6,
+            ne: 0,
+            se: 0,
+        },
+        p.accent,
+    );
 }
 
 // ------------------------------------------------------------- 4 · revisar
@@ -1467,6 +1642,16 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         }
                     });
 
+                    // Primero el tipo de carga: cambia todo lo demás del circuito.
+                    if let Some((selection, kind)) = kind_review(ui, p, doc) {
+                        if let Selection::Circuit(i, c) = selection {
+                            set_load_kind(&mut doc.project.panels[i].circuits[c].load, kind);
+                            doc.selection = selection;
+                            doc.edited();
+                            go = Some(Step::Circuits);
+                        }
+                    }
+
                     let items = review_items(doc);
                     ui.add_space(20.0);
                     label_caps(ui, p, &format!("Por resolver · {}", items.len()));
@@ -1568,6 +1753,195 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                 });
         });
     go
+}
+
+/// Palabras que delatan un motor o un equipo de aire acondicionado en el
+/// nombre de un circuito, sin acentos y en minúsculas.
+const MOTOR_WORDS: [&str; 13] = [
+    "motor",
+    "bomba",
+    "compresor de aire",
+    "ventilador",
+    "extractor",
+    "elevador",
+    "montacargas",
+    "malacate",
+    "polipasto",
+    "transportador",
+    "banda transportadora",
+    "molino",
+    "hidroneumatico",
+];
+const AIR_WORDS: [&str; 12] = [
+    "aire acondicionado",
+    "minisplit",
+    "mini split",
+    "mini-split",
+    "clima",
+    "a/a",
+    "refrigera",
+    "camara fria",
+    "chiller",
+    "condensadora",
+    "enfriador",
+    "manejadora",
+];
+
+fn fold(text: &str) -> String {
+    text.to_lowercase()
+        .chars()
+        .map(|ch| match ch {
+            'á' | 'à' | 'ä' => 'a',
+            'é' | 'è' | 'ë' => 'e',
+            'í' | 'ì' | 'ï' => 'i',
+            'ó' | 'ò' | 'ö' => 'o',
+            'ú' | 'ù' | 'ü' => 'u',
+            other => other,
+        })
+        .collect()
+}
+
+/// Tipo de carga que sugiere el nombre de un circuito capturado como «Otra
+/// carga». Un compresor de refrigeración es aire acondicionado; uno de aire,
+/// motor.
+fn kind_from_name(name: &str) -> Option<LoadKind> {
+    let name = fold(name);
+    if AIR_WORDS.iter().any(|w| name.contains(w)) {
+        Some(LoadKind::AirConditioning)
+    } else if MOTOR_WORDS.iter().any(|w| name.contains(w)) {
+        Some(LoadKind::Motor)
+    } else {
+        None
+    }
+}
+
+/// Circuitos de «Otra carga» cuyo nombre parece de un motor o de un aire
+/// acondicionado, con el tipo que sugiere.
+fn suspicious_kinds(doc: &Doc) -> Vec<(usize, usize, LoadKind)> {
+    let mut out = Vec::new();
+    for (i, panel) in doc.project.panels.iter().enumerate() {
+        for (c, circuit) in panel.circuits.iter().enumerate() {
+            if circuit.load.kind != LoadKind::General {
+                continue;
+            }
+            if let Some(kind) = kind_from_name(&circuit.name) {
+                out.push((i, c, kind));
+            }
+        }
+    }
+    out
+}
+
+/// Aviso en Revisar: un circuito que parece motor o aire acondicionado pero
+/// se capturó como «Otra carga». Devuelve el circuito y el tipo al que se
+/// pidió cambiarlo. «Es otra carga» lo oculta mientras la app esté abierta.
+fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<(Selection, LoadKind)> {
+    let hidden_id = egui::Id::new("tipo-de-carga-revisado");
+    let mut hidden: Vec<(String, String, String)> =
+        ui.ctx().data(|d| d.get_temp(hidden_id)).unwrap_or_default();
+    let key = |i: usize, c: usize| {
+        let panel = &doc.project.panels[i];
+        let circuit = &panel.circuits[c];
+        (panel.id.clone(), circuit.id.clone(), circuit.name.clone())
+    };
+    let items: Vec<_> = suspicious_kinds(doc)
+        .into_iter()
+        .filter(|(i, c, _)| !hidden.contains(&key(*i, *c)))
+        .collect();
+    if items.is_empty() {
+        return None;
+    }
+    let profile = Profile::by_id(&doc.project.profile).unwrap_or(Profile::nom_001_sede_2012());
+    let mut action = None;
+    ui.add_space(20.0);
+    label_caps(
+        ui,
+        p,
+        &format!("¿Tipo de carga correcto? · {}", items.len()),
+    );
+    ui.add_space(4.0);
+    for (i, c, kind) in items {
+        let circuit = &doc.project.panels[i].circuits[c];
+        let (what, rules, missing) = match kind {
+            LoadKind::Motor => (
+                "motor",
+                [
+                    Rule::MotorFullLoadCurrent,
+                    Rule::MotorBranchConductor,
+                    Rule::MotorBranchProtection,
+                ],
+                "la corriente de tabla, el conductor al 125 % ni la protección del motor",
+            ),
+            _ => (
+                "aire acondicionado",
+                [
+                    Rule::CompressorRating,
+                    Rule::CompressorConductor,
+                    Rule::EquipmentNameplate,
+                ],
+                "los datos de placa, el conductor al 125 % ni la protección máxima del equipo",
+            ),
+        };
+        let cite = rules
+            .iter()
+            .map(|r| profile.clause(*r))
+            .collect::<Vec<_>>()
+            .join(" · ");
+        egui::Frame::new()
+            .fill(p.panel)
+            .stroke(egui::Stroke::new(1.0, p.warn.gamma_multiply(0.5)))
+            .corner_radius(8)
+            .inner_margin(egui::Margin::symmetric(14, 10))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width() - 2.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(icon::QUESTION).color(p.warn).size(16.0));
+                    ui.add(
+                        egui::Label::new(strong(format!(
+                            "{} «{}» está como «Otra carga» ({} W)",
+                            circuit.id,
+                            circuit.name,
+                            thousands(circuit.load.power_w)
+                        )))
+                        .wrap(),
+                    );
+                });
+                ui.add(
+                    egui::Label::new(
+                        muted(
+                            p,
+                            format!(
+                                "Su nombre parece de {}. Como carga general no se le aplican {missing}. NOM-001-SEDE-2012, {cite}.",
+                                if kind == LoadKind::Motor { "un motor" } else { "un equipo de aire acondicionado" },
+                            ),
+                        )
+                        .size(12.5),
+                    )
+                    .wrap(),
+                );
+                ui.add_space(2.0);
+                ui.horizontal(|ui| {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(format!("Cambiar a {what}")).color(p.on_accent),
+                            )
+                            .fill(p.accent),
+                        )
+                        .on_hover_text("Cambia el tipo y te lleva a su ficha para capturar los datos del equipo. Se puede deshacer con Ctrl+Z.")
+                        .clicked()
+                    {
+                        action = Some((Selection::Circuit(i, c), kind));
+                    }
+                    if ui.button("Es otra carga").clicked() {
+                        hidden.push(key(i, c));
+                    }
+                });
+            });
+        ui.add_space(6.0);
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(hidden_id, hidden));
+    action
 }
 
 // ------------------------------------------------------------- 5 · memoria
@@ -1696,6 +2070,43 @@ mod tests {
         assert_eq!(thousands(1800.0), "1,800");
         assert_eq!(thousands(7704.4), "7,704");
         assert_eq!(thousands(1_234_567.0), "1,234,567");
+    }
+
+    #[test]
+    fn names_that_look_like_equipment() {
+        assert_eq!(kind_from_name("Bomba de agua"), Some(LoadKind::Motor));
+        assert_eq!(kind_from_name("EXTRACTOR baño"), Some(LoadKind::Motor));
+        assert_eq!(kind_from_name("Hidroneumático"), Some(LoadKind::Motor));
+        assert_eq!(
+            kind_from_name("Minisplit recámara"),
+            Some(LoadKind::AirConditioning)
+        );
+        assert_eq!(
+            kind_from_name("Cámara fría"),
+            Some(LoadKind::AirConditioning)
+        );
+        // Un compresor de refrigeración es aire acondicionado, no motor.
+        assert_eq!(
+            kind_from_name("Compresor de refrigeración"),
+            Some(LoadKind::AirConditioning)
+        );
+        assert_eq!(kind_from_name("Compresor de aire"), Some(LoadKind::Motor));
+        assert_eq!(kind_from_name("Contactos sala"), None);
+        assert_eq!(kind_from_name("Alumbrado exterior"), None);
+    }
+
+    #[test]
+    fn only_general_loads_are_questioned() {
+        let mut doc = Doc::new(ieestudio_project::example::house(), None);
+        // El ejemplo ya tiene la bomba como motor y el aire con su placa.
+        assert!(suspicious_kinds(&doc).is_empty());
+        let c = doc.project.panels[0]
+            .circuits
+            .iter()
+            .position(|x| x.load.kind == LoadKind::Motor)
+            .unwrap();
+        doc.project.panels[0].circuits[c].load.kind = LoadKind::General;
+        assert_eq!(suspicious_kinds(&doc), vec![(0, c, LoadKind::Motor)]);
     }
 
     #[test]

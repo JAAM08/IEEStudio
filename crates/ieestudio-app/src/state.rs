@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use ieestudio_core::{CircuitKind, System};
 use ieestudio_project::{
-    calculate, Circuit, Feeder, Load, LoadKind, Overrides, Panel, PanelResult, Phase, Project,
-    ProjectResult, RunResult, Settings, Source, FORMAT_VERSION,
+    calculate, Circuit, CompressorLoad, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel,
+    PanelResult, Phase, Project, ProjectResult, RunResult, Settings, Source, FORMAT_VERSION,
 };
 
 /// Lo que está seleccionado. Todas las vistas leen y cambian esta selección.
@@ -52,6 +52,27 @@ pub fn empty_project() -> Project {
             system: System::WYE_220_127,
         },
         panels: vec![new_panel("TG-1", "Tablero general", None)],
+    }
+}
+
+/// Cambia el tipo de carga y crea los datos que el tipo nuevo pide: la
+/// potencia del motor o la placa del equipo de aire acondicionado. Los datos
+/// del tipo anterior se conservan por si se regresa a él.
+pub fn set_load_kind(load: &mut Load, kind: LoadKind) {
+    load.kind = kind;
+    match kind {
+        LoadKind::Motor if load.motor.is_none() => {
+            load.motor = Some(MotorLoad {
+                hp: "1".to_string(),
+                motor_type: Default::default(),
+                nameplate_a: None,
+                service_factor_marked: false,
+            });
+        }
+        LoadKind::AirConditioning if load.compressor.is_none() => {
+            load.compressor = Some(CompressorLoad::default());
+        }
+        _ => {}
     }
 }
 
@@ -295,29 +316,94 @@ impl Doc {
             .unwrap_or_default()
     }
 
+    /// Circuito de carga general; la interfaz pregunta antes el tipo.
+    #[cfg(test)]
     pub fn add_circuit(&mut self, panel: usize) {
+        self.add_circuit_of(panel, LoadKind::General);
+    }
+
+    /// Agrega un circuito del tipo de carga elegido, con los datos que ese
+    /// tipo necesita y en las fases menos cargadas del tablero.
+    pub fn add_circuit_of(&mut self, panel: usize, kind: LoadKind) {
         let id = self.free_circuit_id(panel);
+        // El aire acondicionado suele ir entre fases cuando el tablero las tiene.
+        let two_phases = self.project.panels[panel].kind != CircuitKind::LineToNeutral
+            && self.bus_system(panel).line_to_line_v.is_some();
+        let circuit_kind = match kind {
+            LoadKind::AirConditioning if two_phases => CircuitKind::LineToLine,
+            _ => CircuitKind::LineToNeutral,
+        };
+        let phases = self.default_phases(panel, circuit_kind);
+        let name = match kind {
+            LoadKind::General => "Circuito nuevo",
+            other => other.label(),
+        };
+        let mut load = Load {
+            power_w: 1000.0,
+            power_factor: 0.9,
+            continuous: false,
+            kind: LoadKind::General,
+            outlets: None,
+            motor: None,
+            compressor: None,
+        };
+        set_load_kind(&mut load, kind);
         let circuits = &mut self.project.panels[panel].circuits;
         circuits.push(Circuit {
             id,
-            name: "Circuito nuevo".to_string(),
-            kind: CircuitKind::LineToNeutral,
-            phases: vec![Phase::A],
-            load: Load {
-                power_w: 1000.0,
-                power_factor: 0.9,
-                continuous: false,
-                kind: LoadKind::General,
-                outlets: None,
-                motor: None,
-                compressor: None,
-            },
+            name: name.to_string(),
+            kind: circuit_kind,
+            phases,
+            load,
             length_m: 10.0,
             has_neutral: false,
             overrides: Overrides::default(),
         });
         self.selection = Selection::Circuit(panel, circuits.len() - 1);
         self.edited();
+    }
+
+    /// Fases para un circuito nuevo del tipo de conexión dado: las menos
+    /// cargadas de las que tiene el tablero, en orden A, B, C.
+    pub fn default_phases(&self, panel: usize, kind: CircuitKind) -> Vec<Phase> {
+        let available: &[Phase] = match self.project.panels[panel].kind {
+            CircuitKind::LineToNeutral => &[Phase::A],
+            CircuitKind::LineToLine => &[Phase::A, Phase::B],
+            CircuitKind::ThreePhase => &[Phase::A, Phase::B, Phase::C],
+        };
+        let needed = match kind {
+            CircuitKind::LineToNeutral => 1,
+            CircuitKind::LineToLine => 2,
+            CircuitKind::ThreePhase => 3,
+        };
+        let load = self.panel_result(panel).map_or([0.0; 3], |r| r.phase_va);
+        let index = |ph: Phase| match ph {
+            Phase::A => 0,
+            Phase::B => 1,
+            Phase::C => 2,
+        };
+        let mut by_load = available.to_vec();
+        // Orden estable: con la misma carga se queda el orden A, B, C.
+        by_load.sort_by(|a, b| load[index(*a)].total_cmp(&load[index(*b)]));
+        let mut chosen: Vec<Phase> = by_load.into_iter().take(needed).collect();
+        chosen.sort_by_key(|ph| index(*ph));
+        chosen
+    }
+
+    /// Agrega un subtablero alimentado desde el tablero `panel`. Es el mismo
+    /// tablero que se agrega en el paso Tableros: no hay una copia aparte.
+    pub fn add_subpanel(&mut self, panel: usize) -> usize {
+        self.selection = Selection::Feeder(panel);
+        self.add_panel();
+        self.project.panels.len() - 1
+    }
+
+    /// Tableros que se alimentan del tablero `panel`.
+    pub fn subpanels(&self, panel: usize) -> Vec<usize> {
+        let id = &self.project.panels[panel].id;
+        (0..self.project.panels.len())
+            .filter(|&k| self.project.panels[k].parent.as_ref() == Some(id))
+            .collect()
     }
 
     pub fn duplicate_circuit(&mut self) {
@@ -563,6 +649,88 @@ mod tests {
         );
         assert_eq!(ids(1), vec![top.clone()]);
         assert_eq!(ids(2), vec![top, doc.project.panels[1].id.clone()]);
+    }
+
+    #[test]
+    fn each_load_kind_is_created_with_its_data() {
+        let mut doc = Doc::new(ieestudio_project::example::house(), None);
+        let n = doc.project.panels[0].circuits.len();
+        doc.add_circuit_of(0, LoadKind::Motor);
+        doc.add_circuit_of(0, LoadKind::AirConditioning);
+        doc.add_circuit_of(0, LoadKind::Lighting);
+        let circuits = &doc.project.panels[0].circuits;
+        assert_eq!(circuits.len(), n + 3);
+        let motor = &circuits[n];
+        assert_eq!(motor.load.kind, LoadKind::Motor);
+        assert!(motor.load.motor.is_some());
+        assert_eq!(motor.name, "Motor");
+        // El tablero del ejemplo es de tres fases: el aire va entre dos.
+        let ac = &circuits[n + 1];
+        assert_eq!(ac.load.kind, LoadKind::AirConditioning);
+        assert!(ac.load.compressor.is_some());
+        assert_eq!(ac.kind, CircuitKind::LineToLine);
+        assert_eq!(ac.phases.len(), 2);
+        assert_eq!(circuits[n + 2].load.kind, LoadKind::Lighting);
+        // El circuito nuevo queda seleccionado y los ID no se repiten.
+        assert_eq!(doc.selection, Selection::Circuit(0, n + 2));
+        for c in 0..circuits.len() {
+            assert_eq!(doc.circuit_id_problem(0, c), None);
+        }
+        doc.recalculate();
+        assert!(doc.result.is_ok(), "{:?}", doc.result.err());
+    }
+
+    #[test]
+    fn a_new_circuit_goes_to_the_least_loaded_phase() {
+        let mut doc = Doc::new(ieestudio_project::example::house(), None);
+        let load = doc.panel_result(0).unwrap().phase_va;
+        let lightest = (0..3).min_by(|&a, &b| load[a].total_cmp(&load[b])).unwrap();
+        doc.add_circuit_of(0, LoadKind::Lighting);
+        let added = doc.project.panels[0].circuits.last().unwrap();
+        assert_eq!(added.phases, vec![[Phase::A, Phase::B, Phase::C][lightest]]);
+    }
+
+    #[test]
+    fn a_single_phase_panel_only_offers_phase_a() {
+        let mut doc = Doc::new(empty_project(), None);
+        doc.project.panels[0].kind = CircuitKind::LineToNeutral;
+        doc.project.source.system = System::SINGLE_127;
+        doc.add_circuit_of(0, LoadKind::AirConditioning);
+        let added = &doc.project.panels[0].circuits[0];
+        assert_eq!(added.kind, CircuitKind::LineToNeutral);
+        assert_eq!(added.phases, vec![Phase::A]);
+    }
+
+    #[test]
+    fn a_subpanel_from_circuits_is_the_same_as_from_panels() {
+        // Por los dos caminos sale el mismo tablero, colgado del de origen.
+        let mut a = Doc::new(empty_project(), None);
+        let k = a.add_subpanel(0);
+        let mut b = Doc::new(empty_project(), None);
+        b.selection = Selection::Feeder(0);
+        b.add_panel();
+        assert_eq!(a.project, b.project);
+        assert_eq!(a.selection, Selection::Feeder(k));
+        assert_eq!(a.project.panels[k].parent.as_deref(), Some("TG-1"));
+        assert_eq!(a.subpanels(0), vec![k]);
+        assert!(a.subpanels(k).is_empty());
+        // Dos subtableros no repiten ID.
+        a.add_subpanel(0);
+        assert_eq!(a.panel_id_problem(1), None);
+        assert_eq!(a.panel_id_problem(2), None);
+        assert_eq!(a.subpanels(0).len(), 2);
+    }
+
+    #[test]
+    fn changing_the_load_kind_keeps_the_other_data() {
+        let mut load = ieestudio_project::example::house().panels[0].circuits[0]
+            .load
+            .clone();
+        set_load_kind(&mut load, LoadKind::Motor);
+        load.motor.as_mut().unwrap().hp = "2".to_string();
+        set_load_kind(&mut load, LoadKind::General);
+        set_load_kind(&mut load, LoadKind::Motor);
+        assert_eq!(load.motor.unwrap().hp, "2");
     }
 
     #[test]

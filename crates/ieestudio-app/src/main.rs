@@ -3,16 +3,18 @@
 //!
 //! Uso en escritorio: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
 //! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--inicio] [--comandos]
-//! [--paso proyecto|tableros|circuitos|revisar|memoria] [--avanzada] [--captura imagen.png]`
+//! [--paso proyecto|tableros|circuitos|revisar|memoria] [--avanzada] [--agregar] [--captura imagen.png]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod chooser;
 mod commands;
 mod files;
 mod guided;
 mod panels;
 mod state;
+mod symbols;
 mod theme;
 mod widgets;
 mod workspace;
@@ -38,6 +40,7 @@ fn main() -> eframe::Result {
         palette: false,
         step: None,
         advanced: false,
+        chooser: false,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -48,6 +51,7 @@ fn main() -> eframe::Result {
             "--inicio" => options.home = true,
             "--comandos" => options.palette = true,
             "--avanzada" => options.advanced = true,
+            "--agregar" => options.chooser = true,
             "--paso" => {
                 options.step = match args.next().as_deref() {
                     Some("proyecto") => Some(guided::Step::Project),
@@ -190,6 +194,7 @@ fn main() {
         palette: false,
         step: None,
         advanced: false,
+        chooser: false,
     };
     wasm_bindgen_futures::spawn_local(async move {
         let canvas = web_sys::window()

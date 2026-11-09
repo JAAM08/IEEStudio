@@ -12,7 +12,7 @@ use ieestudio_project::{
 use ieestudio_rules::{cite_all, Profile, Rule};
 
 use super::Shared;
-use crate::state::{Doc, Selection};
+use crate::state::{set_load_kind, Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{
     combo, combo_override, load_kind_hint, motor_hp_combo, muted, number, optional_number,
@@ -528,6 +528,16 @@ pub(crate) fn circuit_form(
         .panel_result(i)
         .and_then(|r| r.circuits.get(c))
         .map(|r| r.load_w);
+    // Lo que se necesita para la conexión, antes de tomar el circuito.
+    let system = doc.bus_system(i);
+    let panel_kind = doc.project.panels[i].kind;
+    let phases_for = |kind| doc.default_phases(i, kind);
+    let suggested = [
+        phases_for(CircuitKind::LineToNeutral),
+        phases_for(CircuitKind::LineToLine),
+        phases_for(CircuitKind::ThreePhase),
+    ];
+    let focus = take_focus_description(ui.ctx());
     let circuit = &mut doc.project.panels[i].circuits[c];
     if !guided {
         section(ui, p, "Circuito");
@@ -536,30 +546,41 @@ pub(crate) fn circuit_form(
         ui.label(RichText::new(format!("{} {problem}", icon::WARNING)).color(p.warn));
     }
     property(ui, p, "Descripción", |ui| {
-        changed |= ui.text_edit_singleline(&mut circuit.name).changed();
+        let response = ui.text_edit_singleline(&mut circuit.name);
+        if focus {
+            response.request_focus();
+            // Se selecciona todo para escribir encima del nombre propuesto.
+            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), response.id) {
+                let all = egui::text::CCursorRange::two(
+                    egui::text::CCursor::new(0),
+                    egui::text::CCursor::new(circuit.name.chars().count()),
+                );
+                state.cursor.set_char_range(Some(all));
+                state.store(ui.ctx(), response.id);
+            }
+        }
+        changed |= response.changed();
     });
     section(ui, p, "Carga");
     property(ui, p, "Tipo de carga", |ui| {
-        if combo(ui, ("tipo-carga", c), &mut circuit.load.kind, &LOAD_KINDS) {
-            changed = true;
+        let mut kind = circuit.load.kind;
+        if combo(ui, ("tipo-carga", c), &mut kind, &LOAD_KINDS) {
             // Al elegir motor o aire acondicionado se piden sus datos.
-            match circuit.load.kind {
-                LoadKind::Motor if circuit.load.motor.is_none() => {
-                    circuit.load.motor = Some(MotorLoad {
-                        hp: "1".to_string(),
-                        motor_type: Default::default(),
-                        nameplate_a: None,
-                        service_factor_marked: false,
-                    });
-                }
-                LoadKind::AirConditioning if circuit.load.compressor.is_none() => {
-                    circuit.load.compressor = Some(CompressorLoad::default());
-                }
-                _ => {}
-            }
+            set_load_kind(&mut circuit.load, kind);
+            changed = true;
         }
     })
     .on_hover_text(load_kind_hint(circuit.load.kind));
+    // Primero los datos del equipo, que es lo que el tipo pide.
+    let three_phase = circuit.kind == CircuitKind::ThreePhase;
+    if let (LoadKind::Motor, Some(motor)) = (circuit.load.kind, circuit.load.motor.as_mut()) {
+        changed |= motor_inputs(ui, p, motor, three_phase, c);
+    }
+    if let (LoadKind::AirConditioning, Some(plate)) =
+        (circuit.load.kind, circuit.load.compressor.as_mut())
+    {
+        changed |= compressor_inputs(ui, p, plate);
+    }
     if circuit.load.kind == LoadKind::Receptacles {
         let unit = Profile::nom_001_sede_2012().parameters.receptacle_outlet_va;
         property(ui, p, "Salidas", |ui| {
@@ -588,13 +609,13 @@ pub(crate) fn circuit_form(
         (LoadKind::Motor, Some(_), _) | (LoadKind::AirConditioning, _, Some(_))
     );
     if equipment {
-        property(ui, p, "Potencia", |ui| {
+        property(ui, p, "Potencia equivalente", |ui| {
             ui.label(
                 RichText::new(computed_w.map_or("—".to_string(), |w| format!("{w:.0} W")))
                     .monospace(),
             )
             .on_hover_text(
-                "Calculada con la corriente del equipo: la de tabla del motor o la de placa del compresor.",
+                "No se captura: sale de la corriente del equipo, la de tabla del motor o la de placa del compresor.",
             );
         });
     } else {
@@ -605,22 +626,19 @@ pub(crate) fn circuit_form(
     if !guided {
         changed |= load_details(ui, p, &mut circuit.load, equipment);
     }
-    let three_phase = circuit.kind == CircuitKind::ThreePhase;
-    if let (LoadKind::Motor, Some(motor)) = (circuit.load.kind, circuit.load.motor.as_mut()) {
-        changed |= motor_inputs(ui, p, motor, three_phase, c);
-    }
-    if let (LoadKind::AirConditioning, Some(plate)) =
-        (circuit.load.kind, circuit.load.compressor.as_mut())
-    {
-        changed |= compressor_inputs(ui, p, plate);
-    }
     section(ui, p, "Conexión");
     property(ui, p, "Conexión", |ui| {
-        if combo(ui, ("conexion", c), &mut circuit.kind, &KINDS) {
-            circuit.phases.clear();
+        if connection(ui, &mut circuit.kind, system, panel_kind) {
+            // Las fases menos cargadas del tablero para la conexión nueva.
+            circuit.phases = match circuit.kind {
+                CircuitKind::LineToNeutral => suggested[0].clone(),
+                CircuitKind::LineToLine => suggested[1].clone(),
+                CircuitKind::ThreePhase => suggested[2].clone(),
+            };
             changed = true;
         }
-    });
+    })
+    .on_hover_text("Fases y tensión a las que se conecta la carga. Solo se pueden elegir las que tiene el tablero.");
     property(ui, p, "Fases", |ui| {
         for (label, phase) in [("A", Phase::A), ("B", Phase::B), ("C", Phase::C)] {
             let mut on = circuit.phases.contains(&phase);
@@ -670,6 +688,65 @@ pub(crate) fn circuit_form(
         changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
     });
     changed
+}
+
+/// Tensión de una conexión en el sistema del tablero, si la tiene.
+fn connection_voltage(kind: CircuitKind, system: ieestudio_core::System) -> Option<f64> {
+    match kind {
+        CircuitKind::LineToNeutral => system.line_to_neutral_v,
+        CircuitKind::LineToLine | CircuitKind::ThreePhase => system.line_to_line_v,
+    }
+}
+
+/// Conexión como botones con su tensión: `1F · 127 V`, `2F · 220 V`,
+/// `3F · 220 V`. Las que el tablero no tiene quedan desactivadas.
+fn connection(
+    ui: &mut egui::Ui,
+    kind: &mut CircuitKind,
+    system: ieestudio_core::System,
+    panel: CircuitKind,
+) -> bool {
+    let mut changed = false;
+    let rank = |k: CircuitKind| match k {
+        CircuitKind::LineToNeutral => 1,
+        CircuitKind::LineToLine => 2,
+        CircuitKind::ThreePhase => 3,
+    };
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for option in [
+            CircuitKind::LineToNeutral,
+            CircuitKind::LineToLine,
+            CircuitKind::ThreePhase,
+        ] {
+            let voltage = connection_voltage(option, system);
+            let text = match voltage {
+                Some(v) => format!("{}F · {v:.0} V", rank(option)),
+                None => format!("{}F", rank(option)),
+            };
+            let possible = voltage.is_some() && rank(option) <= rank(panel);
+            let on = *kind == option;
+            let response = ui
+                .add_enabled(possible || on, egui::Button::selectable(on, text))
+                .on_disabled_hover_text("El tablero no tiene esta conexión.");
+            if response.clicked() && !on {
+                *kind = option;
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+/// Pide que la próxima ficha de circuito ponga el cursor en la descripción,
+/// como después de agregar un circuito.
+pub fn focus_description(ctx: &egui::Context) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new("enfocar-descripcion"), true));
+}
+
+fn take_focus_description(ctx: &egui::Context) -> bool {
+    ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new("enfocar-descripcion")))
+        .unwrap_or(false)
 }
 
 /// Identificador de un circuito, con el aviso si se repite.

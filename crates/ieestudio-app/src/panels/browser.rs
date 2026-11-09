@@ -28,7 +28,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                 .on_hover_text("Agregar un circuito al tablero activo")
                 .clicked()
             {
-                doc.add_circuit(panel);
+                shared.choose_load = Some(panel);
             }
         }
     });

@@ -56,8 +56,19 @@
 - Vista guiada en cinco pasos como vista de omisión (decisión 0020):
   Proyecto, Tableros, Circuitos, Revisar y Memoria; la vista avanzada con
   paneles queda a un clic.
+- Agregar circuito por tipo de carga (decisión 0021): «¿Qué vas a
+  conectar?» con motor y aire acondicionado a la vista, ficha que pide
+  primero los datos del equipo, símbolos por tipo y aviso en Revisar cuando
+  un circuito parece motor o aire acondicionado.
 
 ## Pendiente, en orden
+
+- Unifilar con el formato de plano: simbología NMX-J-136, bloques de
+  acometida, subestación, alimentadores y protecciones (I.1 a I.4), cajetín y
+  modos Plano y Revisión.
+- Capacidad interruptiva por bus infinito con aportación de motores y datos
+  de catálogo de los interruptores; por decidir cómo cuenta en el veredicto
+  (ver la decisión 0018).
 
 - Rediseño, fases 2 y 3: tablet y teléfono, llevando la vista guiada a una
   vista por paso. Antes, una prueba en un teléfono real de egui en el
