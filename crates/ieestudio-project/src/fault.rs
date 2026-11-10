@@ -95,10 +95,16 @@ fn steps_for_transformer(
     impedance_percent: f64,
     system: &System,
     what: &str,
+    from_table: bool,
 ) -> Result<(f64, Vec<Step>), String> {
     let (voltage, three_phase) =
         transformer_voltage(system).ok_or_else(|| "el sistema no tiene tensión".to_string())?;
-    let tolerance = profile.parameters.fault_impedance_tolerance;
+    // El mínimo de la tabla de la norma ya incluye la tolerancia.
+    let tolerance = if from_table {
+        0.0
+    } else {
+        profile.parameters.fault_impedance_tolerance
+    };
     let full_load =
         transformer_full_load_current(kva, voltage, three_phase).map_err(|e| e.to_string())?;
     let z = effective_impedance_pu(impedance_percent, tolerance).map_err(|e| e.to_string())?;
@@ -120,18 +126,31 @@ fn steps_for_transformer(
             note: None,
             references: vec![],
         },
-        Step {
-            title: "Impedancia para la falla".into(),
-            formula: Some("Z = Z placa · (1 − tolerancia)".into()),
-            substitution: format!(
-                "Z = {impedance_percent} % · (1 − {tolerance:.2}) = {:.3} %",
-                z * 100.0
-            ),
-            note: Some(
-                "La impedancia real puede salir menor que la de placa; con la reducida la falla sale mayor."
-                    .into(),
-            ),
-            references: refs.clone(),
+        if from_table {
+            Step {
+                title: "Impedancia para la falla".into(),
+                formula: None,
+                substitution: format!("Z = {impedance_percent} %, la mínima de la tabla"),
+                note: Some(
+                    "Sin dato de placa se toma la impedancia mínima de la norma de fabricación para su tipo, potencia y tensión, que ya incluye la tolerancia: da la falla mayor."
+                        .into(),
+                ),
+                references: vec![profile.reference(Rule::TransformerImpedanceLimits)],
+            }
+        } else {
+            Step {
+                title: "Impedancia para la falla".into(),
+                formula: Some("Z = Z placa · (1 − tolerancia)".into()),
+                substitution: format!(
+                    "Z = {impedance_percent} % · (1 − {tolerance:.2}) = {:.3} %",
+                    z * 100.0
+                ),
+                note: Some(
+                    "La impedancia real puede salir menor que la de placa; con la reducida la falla sale mayor."
+                        .into(),
+                ),
+                references: refs.clone(),
+            }
         },
         Step {
             title: "Falla por bus infinito".into(),
@@ -141,7 +160,8 @@ fn steps_for_transformer(
                 icc / 1000.0
             ),
             note: Some(
-                "La red se toma sin impedancia: es la corriente mayor posible en el secundario.".into(),
+                "La red se toma sin impedancia: es la corriente mayor posible en el secundario."
+                    .into(),
             ),
             references: refs,
         },
@@ -252,12 +272,14 @@ fn source_fault(
         ));
     }
     let substation = source.substation.as_ref()?;
+    let impedance = substation_impedance(profile, source).ok()?;
     let (ka, steps) = steps_for_transformer(
         profile,
         substation.kva,
-        substation.impedance_percent,
+        impedance,
         &source.system,
         "transformador de la acometida",
+        substation.impedance_from_table,
     )
     .ok()?;
     Some(with_motors(
@@ -267,6 +289,47 @@ fn source_fault(
         steps,
         motors,
     ))
+}
+
+/// Impedancia con la que se calcula la falla de la subestación: la de placa
+/// o, si se pidió, la mínima de la tabla de la norma de fabricación. El error
+/// dice qué falta para encontrarla en la tabla.
+pub fn substation_impedance(
+    profile: &Profile,
+    source: &crate::model::Source,
+) -> Result<f64, String> {
+    use crate::model::{Connection, Mounting};
+    let Some(sub) = &source.substation else {
+        return Err("no hay subestación".into());
+    };
+    if !sub.impedance_from_table {
+        return Ok(sub.impedance_percent);
+    }
+    let three_phase = transformer_voltage(&source.system).is_some_and(|(_, t)| t)
+        && sub.connection != Some(Connection::SinglePhase);
+    let kind = match (three_phase, sub.mounting) {
+        (false, _) => "single_phase",
+        (true, Some(Mounting::Pole)) => "pole_three_phase",
+        (true, Some(Mounting::Substation)) => "substation",
+        (true, Some(_)) => {
+            return Err(
+                "la tabla solo cubre transformadores tipo poste y tipo subestación; captura la impedancia de placa".into(),
+            )
+        }
+        (true, None) => return Err("falta el montaje del transformador".into()),
+    };
+    let kv = sub
+        .primary_kv
+        .ok_or_else(|| "falta la tensión del primario".to_string())?;
+    profile
+        .impedance_limits(kind, sub.kva, kv)
+        .map(|(min, _)| min)
+        .ok_or_else(|| {
+            format!(
+                "la tabla no tiene un transformador de {} kVA a {kv} kV de este tipo; captura la impedancia de placa",
+                sub.kva
+            )
+        })
 }
 
 fn worse(a: Status, b: Status) -> Status {
@@ -371,6 +434,7 @@ pub(crate) fn study(
                     t.impedance_percent,
                     &t.secondary,
                     &format!("transformador de {}", panel.id),
+                    false,
                 ) {
                     Ok((ka, steps)) => with_motors(
                         profile,

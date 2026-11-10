@@ -46,9 +46,26 @@ NMX-J-136-ANCE-2019.
   y marco. En DXF el límite de los tableros va con línea discontinua
   (`DASHED`).
 
+## Símbolos cotejados con la norma
+
+Los símbolos se revisaron contra la NMX-J-136-ANCE-2007 (sección 4.2,
+símbolos nacionales, y 4.3, unifilares de subestaciones):
+
+| Símbolo | Figura |
+|---|---|
+| Interruptor termomagnético (automático): la línea se abre y un arco une los extremos | 4.2.14, 4.3.3 |
+| Equipo de medición: cuadro con M | 4.3.10 |
+| Transformador: dos devanados enfrentados (los dos círculos son del grupo generador) | 4.2.68, 4.3.6 |
+| Tablero de distribución general: rectángulo con diagonal | 4.2.90 |
+| Salida de lámpara incandescente: circunferencia con cuatro rayos | 4.2.52 |
+| Receptáculo sencillo: circunferencia con dos diagonales | 4.2.27 |
+| Motor: circunferencia con M | 4.2.67 |
+| Salida para propósito especial: circunferencia con triángulo y letras (AA, AF, EC) | 4.2.60 |
+| Acometida: línea con quiebre y flecha | 4.2.26 |
+
+La carga general no tiene símbolo en la norma y se dibuja con una flecha.
+
 ## Pendiente
 
-- Los símbolos siguen la lámina de referencia del curso; falta cotejarlos con
-  el texto de la NMX-J-136-ANCE-2019.
-- La frecuencia, el suministrador, el medidor, la subestación, los datos de
-  catálogo y las posiciones llegaron con la decisión 0023.
+- La edición vigente es la NMX-J-136-ANCE-2019, que no se pudo consultar; el
+  cotejo es contra la de 2007. Falta confirmar que estas figuras no cambiaron.

@@ -115,10 +115,12 @@ pub enum Rule {
     AvailableFault,
     /// Aportación de los motores a la corriente de falla.
     MotorFaultContribution,
+    /// Impedancia mínima de un transformador sin dato de placa.
+    TransformerImpedanceLimits,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 50] = [
+    pub const ALL: [Rule; 51] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -169,6 +171,7 @@ impl Rule {
         Rule::TransformerSecondary,
         Rule::AvailableFault,
         Rule::MotorFaultContribution,
+        Rule::TransformerImpedanceLimits,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -224,6 +227,7 @@ impl Rule {
             Rule::TransformerSecondary => "transformer_secondary",
             Rule::AvailableFault => "available_fault",
             Rule::MotorFaultContribution => "motor_fault_contribution",
+            Rule::TransformerImpedanceLimits => "transformer_impedance_limits",
         }
     }
 }

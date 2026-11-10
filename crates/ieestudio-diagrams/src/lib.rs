@@ -377,10 +377,9 @@ impl Painter {
                 (x + radius * angle.cos(), center + radius * angle.sin())
             })
             .collect();
+        // Figura 4.2.14: la línea se abre y un arco une los dos extremos.
+        let _ = bottom;
         self.path(points, 1.3, false);
-        for y in [top, bottom] {
-            self.path(vec![(x - 2.5, y), (x + 2.5, y)], 1.3, false);
-        }
     }
 
     /// Símbolo de una carga o de un tablero con su centro en `c`; ocupa unos
@@ -399,31 +398,61 @@ impl Painter {
             );
         };
         match symbol {
+            // Figura 4.2.52, salida de lámpara incandescente: circunferencia
+            // con cuatro rayos en diagonal.
             Symbol::Load(LoadKind::Lighting) => {
-                self.circle(c, 8.0);
-                self.circle(c, 4.0);
-                self.line((x - 12.0, y), (x + 12.0, y), 1.2);
-                self.line((x, y - 12.0), (x, y + 12.0), 1.2);
+                self.circle(c, 7.0);
+                for (dx, dy) in [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)] {
+                    self.line(
+                        (x + dx * 5.6, y + dy * 5.6),
+                        (x + dx * 10.0, y + dy * 10.0),
+                        1.2,
+                    );
+                }
             }
+            // Figura 4.2.27, receptáculo sencillo: circunferencia con dos
+            // diagonales.
             Symbol::Load(LoadKind::Receptacles) => {
-                self.circle(c, 10.0);
-                self.line((x - 6.0, y + 6.0), (x + 6.0, y - 6.0), 1.2);
+                self.circle(c, 9.0);
+                self.line((x - 7.5, y + 3.0), (x + 3.0, y - 7.5), 1.2);
+                self.line((x - 3.0, y + 7.5), (x + 7.5, y - 3.0), 1.2);
             }
+            // Figura 4.2.67.
             Symbol::Load(LoadKind::Motor) => {
                 self.circle(c, 11.0);
                 letters(self, "M", 11.0);
             }
-            Symbol::Load(LoadKind::AirConditioning) => {
+            // Figura 4.2.60, salida para propósito especial: circunferencia
+            // con un triángulo y las letras de su función a un lado.
+            Symbol::Load(
+                kind @ (LoadKind::AirConditioning
+                | LoadKind::Appliance
+                | LoadKind::KitchenEquipment),
+            ) => {
                 self.circle(c, 11.0);
-                letters(self, "AA", 7.5);
-            }
-            Symbol::Load(LoadKind::Appliance) => {
-                self.circle(c, 11.0);
-                letters(self, "AF", 7.5);
-            }
-            Symbol::Load(LoadKind::KitchenEquipment) => {
-                self.circle(c, 11.0);
-                letters(self, "EC", 7.5);
+                self.path(
+                    vec![
+                        (x, y - 9.5),
+                        (x + 8.2, y + 4.8),
+                        (x - 8.2, y + 4.8),
+                        (x, y - 9.5),
+                    ],
+                    1.2,
+                    false,
+                );
+                let text = match kind {
+                    LoadKind::AirConditioning => "AA",
+                    LoadKind::Appliance => "AF",
+                    _ => "EC",
+                };
+                self.text_sized(
+                    (x + 13.0, y + 11.0),
+                    text.to_string(),
+                    7.0,
+                    Font::Bold,
+                    Ink::Text,
+                    Anchor::Start,
+                );
             }
             Symbol::Load(LoadKind::General) => {
                 self.path(
@@ -445,9 +474,24 @@ impl Painter {
                 self.rect((x - 10.0, y - 10.0), (20.0, 20.0), false);
                 letters(self, "M", 11.0);
             }
+            // Figuras 4.2.68 y 4.3.6: dos devanados enfrentados. El primario
+            // arriba y el secundario abajo, porque el diagrama corre de
+            // arriba hacia abajo.
             Symbol::Transformer => {
-                self.circle((x, y - 6.0), 9.0);
-                self.circle((x, y + 6.0), 9.0);
+                for (base, sign) in [(y - 4.0, -1.0), (y + 4.0, 1.0)] {
+                    for k in [-1.0, 0.0, 1.0] {
+                        let cx = x + k * 8.0;
+                        let points = (0..=10)
+                            .map(|i| {
+                                let angle = std::f64::consts::PI * f64::from(i) / 10.0;
+                                (cx - 4.0 * angle.cos(), base + sign * 4.0 * angle.sin())
+                            })
+                            .collect();
+                        self.path(points, 1.2, false);
+                    }
+                    // La terminal sale del centro del devanado.
+                    self.line((x, base + sign * 4.0), (x, base + sign * 11.0), 1.2);
+                }
             }
             Symbol::Breaker => {
                 self.line((x, y - 13.0), (x, y - 9.0), 1.2);
@@ -1405,7 +1449,7 @@ fn sheet(
     pt.rect((sx, y), (SIDE, table_height), false);
     pt.text_sized(
         (sx + 10.0, y + 17.0),
-        "SIMBOLOGÍA".to_string(),
+        "SIMBOLOGÍA (NMX-J-136-ANCE)".to_string(),
         10.0,
         Font::Bold,
         Ink::Text,
@@ -1420,17 +1464,17 @@ fn sheet(
         }
         pt.symbol(*symbol, (sx + 30.0, ry + row / 2.0));
         let label = match symbol {
-            Symbol::Breaker => "INTERRUPTOR TERMOMAGNÉTICO",
-            Symbol::Meter => "MEDIDOR DE ENERGÍA",
+            Symbol::Breaker => "INTERRUPTOR TERMOMAGNÉTICO (AUTOMÁTICO)",
+            Symbol::Meter => "EQUIPO DE MEDICIÓN",
             Symbol::Transformer => "TRANSFORMADOR",
-            Symbol::Panel => "TABLERO O CENTRO DE CARGA",
-            Symbol::Load(LoadKind::Lighting) => "LUMINARIO (CIRCUITO DE ALUMBRADO)",
-            Symbol::Load(LoadKind::Receptacles) => "CIRCUITO DE CONTACTOS",
+            Symbol::Panel => "TABLERO DE DISTRIBUCIÓN",
+            Symbol::Load(LoadKind::Lighting) => "SALIDA DE ALUMBRADO",
+            Symbol::Load(LoadKind::Receptacles) => "RECEPTÁCULO (CONTACTOS)",
             Symbol::Load(LoadKind::Motor) => "MOTOR ELÉCTRICO",
             Symbol::Load(LoadKind::AirConditioning) => "SALIDA ESPECIAL: AIRE ACONDICIONADO",
             Symbol::Load(LoadKind::Appliance) => "SALIDA ESPECIAL: APARATO FIJO",
             Symbol::Load(LoadKind::KitchenEquipment) => "SALIDA ESPECIAL: EQUIPO DE COCINA",
-            Symbol::Load(LoadKind::General) => "CARGA",
+            Symbol::Load(LoadKind::General) => "CARGA (SIN SÍMBOLO EN LA NORMA)",
         };
         pt.text(
             (sx + 70.0, ry + row / 2.0 + 3.0),

@@ -175,11 +175,11 @@ fn plan_is_black_and_white_with_its_sheet() {
     }
     let t = texts(&diagram);
     for expected in [
-        "SIMBOLOGÍA",
-        "INTERRUPTOR TERMOMAGNÉTICO",
-        "MEDIDOR DE ENERGÍA",
+        "SIMBOLOGÍA (NMX-J-136-ANCE)",
+        "INTERRUPTOR TERMOMAGNÉTICO (AUTOMÁTICO)",
+        "EQUIPO DE MEDICIÓN",
         "MOTOR ELÉCTRICO",
-        "CIRCUITO DE CONTACTOS",
+        "RECEPTÁCULO (CONTACTOS)",
         "SALIDA ESPECIAL: AIRE ACONDICIONADO",
         "DIAGRAMA UNIFILAR",
         "Familia Pérez",
@@ -266,6 +266,7 @@ fn dxf_has_every_line_and_text() {
 fn catalog_data_and_fault_current_are_drawn() {
     let mut house = example::house();
     house.source.substation = Some(ieestudio_project::Substation {
+        impedance_from_table: Default::default(),
         kva: 112.5,
         impedance_percent: 3.0,
         primary_kv: Some(13.2),

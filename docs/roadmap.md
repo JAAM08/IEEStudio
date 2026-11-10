@@ -80,9 +80,10 @@
 - Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
   plantillas de circuito.
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
-- Cotejar los símbolos del unifilar con el texto de la NMX-J-136-ANCE-2019 y
-  agregar la tabla de impedancias de la NMX-J-116 para transformadores sin
-  dato de placa.
+- Confirmar con la NMX-J-136-ANCE-2019 los símbolos del unifilar (cotejados
+  con la edición 2007) y con el texto de la NMX-J-116-ANCE la tabla de
+  impedancias (transcrita de una lámina). Agregar la de transformadores tipo
+  pedestal (NMX-J-285).
 - Unifilar fase 3: bloques con atributos en el DXF y tamaños de hoja.
 
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e

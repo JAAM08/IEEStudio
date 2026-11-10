@@ -755,6 +755,7 @@ fn checks_named<'a>(run: &'a RunResult, name: &str) -> Vec<&'a ieestudio_project
 fn fault_by_infinite_bus_with_motors() {
     let mut project = example::house();
     project.source.substation = Some(ieestudio_project::Substation {
+        impedance_from_table: Default::default(),
         kva: 112.5,
         impedance_percent: 3.0,
         primary_kv: Some(13.2),
@@ -833,6 +834,7 @@ fn fault_by_infinite_bus_with_motors() {
 fn supplier_fault_current_takes_precedence() {
     let mut project = example::house();
     project.source.substation = Some(ieestudio_project::Substation {
+        impedance_from_table: Default::default(),
         kva: 112.5,
         impedance_percent: 3.0,
         primary_kv: None,
@@ -879,4 +881,49 @@ fn a_project_transformer_sets_its_own_fault() {
         let c = checks_named(run, "Capacidad interruptiva")[0];
         assert_eq!(c.status, Status::Complies, "{}: {}", run.id, c.detail);
     }
+}
+
+/// Sin dato de placa, la falla se calcula con la impedancia mínima de la
+/// Tabla 11 de la NMX-J-116-ANCE, sin reducirla otra vez: tipo poste trifásico
+/// de 112.5 kVA a 13.2 kV, Z = 2 % → 295.24 A / 0.02 = 14.76 kA.
+#[test]
+fn fault_with_the_minimum_impedance_of_the_standard() {
+    let mut project = example::house();
+    project.source.substation = Some(ieestudio_project::Substation {
+        kva: 112.5,
+        impedance_percent: 3.0,
+        impedance_from_table: true,
+        primary_kv: Some(13.2),
+        connection: None,
+        mounting: Some(ieestudio_project::Mounting::Pole),
+        brand: String::new(),
+    });
+    let result = calculate(&project).unwrap();
+    let study = result
+        .fault
+        .as_ref()
+        .expect("la tabla cubre este transformador");
+    close(study.source.base_ka, 14.7618);
+    let step = study
+        .source
+        .steps
+        .iter()
+        .find(|s| s.title == "Impedancia para la falla")
+        .unwrap();
+    assert!(step.substitution.contains("2 %"));
+    assert!(step.references[0]
+        .clause
+        .as_deref()
+        .unwrap()
+        .contains("NMX-J-116"));
+
+    // Tipo pedestal no está en la tabla: no se supone un valor y la capacidad
+    // interruptiva vuelve a quedar fuera de alcance.
+    let sub = project.source.substation.as_mut().unwrap();
+    sub.mounting = Some(ieestudio_project::Mounting::PadMounted);
+    let profile = ieestudio_rules::Profile::nom_001_sede_2012();
+    assert!(ieestudio_project::fault::substation_impedance(profile, &project.source).is_err());
+    let result = calculate(&project).unwrap();
+    assert!(result.fault.is_none());
+    assert!(!result.verdict.out_of_scope.is_empty());
 }

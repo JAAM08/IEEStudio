@@ -193,6 +193,21 @@ pub struct ElectrodeRow {
     pub electrode_aluminum: String,
 }
 
+/// Fila de la Tabla 11 de la NMX-J-116-ANCE: límites de impedancia de un
+/// transformador de distribución. Los valores ya incluyen la tolerancia de
+/// fabricación (nota 1 de la tabla).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransformerImpedanceRow {
+    /// `single_phase`, `pole_three_phase` o `substation`.
+    pub kind: String,
+    /// Nivel de aislamiento hasta el que aplica la fila, en kV.
+    pub kv_max: f64,
+    pub kva_min: f64,
+    pub kva_max: f64,
+    pub z_min: f64,
+    pub z_max: f64,
+}
+
 /// Fila de la Tabla 450-3(b).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransformerProtectionRow {
@@ -254,6 +269,8 @@ pub struct Profile {
     pub grounding_electrode: Vec<ElectrodeRow>,
     /// Tabla 450-3(b).
     pub transformer_protection: Vec<TransformerProtectionRow>,
+    /// Tabla 11 de la NMX-J-116-ANCE, en orden creciente de tensión.
+    pub transformer_impedance: Vec<TransformerImpedanceRow>,
     /// Norma de la que salen las tablas.
     pub document: NormativeDocument,
     /// Factores, límites y calibres mínimos del perfil.
@@ -269,6 +286,17 @@ macro_rules! table {
             $build,
         )
     };
+}
+
+/// La fila es la de la primera banda de tensión que cubre `kv` para su clase.
+fn true_first_band(
+    row: &TransformerImpedanceRow,
+    kv: f64,
+    rows: &[TransformerImpedanceRow],
+) -> bool {
+    !rows
+        .iter()
+        .any(|r| r.kind == row.kind && kv <= r.kv_max && r.kv_max < row.kv_max)
 }
 
 impl Profile {
@@ -556,6 +584,18 @@ impl Profile {
                         electrode_aluminum: r.text("electrode_aluminum"),
                     }
                 ),
+                transformer_impedance: table!(
+                    "nom-001-sede-2012",
+                    "nmx_j_116_impedance.csv",
+                    |r| TransformerImpedanceRow {
+                        kind: r.text("kind"),
+                        kv_max: r.get("kv_max"),
+                        kva_min: r.get("kva_min"),
+                        kva_max: r.get("kva_max"),
+                        z_min: r.get("z_min"),
+                        z_max: r.get("z_max"),
+                    }
+                ),
                 transformer_protection: table!(
                     "nom-001-sede-2012",
                     "table_450_3_b_transformer_protection.csv",
@@ -593,6 +633,19 @@ impl Profile {
             clause: self.references.get(rule.id()).map(|e| e.clause.clone()),
             source_url: self.document.source_url.clone(),
         }
+    }
+
+    /// Límites de impedancia, en porciento, de un transformador de
+    /// distribución de la clase `kind` (`single_phase`, `pole_three_phase`
+    /// o `substation`), por su potencia y la tensión de su primario. `None`
+    /// si la tabla no lo cubre.
+    pub fn impedance_limits(&self, kind: &str, kva: f64, primary_kv: f64) -> Option<(f64, f64)> {
+        self.transformer_impedance
+            .iter()
+            .filter(|r| r.kind == kind && primary_kv <= r.kv_max)
+            .find(|r| true_first_band(r, primary_kv, &self.transformer_impedance))
+            .filter(|r| kva >= r.kva_min && kva <= r.kva_max)
+            .map(|r| (r.z_min, r.z_max))
     }
 
     /// Cláusula de una regla, para mensajes: `Tabla 310-15(b)(16)`.
@@ -943,6 +996,34 @@ mod tests {
         // Criterios de la estimación de falla por bus infinito (decisión 0023).
         assert_eq!(profile.parameters.fault_motor_multiplier, 4.0);
         assert_eq!(profile.parameters.fault_impedance_tolerance, 0.10);
+        // Tabla 11 de la NMX-J-116-ANCE.
+        assert_eq!(
+            profile.impedance_limits("pole_three_phase", 112.5, 13.2),
+            Some((2.0, 3.0))
+        );
+        assert_eq!(
+            profile.impedance_limits("pole_three_phase", 75.0, 23.0),
+            Some((2.0, 3.25))
+        );
+        assert_eq!(
+            profile.impedance_limits("substation", 500.0, 34.5),
+            Some((3.0, 5.75))
+        );
+        assert_eq!(
+            profile.impedance_limits("single_phase", 25.0, 13.2),
+            Some((1.5, 3.0))
+        );
+        // Tipo poste de 225 y 300 kVA solo en 25 kV (nota 2); fuera, sin dato.
+        assert_eq!(
+            profile.impedance_limits("pole_three_phase", 225.0, 23.0),
+            Some((2.0, 3.25))
+        );
+        assert_eq!(
+            profile.impedance_limits("pole_three_phase", 225.0, 13.2),
+            None
+        );
+        assert_eq!(profile.impedance_limits("substation", 750.0, 13.2), None);
+        assert_eq!(profile.impedance_limits("substation", 300.0, 46.0), None);
         assert_eq!(profile.office_receptacle_va_per_m2("offices"), Some(11.0));
         assert_eq!(profile.office_receptacle_va_per_m2("stores"), None);
         assert_eq!(profile.parameters.appliance_demand_factor, 0.75);

@@ -66,6 +66,18 @@ de aportación de la carga de motores: sin ella el bus infinito se queda corto.
 
 Falla de fase a tierra o a neutro, impedancia de los alimentadores, relación
 X/R y asimetría, interruptores en serie y limitadores de corriente: son del
-programa de cortocircuito de la suite. La tabla de impedancias de la
-NMX-J-116 para cuando no hay dato de placa se agrega cuando se tenga el texto
-de la norma.
+programa de cortocircuito de la suite.
+
+## Transformador sin dato de placa
+
+Con «Sin dato de placa» la falla de la subestación se calcula con la
+impedancia mínima de la Tabla 11 de la NMX-J-116-ANCE
+(`nmx_j_116_impedance.csv`) para su clase (monofásico, trifásico tipo poste o
+tipo subestación), su potencia y la tensión de su primario. Ese mínimo ya
+incluye la tolerancia (nota 1 de la tabla), así que no se reduce otra vez. Un
+transformador que la tabla no cubre, como el tipo pedestal (NMX-J-285), no
+recibe un valor supuesto: se pide la impedancia de placa y, sin ella, la
+capacidad interruptiva queda fuera de alcance.
+
+La tabla se transcribió de la lámina de un curso que la reproduce; falta
+cotejarla con el texto de la norma.
