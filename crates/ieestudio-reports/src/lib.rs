@@ -7,7 +7,7 @@
 use std::fmt::Write as _;
 
 use ieestudio_core::{CircuitKind, System};
-use ieestudio_diagrams::single_line;
+use ieestudio_diagrams::plan;
 use ieestudio_project::quick::{QuickInput, QuickResult};
 use ieestudio_project::verdict::Verdict;
 use ieestudio_project::{
@@ -541,7 +541,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     }
 
     // Diagrama unifilar en una hoja horizontal, ajustado a la página.
-    let svg = single_line(project, result).to_svg();
+    let svg = plan(project, result).to_svg();
     let _ = writeln!(
         out,
         "\n#page(flipped: true)[\n= Diagrama unifilar\n#block(height: 1fr, width: 100%, image(bytes({}), format: \"svg\", width: 100%, height: 100%, fit: \"contain\"))\n]",

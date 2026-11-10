@@ -526,7 +526,7 @@ impl App {
                 return;
             }
         };
-        let bytes = ieestudio_diagrams::single_line(&self.doc.project, result).to_dxf();
+        let bytes = ieestudio_diagrams::plan(&self.doc.project, result).to_dxf();
         let stem = self.suggested_name();
         let stem = stem.trim_end_matches(&format!(".{EXTENSION}"));
         let filter = Filter {

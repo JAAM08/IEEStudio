@@ -8,7 +8,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ieestudio-core = { path = "../ieestudio-core" }
 ieestudio-project = { path = "../ieestudio-project" }
 
-[dev-dependencies]
-ieestudio-core = { path = "../ieestudio-core" }
