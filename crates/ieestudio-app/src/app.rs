@@ -9,11 +9,13 @@ use egui_phosphor::regular as icon;
 use ieestudio_project::{example, Project};
 use serde::{Deserialize, Serialize};
 
+use crate::chooser;
 use crate::commands::{Command, CommandPalette};
 use crate::files::{self, Filter, Inbox, Picked, Purpose, Saved};
 use crate::guided::{self, Step};
 use crate::panels::{schedule, Shared, Viewer};
 use crate::state::{empty_project, Doc, Selection};
+use crate::symbols::Symbol;
 use crate::theme::{self, Palette, ACCENTS};
 use crate::widgets::{muted, strong, verdict_chips};
 use crate::workspace::{self, Tab, Workspace};
@@ -138,6 +140,8 @@ pub struct Options {
     pub step: Option<Step>,
     /// Empieza en la vista avanzada, con paneles.
     pub advanced: bool,
+    /// Empieza con la ventana «¿Qué vas a conectar?» abierta, para revisarla.
+    pub chooser: bool,
 }
 
 impl App {
@@ -267,6 +271,9 @@ impl App {
                 workspace::close(&mut app.dock, tab);
             }
         }
+        if options.chooser {
+            app.shared.choose_load = app.doc.panel_index();
+        }
         app
     }
 
@@ -292,7 +299,7 @@ impl App {
             Command::Undo => self.doc.undo(),
             Command::Redo => self.doc.redo(),
             Command::AddCircuit => match self.doc.panel_index() {
-                Some(p) => self.doc.add_circuit(p),
+                Some(p) => self.shared.choose_load = Some(p),
                 None => {
                     self.notice = Some("El proyecto no tiene tableros: agrega uno primero.".into())
                 }
@@ -1002,9 +1009,7 @@ impl App {
                     .clicked()
                 {
                     ui.close();
-                    if let Some(p) = panel {
-                        self.doc.add_circuit(p);
-                    }
+                    self.shared.choose_load = panel;
                 }
                 let on_circuit = matches!(self.doc.selection, Selection::Circuit(..));
                 if ui
@@ -1260,6 +1265,48 @@ impl App {
         });
     }
 
+    /// «¿Qué vas a conectar?»: agrega el circuito del tipo elegido, o un
+    /// subtablero, al tablero que la pidió.
+    fn chooser_window(&mut self, ctx: &egui::Context) {
+        let Some(panel) = self.shared.choose_load else {
+            return;
+        };
+        if panel >= self.doc.project.panels.len() {
+            self.shared.choose_load = None;
+            return;
+        }
+        let p = self.shared.palette;
+        match chooser::show(ctx, &p, &self.doc, panel) {
+            chooser::Outcome::Open => {}
+            chooser::Outcome::Cancel => self.shared.choose_load = None,
+            chooser::Outcome::Pick(symbol) => {
+                self.shared.choose_load = None;
+                match symbol {
+                    Symbol::Load(kind) => {
+                        self.doc.add_circuit_of(panel, kind);
+                        if self.guided {
+                            self.step = Step::Circuits;
+                        }
+                        // La descripción queda lista para escribir.
+                        crate::panels::properties::focus_description(ctx);
+                    }
+                    Symbol::Subpanel => {
+                        let k = self.doc.add_subpanel(panel);
+                        let panels = &self.doc.project.panels;
+                        self.shared.done = Some(format!(
+                            "Subtablero {} agregado desde {}: captura su alimentador.",
+                            panels[k].id, panels[panel].id
+                        ));
+                        // Su alimentador se captura en la ficha del tablero.
+                        if self.guided {
+                            self.step = Step::Panels;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn shortcuts(&mut self, ctx: &egui::Context) {
         use egui::{Key, KeyboardShortcut, Modifiers};
         let pressed = |m: Modifiers, k: Key| {
@@ -1493,7 +1540,7 @@ impl eframe::App for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.pending = Some(Pending::Quit);
         }
-        if self.pending.is_none() {
+        if self.pending.is_none() && self.shared.choose_load.is_none() {
             self.shortcuts(&ctx);
         }
         self.receive();
@@ -1588,6 +1635,7 @@ impl eframe::App for App {
                 self.run_command(command);
             }
         }
+        self.chooser_window(&ctx);
         self.about_window(&ctx);
         self.confirm_window(&ctx);
         self.import_window(&ctx);

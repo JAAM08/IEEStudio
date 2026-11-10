@@ -695,7 +695,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         None => {}
     }
     match action {
-        Some(Action::Add) => doc.add_circuit(panel_index),
+        Some(Action::Add) => shared.choose_load = Some(panel_index),
         Some(Action::Balance) => {
             shared.done = Some(match doc.balance_phases(panel_index) {
                 Some((before, after)) => {

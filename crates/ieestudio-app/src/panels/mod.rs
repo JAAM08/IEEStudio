@@ -31,6 +31,9 @@ pub struct Shared {
     /// Panel que otro panel pidió abrir, por ejemplo el procedimiento desde
     /// la barra contextual del cuadro de cargas.
     pub open_tab: Option<Tab>,
+    /// Tablero al que se va a agregar un circuito: mientras tenga valor está
+    /// abierta la ventana «¿Qué vas a conectar?».
+    pub choose_load: Option<usize>,
 }
 
 impl Shared {
@@ -45,6 +48,7 @@ impl Shared {
             quick: quick::QuickView::default(),
             done: None,
             open_tab: None,
+            choose_load: None,
             preview: report::Preview::default(),
         }
     }
