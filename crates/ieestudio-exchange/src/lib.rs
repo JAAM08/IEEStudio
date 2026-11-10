@@ -489,11 +489,14 @@ pub fn import_xlsx(project: &mut Project, bytes: &[u8]) -> Result<ImportReport, 
 
 fn new_panel(id: &str) -> Panel {
     Panel {
+        board: Default::default(),
+        interrupting_ka: Default::default(),
         id: id.to_string(),
         name: format!("Tablero {id}"),
         parent: None,
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
+            interrupting_ka: Default::default(),
             length_m: 10.0,
             demand: Demand::Article220,
             demand_factor: None,

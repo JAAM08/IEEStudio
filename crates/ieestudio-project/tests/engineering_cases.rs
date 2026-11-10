@@ -66,11 +66,14 @@ fn feeder_load_cases() {
             }
         }
         project.panels = vec![Panel {
+            board: Default::default(),
+            interrupting_ka: Default::default(),
             id: "T".into(),
             name: "Tablero".into(),
             parent: None,
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
+                interrupting_ka: Default::default(),
                 length_m: 10.0,
                 demand: Demand::Article220,
                 demand_factor: None,

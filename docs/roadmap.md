@@ -60,15 +60,19 @@
   conectar?» con motor y aire acondicionado a la vista, ficha que pide
   primero los datos del equipo, símbolos por tipo y aviso en Revisar cuando
   un circuito parece motor o aire acondicionado.
+- Unifilar con el formato de un plano (decisión 0022): bloques de acometida,
+  transformador, alimentadores y protecciones, recuadro y encabezado de cada
+  tablero, símbolos por carga, subtableros abajo, filas, y modos Revisión y
+  Plano con simbología, notas y cajetín.
+- Capacidad interruptiva con la falla estimada por bus infinito (decisión
+  0023): dato de la suministradora o subestación, tolerancia de la
+  impedancia, aportación de motores a la vista, «cumple con un método
+  conservador» o «no concluyente»; datos de catálogo de acometida,
+  subestación, transformadores, tableros e interruptores, y posiciones
+  propuestas en el tablero.
 
 ## Pendiente, en orden
 
-- Unifilar con el formato de plano: simbología NMX-J-136, bloques de
-  acometida, subestación, alimentadores y protecciones (I.1 a I.4), cajetín y
-  modos Plano y Revisión.
-- Capacidad interruptiva por bus infinito con aportación de motores y datos
-  de catálogo de los interruptores; por decidir cómo cuenta en el veredicto
-  (ver la decisión 0018).
 
 - Rediseño, fases 2 y 3: tablet y teléfono, llevando la vista guiada a una
   vista por paso. Antes, una prueba en un teléfono real de egui en el
@@ -76,6 +80,11 @@
 - Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
   plantillas de circuito.
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
+- Confirmar con la NMX-J-136-ANCE-2019 los símbolos del unifilar (cotejados
+  con la edición 2007) y con el texto de la NMX-J-116-ANCE la tabla de
+  impedancias (transcrita de una lámina). Agregar la de transformadores tipo
+  pedestal (NMX-J-285).
+- Unifilar fase 3: bloques con atributos en el DXF y tamaños de hoja.
 
 Alcance de la versión 1.0: instalaciones residenciales, comerciales e
 industriales en baja tensión, con motores.

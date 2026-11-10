@@ -449,6 +449,7 @@ const COMMON_OCCUPANCIES: [&str; 3] = ["dwellings", "offices", "stores"];
 
 fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
     let mut changed = false;
+    let study = doc.result.as_ref().ok().and_then(|r| r.fault.clone());
     egui::ScrollArea::vertical()
         .id_salt("paso-proyecto")
         .auto_shrink([false, false])
@@ -551,6 +552,34 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                     });
                     ui.add_space(10.0);
                 }
+
+                egui::Frame::new()
+                    .fill(p.panel)
+                    .stroke(egui::Stroke::new(1.0, p.line))
+                    .corner_radius(8)
+                    .inner_margin(egui::Margin::symmetric(16, 12))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.label(strong("Acometida y cortocircuito"));
+                        let source = &project.source;
+                        let mut summary = Vec::new();
+                        if !source.supplier.trim().is_empty() {
+                            summary.push(source.supplier.trim().to_string());
+                        }
+                        if let Some(sub) = &source.substation {
+                            summary.push(format!("subestación de {} kVA, Z = {} %", sub.kva, sub.impedance_percent));
+                        }
+                        match &study {
+                            Some(f) => summary.push(format!("falla de {:.2} kA en el punto de conexión", f.source.total_ka)),
+                            None => summary.push("sin datos de falla: la capacidad interruptiva queda fuera de alcance".into()),
+                        }
+                        ui.label(muted(p, crate::widgets::capitalize(&summary.join(" · "))).size(12.5));
+                        egui::CollapsingHeader::new("Datos de la acometida, la subestación y la falla")
+                            .id_salt("acometida-guiado")
+                            .show(ui, |ui| {
+                                changed |= properties::source_inputs(ui, p, &mut project.source, study.as_ref());
+                            });
+                    });
 
                 ui.add_space(14.0);
                 let s = &project.settings;
@@ -1555,7 +1584,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             .id_salt("unifilar-guiado")
                             .max_height(360.0)
                             .show(ui, |ui| {
-                                if let Some(hit) = crate::panels::diagram::paint(ui, p, &diagram, zoom, None) {
+                                if let Some(hit) = crate::panels::diagram::paint(ui, p, &diagram, zoom, false, None) {
                                     doc.selection = match hit {
                                         (i, Some(c)) => Selection::Circuit(i, c),
                                         (i, None) => Selection::Feeder(i),
@@ -1590,6 +1619,16 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                     ui.label(muted(p, "Caída máxima"));
                                     ui.label(RichText::new(format!("{max:.2} %")).monospace());
                                     ui.end_row();
+                                    if let Some(f) = &panel.fault {
+                                        ui.label(muted(p, "Falla (bus infinito)"));
+                                        ui.label(RichText::new(format!("{:.2} kA", f.total_ka)).monospace())
+                                            .on_hover_text(if f.motor_ka > 0.0 {
+                                                format!("{:.2} kA más {:.3} kA de aportación de motores", f.base_ka, f.motor_ka)
+                                            } else {
+                                                "Sin motores en el proyecto".to_string()
+                                            });
+                                        ui.end_row();
+                                    }
                                 });
                             ui.add_space(10.0);
                         }

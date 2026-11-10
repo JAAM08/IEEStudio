@@ -83,6 +83,9 @@ pub struct Verdict {
     pub pending_checks: usize,
     /// Verificaciones de la norma que el programa no hace.
     pub out_of_scope: Vec<OutOfScope>,
+    /// La capacidad interruptiva se verificó con la corriente de falla
+    /// estimada por bus infinito, un método conservador (decisión 0023).
+    pub conservative_fault: bool,
 }
 
 impl Verdict {
@@ -117,7 +120,15 @@ impl Verdict {
             failed_checks: failed,
             pending_checks: pending,
             out_of_scope: Vec::new(),
+            conservative_fault: false,
         }
+    }
+
+    /// Marca que la capacidad interruptiva se verificó por bus infinito.
+    pub fn with_conservative_fault(mut self) -> Self {
+        self.conservative_fault = true;
+        self.out_of_scope.clear();
+        self
     }
 
     /// Agrega las verificaciones fuera del alcance del programa.
@@ -165,6 +176,9 @@ impl Verdict {
                 match self.out_of_scope_text() {
                     Some(note) => format!(
                         "Conforme en lo evaluado con {profile_code}: lo que el programa verifica cumple y nada quedó sin evaluar. {note}"
+                    ),
+                    None if self.conservative_fault => format!(
+                        "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar. La capacidad interruptiva se verificó con un método conservador (bus infinito)."
                     ),
                     None => format!(
                         "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar."

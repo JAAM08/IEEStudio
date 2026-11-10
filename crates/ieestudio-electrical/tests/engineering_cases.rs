@@ -7,6 +7,9 @@ use ieestudio_core::{
 };
 use ieestudio_electrical::conduit::{size_conduit, ConductorGroup, ConduitInput, Covering};
 use ieestudio_electrical::current::nominal_current;
+use ieestudio_electrical::fault::{
+    effective_impedance_pu, infinite_bus_current, transformer_full_load_current,
+};
 use ieestudio_electrical::sizing::{select_conductor, SizingInput};
 use ieestudio_electrical::voltage_drop::{voltage_drop, VoltageDropInput};
 use ieestudio_rules::csv::{parse, Row};
@@ -398,4 +401,32 @@ fn motor_cases() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Corriente de falla por bus infinito (decisión 0023).
+#[test]
+fn fault_current_cases() {
+    let rows = parse(
+        "fault_current.csv",
+        &fixture("fault_current.csv"),
+        |r: &Row| {
+            (
+                r.text("id"),
+                r.get::<f64>("kva"),
+                r.get::<f64>("voltage_v"),
+                r.get::<u32>("phases"),
+                r.get::<f64>("impedance_percent"),
+                r.get::<f64>("tolerance"),
+                r.get::<f64>("expected_full_load_a"),
+                r.get::<f64>("expected_fault_a"),
+            )
+        },
+    );
+    assert!(rows.len() >= 4);
+    for (id, kva, v, phases, z, tol, full_load, fault) in rows {
+        let i = transformer_full_load_current(kva, v, phases == 3).unwrap();
+        assert!((i - full_load).abs() <= 0.01, "{id}: In {i}");
+        let icc = infinite_bus_current(i, effective_impedance_pu(z, tol).unwrap()).unwrap();
+        assert!((icc - fault).abs() <= 0.5, "{id}: Icc {icc}");
+    }
 }

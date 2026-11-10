@@ -7,8 +7,10 @@ pub mod balance;
 mod calc;
 mod demand;
 pub mod example;
+pub mod fault;
 mod model;
 mod motors;
+pub mod positions;
 mod procedure;
 pub mod quick;
 mod transformer;
@@ -20,8 +22,9 @@ pub use calc::{
 };
 pub use demand::DemandLine;
 pub use model::{
-    Area, Circuit, CompressorLoad, Demand, Feeder, Load, LoadKind, MotorLoad, Overrides, Panel,
-    Phase, Project, ProjectInfo, Settings, Source, Transformer, FORMAT_VERSION,
+    Area, Board, BreakerData, Circuit, CompressorLoad, Connection, Demand, Feeder, Load, LoadKind,
+    MotorLoad, Mounting, Overrides, Panel, Phase, Project, ProjectInfo, Settings, Source,
+    SourceFault, Substation, Transformer, FORMAT_VERSION,
 };
 pub use motors::hp_label;
 pub use procedure::{insulation_name, material_name, size_label, Step};

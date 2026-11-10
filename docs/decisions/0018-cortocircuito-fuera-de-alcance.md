@@ -1,7 +1,8 @@
 # 0018. El cortocircuito sale de IEEStudio y pasa a la suite
 
 **Estado:** aceptada (noviembre de 2026). Sustituye a la 0013 y al punto de
-cortocircuito de la 0016.
+cortocircuito de la 0016. La 0023 agrega una estimación conservadora por bus
+infinito cuando hay datos de la fuente.
 
 ## Contexto
 

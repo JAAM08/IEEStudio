@@ -119,6 +119,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
 
 fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     let mut changed = false;
+    let study = doc.result.as_ref().ok().and_then(|r| r.fault.clone());
     let project = &mut doc.project;
     section(ui, p, "Proyecto");
     property(ui, p, "Nombre", |ui| {
@@ -168,6 +169,8 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Sistema", |ui| {
         changed |= combo(ui, "sistema", &mut project.source.system, &SYSTEMS);
     });
+    section(ui, p, "Acometida y cortocircuito");
+    changed |= source_inputs(ui, p, &mut project.source, study.as_ref());
 
     section(ui, p, "Criterios de diseño");
     changed |= criteria_inputs(ui, p, &mut project.settings);
@@ -250,6 +253,19 @@ pub(crate) fn criteria_inputs(
 
 pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> bool {
     let mut changed = false;
+    let fault = doc.panel_result(i).and_then(|r| r.fault.clone());
+    let motors = doc
+        .result
+        .as_ref()
+        .ok()
+        .and_then(|r| r.fault.as_ref())
+        .and_then(|f| f.motors.clone());
+    // El interruptor del alimentador está en el tablero de donde sale.
+    let upstream_ka = doc.project.panels[i]
+        .parent
+        .as_ref()
+        .and_then(|id| doc.project.panels.iter().find(|x| &x.id == id))
+        .and_then(|x| x.board.interrupting_ka);
     let others = doc.feeder_candidates(i);
     let source_name = doc.project.source.name.clone();
     let settings = doc.project.settings.clone();
@@ -310,6 +326,32 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
     changed |= ui
         .checkbox(&mut panel.feeder.has_neutral, "Lleva neutro")
         .changed();
+    egui::CollapsingHeader::new(
+        RichText::new("Interruptor del alimentador (catálogo)").color(p.ink2),
+    )
+    .id_salt(("interruptor-alimentador", i))
+    .show(ui, |ui| {
+        changed |= breaker_inputs(
+            ui,
+            p,
+            &format!("alim{i}"),
+            &mut panel.feeder.overrides,
+            upstream_ka,
+        );
+    });
+
+    section(ui, p, "Tablero (catálogo)");
+    changed |= board_inputs(ui, p, &mut panel.board);
+    if let Some(bus) = &fault {
+        ui.add_space(4.0);
+        fault_box(
+            ui,
+            p,
+            &format!("Corriente de falla en las barras de {}", panel.id),
+            bus,
+            motors.as_ref(),
+        );
+    }
 
     section(ui, p, "Transformador");
     let mut has_transformer = panel.transformer.is_some();
@@ -319,6 +361,9 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         .changed()
     {
         panel.transformer = has_transformer.then(|| ieestudio_project::Transformer {
+            brand: Default::default(),
+            connection: Default::default(),
+            mounting: Default::default(),
             kva: 45.0,
             impedance_percent: 3.0,
             secondary: ieestudio_core::System::WYE_220_127,
@@ -340,10 +385,45 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         property(ui, p, "Secundario", |ui| {
             changed |= combo(ui, "sistema-secundario", &mut t.secondary, &SYSTEMS);
         });
+        property(ui, p, "Conexión", |ui| {
+            changed |= optional_combo(
+                ui,
+                ("conexion-transformador", i),
+                &mut t.connection,
+                &ieestudio_project::Connection::ALL,
+                ieestudio_project::Connection::label,
+            );
+        });
+        property(ui, p, "Montaje", |ui| {
+            changed |= optional_combo(
+                ui,
+                ("montaje-transformador", i),
+                &mut t.mounting,
+                &ieestudio_project::Mounting::ALL,
+                ieestudio_project::Mounting::label,
+            );
+        });
+        changed |= text_property(ui, p, "Marca", &mut t.brand, "Opcional");
         changed |= ui
             .checkbox(&mut t.secondary_protection, "Interruptor en el secundario")
             .on_hover_text("Con protección en el secundario (máximo 125 %) el primario puede protegerse hasta el 250 % (Tabla 450-3(b)).")
             .changed();
+        if t.secondary_protection {
+            let board_ka = panel.board.interrupting_ka;
+            egui::CollapsingHeader::new(
+                RichText::new("Interruptor del secundario (catálogo)").color(p.ink2),
+            )
+            .id_salt(("interruptor-secundario", i))
+            .show(ui, |ui| {
+                changed |= breaker_inputs(
+                    ui,
+                    p,
+                    &format!("sec{i}"),
+                    &mut t.secondary_overrides,
+                    board_ka,
+                );
+            });
+        }
         if ui
             .button(format!("{} Conductores del secundario", icon::ARROW_RIGHT))
             .clicked()
@@ -538,6 +618,7 @@ pub(crate) fn circuit_form(
         phases_for(CircuitKind::ThreePhase),
     ];
     let focus = take_focus_description(ui.ctx());
+    let board_ka = doc.project.panels[i].board.interrupting_ka;
     let circuit = &mut doc.project.panels[i].circuits[c];
     if !guided {
         section(ui, p, "Circuito");
@@ -662,6 +743,8 @@ pub(crate) fn circuit_form(
         changed |= number(ui, &mut circuit.length_m, 0.5, 0.0, 5000.0, " m");
     });
     if !guided {
+        section(ui, p, "Interruptor (catálogo)");
+        changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
         changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
         return changed;
     }
@@ -687,6 +770,18 @@ pub(crate) fn circuit_form(
         }
         changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
     });
+    egui::CollapsingHeader::new(RichText::new("Interruptor (catálogo)").color(p.ink2))
+        .id_salt(("catalogo", i, c))
+        .show(ui, |ui| {
+            ui.label(
+                muted(
+                    p,
+                    "Marco, capacidad interruptiva, modelo, marca y posición: aparecen en el unifilar.",
+                )
+                .size(11.0),
+            );
+            changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
+        });
     changed
 }
 
@@ -747,6 +842,343 @@ pub fn focus_description(ctx: &egui::Context) {
 fn take_focus_description(ctx: &egui::Context) -> bool {
     ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new("enfocar-descripcion")))
         .unwrap_or(false)
+}
+
+/// Lista de opciones con «Sin dato», para un valor opcional.
+fn optional_combo<T: PartialEq + Copy>(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: &mut Option<T>,
+    options: &[T],
+    label: impl Fn(T) -> &'static str,
+) -> bool {
+    let mut changed = false;
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(value.map_or("Sin dato", &label))
+        .show_ui(ui, |ui| {
+            changed |= ui.selectable_value(value, None, "Sin dato").changed();
+            for &option in options {
+                changed |= ui
+                    .selectable_value(value, Some(option), label(option))
+                    .changed();
+            }
+        });
+    changed
+}
+
+fn text_property(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    label: &str,
+    value: &mut String,
+    hint: &str,
+) -> bool {
+    let mut changed = false;
+    property(ui, p, label, |ui| {
+        changed |= ui
+            .add(
+                egui::TextEdit::singleline(value)
+                    .hint_text(hint)
+                    .desired_width(150.0),
+            )
+            .changed();
+    });
+    changed
+}
+
+/// Acometida: suministradora, frecuencia, medidor, subestación y corriente
+/// de falla (requisitos I.1 e I.2 del unifilar y decisión 0023).
+pub(crate) fn source_inputs(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    source: &mut ieestudio_project::Source,
+    study: Option<&ieestudio_project::fault::FaultStudy>,
+) -> bool {
+    let mut changed = false;
+    changed |= text_property(ui, p, "Suministradora", &mut source.supplier, "CFE");
+    property(ui, p, "Frecuencia", |ui| {
+        changed |= optional_number(ui, &mut source.frequency_hz, 60.0, " Hz");
+    });
+    changed |= ui
+        .checkbox(&mut source.meter, "Medidor en el punto de conexión")
+        .changed();
+    property(ui, p, "Falla disponible", |ui| {
+        changed |= optional_number(ui, &mut source.fault.available_ka, 10.0, " kA");
+    })
+    .on_hover_text("Corriente de cortocircuito en el punto de conexión, si la da la suministradora. Manda sobre la que se estima con la subestación.");
+    let mut has_substation = source.substation.is_some();
+    if ui
+        .checkbox(&mut has_substation, "Se alimenta de una subestación (media tensión)")
+        .on_hover_text("El transformador que alimenta la instalación, propio o de la suministradora. Con su potencia e impedancia se estima la corriente de falla por bus infinito.")
+        .changed()
+    {
+        source.substation = has_substation.then(|| ieestudio_project::Substation {
+            impedance_from_table: Default::default(),
+            kva: 112.5,
+            impedance_percent: 3.0,
+            primary_kv: Some(13.2),
+            connection: None,
+            mounting: None,
+            brand: String::new(),
+        });
+        changed = true;
+    }
+    if let Some(sub) = source.substation.as_mut() {
+        property(ui, p, "Potencia", |ui| {
+            changed |= number(ui, &mut sub.kva, 1.0, 1.0, 100_000.0, " kVA");
+        });
+        if !sub.impedance_from_table {
+            property(ui, p, "Impedancia", |ui| {
+                changed |= number(ui, &mut sub.impedance_percent, 0.1, 0.5, 20.0, " %");
+            })
+            .on_hover_text("La de placa. Se reduce por la tolerancia de fabricación antes de calcular la falla.");
+        }
+        changed |= ui
+            .checkbox(&mut sub.impedance_from_table, "Sin dato de placa: usar la mínima de la norma")
+            .on_hover_text("Toma la impedancia mínima de la Tabla 11 de la NMX-J-116-ANCE para el tipo, la potencia y la tensión del transformador. Ya incluye la tolerancia y da la falla mayor.")
+            .changed();
+        property(ui, p, "Primario", |ui| {
+            changed |= optional_number(ui, &mut sub.primary_kv, 13.2, " kV");
+        });
+        property(ui, p, "Conexión", |ui| {
+            changed |= optional_combo(
+                ui,
+                "conexion-subestacion",
+                &mut sub.connection,
+                &ieestudio_project::Connection::ALL,
+                ieestudio_project::Connection::label,
+            );
+        });
+        property(ui, p, "Montaje", |ui| {
+            changed |= optional_combo(
+                ui,
+                "montaje-subestacion",
+                &mut sub.mounting,
+                &ieestudio_project::Mounting::ALL,
+                ieestudio_project::Mounting::label,
+            );
+        });
+        changed |= text_property(ui, p, "Marca", &mut sub.brand, "Opcional");
+    }
+    if source
+        .substation
+        .as_ref()
+        .is_some_and(|s| s.impedance_from_table)
+    {
+        let profile = Profile::nom_001_sede_2012();
+        match ieestudio_project::fault::substation_impedance(profile, source) {
+            Ok(z) => {
+                ui.label(
+                    muted(
+                        p,
+                        format!(
+                            "Impedancia de la tabla: {z} % ({}).",
+                            profile.clause(ieestudio_rules::Rule::TransformerImpedanceLimits)
+                        ),
+                    )
+                    .size(11.5),
+                );
+            }
+            Err(why) => {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("{} Sin impedancia: {why}.", icon::WARNING))
+                            .color(p.warn)
+                            .size(12.0),
+                    )
+                    .wrap(),
+                );
+            }
+        }
+    }
+    if let Some(study) = study {
+        ui.add_space(6.0);
+        fault_box(
+            ui,
+            p,
+            "Corriente de falla en el punto de conexión",
+            &study.source,
+            study.motors.as_ref(),
+        );
+    } else {
+        ui.label(
+            muted(
+                p,
+                "Sin la falla de la suministradora ni la subestación, la capacidad interruptiva queda fuera de alcance.",
+            )
+            .size(11.0),
+        );
+    }
+    changed
+}
+
+/// Recuadro con la corriente de falla de unas barras: de dónde sale, la
+/// aportación de los motores a la vista y el procedimiento.
+pub(crate) fn fault_box(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    title: &str,
+    bus: &ieestudio_project::fault::BusFault,
+    motors: Option<&ieestudio_project::fault::MotorContribution>,
+) {
+    use ieestudio_project::fault::FaultOrigin;
+    egui::Frame::new()
+        .fill(p.bg)
+        .stroke(egui::Stroke::new(1.0, p.line))
+        .corner_radius(6)
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(title).size(11.5).color(p.ink2));
+            ui.label(
+                RichText::new(format!("{} {:.2} kA", icon::LIGHTNING, bus.total_ka))
+                    .size(16.0)
+                    .strong(),
+            );
+            let origin = match &bus.origin {
+                FaultOrigin::Supplier => "Dato de la suministradora.".to_string(),
+                FaultOrigin::Substation => {
+                    "Bus infinito del transformador de la acometida: la red se toma sin impedancia, así que es la corriente mayor posible.".to_string()
+                }
+                FaultOrigin::Transformer { panel } => format!(
+                    "Bus infinito del transformador de {panel}: es la corriente mayor posible en su secundario."
+                ),
+            };
+            ui.add(egui::Label::new(muted(p, origin).size(11.5)).wrap());
+            if let Some(m) = motors.filter(|_| bus.motor_ka > 0.0) {
+                // La aportación de los motores, a la vista.
+                let response = egui::Frame::new()
+                    .fill(p.accent.gamma_multiply(0.10))
+                    .stroke(egui::Stroke::new(1.0, p.accent.gamma_multiply(0.5)))
+                    .corner_radius(5)
+                    .inner_margin(egui::Margin::symmetric(8, 6))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.label(
+                            RichText::new(format!(
+                                "{} Incluye la aportación de {}",
+                                icon::ENGINE,
+                                if m.motors.len() == 1 {
+                                    "1 motor".to_string()
+                                } else {
+                                    format!("{} motores", m.motors.len())
+                                }
+                            ))
+                            .color(p.accent_text)
+                            .strong(),
+                        );
+                        let currents: Vec<String> =
+                            m.motors.iter().map(|s| format!("{:.2}", s.full_load_a)).collect();
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(format!(
+                                    "{} × ({}) A = {:.1} A → {:.2} + {:.3} = {:.2} kA",
+                                    m.multiplier,
+                                    currents.join(" + "),
+                                    m.total_a,
+                                    bus.base_ka,
+                                    bus.motor_ka,
+                                    bus.total_ka
+                                ))
+                                .monospace()
+                                .size(11.5),
+                            )
+                            .wrap(),
+                        );
+                        ui.label(
+                            muted(
+                                p,
+                                "Los motores en marcha también alimentan la falla. Se suma su corriente a plena carga multiplicada, en todos los tableros.",
+                            )
+                            .size(11.0),
+                        );
+                    })
+                    .response;
+                let list: Vec<String> = m
+                    .motors
+                    .iter()
+                    .map(|s| format!("• {}: {:.2} A", s.label, s.full_load_a))
+                    .collect();
+                response.on_hover_text(format!(
+                    "Motores y compresores que aportan:\n{}\n\nMultiplicador {} (perfil). Es una cota superior: un motor lejano aporta menos.",
+                    list.join("\n"),
+                    m.multiplier
+                ));
+            }
+            egui::CollapsingHeader::new(RichText::new("Cómo se calculó").size(12.0).color(p.ink2))
+                .id_salt(("falla", title))
+                .show(ui, |ui| {
+                    crate::widgets::steps_ui(ui, p, ("pasos-falla", bus.total_ka.to_bits()), &bus.steps, None);
+                });
+        });
+}
+
+/// Datos de catálogo de un interruptor y su posición en el tablero.
+pub(crate) fn breaker_inputs(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    id: &str,
+    ov: &mut Overrides,
+    board_ka: Option<f64>,
+) -> bool {
+    let mut changed = false;
+    let data = &mut ov.breaker;
+    property(ui, p, "Marco", |ui| {
+        changed |= optional_number(ui, &mut data.frame_a, 100.0, " A");
+    })
+    .on_hover_text("Amperes de marco (AM). Los de disparo (AD) son los del interruptor que propone o verifica IEEStudio.");
+    property(ui, p, "Cap. interruptiva", |ui| {
+        changed |= optional_number(ui, &mut data.interrupting_ka, 10.0, " kA");
+        if data.interrupting_ka.is_none() {
+            if let Some(ka) = board_ka {
+                ui.label(muted(p, format!("{ka} kA del tablero")).size(11.0));
+            }
+        }
+    })
+    .on_hover_text("Se compara con la corriente de falla de las barras de donde sale. Sin dato toma la del tablero.");
+    changed |= text_property(ui, p, "Modelo", &mut data.model, "QOB120");
+    changed |= text_property(ui, p, "Marca", &mut data.brand, "Opcional");
+    changed |= text_property(
+        ui,
+        p,
+        "Ajuste",
+        &mut data.trip_range,
+        "Electrónicos: 0.4–1.0 In",
+    );
+    let mut position = ov.position.clone().unwrap_or_default();
+    property(ui, p, "Posición", |ui| {
+        if ui
+            .add(
+                egui::TextEdit::singleline(&mut position)
+                    .hint_text("La propone IEEStudio")
+                    .desired_width(110.0)
+                    .id_salt(("posicion", id)),
+            )
+            .changed()
+        {
+            ov.position = (!position.trim().is_empty()).then(|| position.trim().to_string());
+            changed = true;
+        }
+    })
+    .on_hover_text("Espacios del tablero como en el unifilar: 1, 2,4 o 13,15,17. Vacía, IEEStudio la propone según las fases.");
+    changed
+}
+
+/// Datos de catálogo del tablero: barras, capacidad interruptiva, modelo y marca.
+fn board_inputs(ui: &mut egui::Ui, p: &Palette, board: &mut ieestudio_project::Board) -> bool {
+    let mut changed = false;
+    property(ui, p, "Barras", |ui| {
+        changed |= optional_number(ui, &mut board.bus_a, 225.0, " A");
+    });
+    property(ui, p, "Cap. interruptiva", |ui| {
+        changed |= optional_number(ui, &mut board.interrupting_ka, 10.0, " kA");
+    })
+    .on_hover_text(
+        "La de sus interruptores. La toma cada interruptor del tablero que no tiene la suya.",
+    );
+    changed |= text_property(ui, p, "Modelo", &mut board.model, "NQ304AB225S");
+    changed |= text_property(ui, p, "Marca", &mut board.brand, "Opcional");
+    changed
 }
 
 /// Identificador de un circuito, con el aviso si se repite.

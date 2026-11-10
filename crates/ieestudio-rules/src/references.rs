@@ -111,10 +111,16 @@ pub enum Rule {
     GroundingElectrode,
     TransformerProtection,
     TransformerSecondary,
+    /// Corriente de falla estimada por bus infinito (decisión 0023).
+    AvailableFault,
+    /// Aportación de los motores a la corriente de falla.
+    MotorFaultContribution,
+    /// Impedancia mínima de un transformador sin dato de placa.
+    TransformerImpedanceLimits,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 48] = [
+    pub const ALL: [Rule; 51] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -163,6 +169,9 @@ impl Rule {
         Rule::GroundingElectrode,
         Rule::TransformerProtection,
         Rule::TransformerSecondary,
+        Rule::AvailableFault,
+        Rule::MotorFaultContribution,
+        Rule::TransformerImpedanceLimits,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -216,6 +225,9 @@ impl Rule {
             Rule::GroundingElectrode => "grounding_electrode",
             Rule::TransformerProtection => "transformer_protection",
             Rule::TransformerSecondary => "transformer_secondary",
+            Rule::AvailableFault => "available_fault",
+            Rule::MotorFaultContribution => "motor_fault_contribution",
+            Rule::TransformerImpedanceLimits => "transformer_impedance_limits",
         }
     }
 }
@@ -266,6 +278,13 @@ pub struct Parameters {
     /// de aparatos en el alimentador para aplicarlo.
     pub appliance_demand_factor: f64,
     pub appliance_demand_min_count: u32,
+    /// Corriente de falla de los motores como múltiplo de su corriente a
+    /// plena carga (decisión 0023). Criterio de ingeniería, no de la norma.
+    pub fault_motor_multiplier: f64,
+    /// Tolerancia de la impedancia de placa de un transformador: la falla se
+    /// calcula con la impedancia reducida en esta fracción. Criterio de
+    /// ingeniería, no de la norma.
+    pub fault_impedance_tolerance: f64,
 }
 
 /// Datos de la norma de un perfil.

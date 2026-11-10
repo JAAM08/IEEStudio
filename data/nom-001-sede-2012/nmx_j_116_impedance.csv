@@ -1,0 +1,10 @@
+kind,kv_max,kva_min,kva_max,z_min,z_max
+single_phase,15,5,167,1.50,3.00
+single_phase,25,5,167,1.50,3.25
+single_phase,34.5,5,167,1.50,3.50
+pole_three_phase,15,15,150,2.00,3.00
+pole_three_phase,25,15,300,2.00,3.25
+pole_three_phase,34.5,15,150,2.00,3.50
+substation,15,225,500,2.50,5.00
+substation,25,225,500,2.75,5.50
+substation,34.5,225,500,3.00,5.75
