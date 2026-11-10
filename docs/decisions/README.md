@@ -23,10 +23,11 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0015 | [Conductores en paralelo propuestos por el programa](0015-paralelos.md) | Aceptada |
 | 0016 | [Transformadores dentro del proyecto](0016-transformador.md) | Aceptada; cortocircuito retirado por 0018 |
 | 0017 | [La aplicación en el navegador](0017-version-web.md) | Aceptada |
-| 0018 | [El cortocircuito sale de IEEStudio y pasa a la suite](0018-cortocircuito-fuera-de-alcance.md) | Aceptada |
+| 0018 | [El cortocircuito sale de IEEStudio y pasa a la suite](0018-cortocircuito-fuera-de-alcance.md) | Aceptada; ampliada por 0023 |
 | 0019 | [Rediseño de la interfaz, fase 1: escritorio](0019-rediseno-fase-1.md) | Aceptada; vale dentro de la vista avanzada |
 | 0020 | [Vista guiada en cinco pasos](0020-flujo-guiado.md) | Aceptada |
 | 0021 | [Agregar un circuito eligiendo primero qué se conecta](0021-agregar-por-tipo-de-carga.md) | Aceptada |
 | 0022 | [El unifilar con el formato de un plano eléctrico](0022-unifilar-como-plano.md) | Aceptada |
+| 0023 | [Capacidad interruptiva con la falla estimada por bus infinito](0023-falla-por-bus-infinito.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

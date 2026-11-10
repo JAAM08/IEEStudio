@@ -361,6 +361,8 @@ impl Profile {
                 receptacle_outlet_va: number("receptacle_outlet_va"),
                 appliance_demand_factor: number("appliance_demand_factor"),
                 appliance_demand_min_count: number("appliance_demand_min_count") as u32,
+                fault_motor_multiplier: number("fault_motor_multiplier"),
+                fault_impedance_tolerance: number("fault_impedance_tolerance"),
             };
             let motor_row = |columns: &'static [&'static str]| {
                 move |r: &csv::Row| MotorCurrentRow {
@@ -938,6 +940,9 @@ mod tests {
         assert_eq!(profile.kitchen_demand_percent(12), Some(65.0));
         // 220-14(i), 220-14(k) y 220-53
         assert_eq!(profile.parameters.receptacle_outlet_va, 180.0);
+        // Criterios de la estimación de falla por bus infinito (decisión 0023).
+        assert_eq!(profile.parameters.fault_motor_multiplier, 4.0);
+        assert_eq!(profile.parameters.fault_impedance_tolerance, 0.10);
         assert_eq!(profile.office_receptacle_va_per_m2("offices"), Some(11.0));
         assert_eq!(profile.office_receptacle_va_per_m2("stores"), None);
         assert_eq!(profile.parameters.appliance_demand_factor, 0.75);

@@ -11,6 +11,7 @@ los ejecutan todos.
 | `conductor_sizing.csv` | Corriente de diseño, interruptor, calibre, ampacidad permitida y puesta a tierra |
 | `conduit.csv` | Área de conductores, ocupación permitida y tamaño del tubo |
 | `motors.csv` | Corriente de motores y motocompresores, conductor, interruptor y calibre |
+| `fault_current.csv` | Corriente nominal de un transformador y corriente de falla por bus infinito, con la tolerancia de la impedancia (decisión 0023) |
 | `feeder_load.csv` | Carga del alimentador según el artículo 220: mínimas por área y factores de demanda. Las cargas de varios circuitos se separan con `;`. Los ejecuta `ieestudio-project` (`tests/engineering_cases.rs`) |
 
 Columnas comunes:

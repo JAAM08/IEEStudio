@@ -1,0 +1,5 @@
+id,description,kva,voltage_v,phases,impedance_percent,tolerance,expected_full_load_a,expected_fault_a,source,reviewed_by
+FC-01,"Transformador de 112.5 kVA, 220/127 V, Z = 3 %, sin tolerancia",112.5,220,3,3.0,0,295.24,9841.2,"Curso de proyectos eléctricos, ejemplo de bus infinito (9.84 kA)",
+FC-02,"El mismo con la impedancia reducida 10 %",112.5,220,3,3.0,0.10,295.24,10934.7,"Cálculo a mano: 9 841.2 / 0.9",
+FC-03,"Transformador de 45 kVA, 220/127 V, Z = 3 %, tolerancia 10 %",45,220,3,3.0,0.10,118.09,4373.8,"Cálculo a mano: 45 000 / (√3 · 220) / 0.027",
+FC-04,"Transformador monofásico de 25 kVA, 240/120 V, Z = 2 %, tolerancia 10 %",25,240,1,2.0,0.10,104.17,5787.0,"Cálculo a mano: 25 000 / 240 / 0.018",

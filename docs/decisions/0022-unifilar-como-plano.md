@@ -50,5 +50,5 @@ NMX-J-136-ANCE-2019.
 
 - Los símbolos siguen la lámina de referencia del curso; falta cotejarlos con
   el texto de la NMX-J-136-ANCE-2019.
-- La frecuencia, el suministrador y si hay medidor se agregan con los datos
-  de la acometida.
+- La frecuencia, el suministrador, el medidor, la subestación, los datos de
+  catálogo y las posiciones llegaron con la decisión 0023.

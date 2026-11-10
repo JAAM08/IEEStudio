@@ -116,6 +116,179 @@ impl Default for Settings {
 pub struct Source {
     pub name: String,
     pub system: System,
+    /// Compañía suministradora, para el unifilar: `CFE`.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub supplier: String,
+    /// Frecuencia del sistema en hertz, para el unifilar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_hz: Option<f64>,
+    /// Lleva medidor en el punto de conexión.
+    #[serde(default = "yes")]
+    pub meter: bool,
+    /// Transformador que alimenta la instalación: la subestación propia o el
+    /// transformador de la suministradora. Con él se estima la corriente de
+    /// falla por bus infinito.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub substation: Option<Substation>,
+    /// Corriente de falla que da la suministradora en el punto de conexión.
+    /// Si se tiene, manda sobre la que se estima con la subestación.
+    #[serde(default, skip_serializing_if = "SourceFault::is_empty")]
+    pub fault: SourceFault,
+}
+
+impl Source {
+    pub fn new(name: &str, system: System) -> Self {
+        Source {
+            name: name.to_string(),
+            system,
+            supplier: String::new(),
+            frequency_hz: None,
+            meter: true,
+            substation: None,
+            fault: SourceFault::default(),
+        }
+    }
+}
+
+/// Dato de falla de la suministradora. Los archivos de la decisión 0013 ya
+/// lo traían con este mismo nombre.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SourceFault {
+    /// Corriente de cortocircuito disponible, en kA.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub available_ka: Option<f64>,
+}
+
+impl SourceFault {
+    pub fn is_empty(&self) -> bool {
+        self.available_ka.is_none()
+    }
+}
+
+/// Transformador que alimenta la instalación desde media tensión
+/// (requisito I.2 del unifilar).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Substation {
+    pub kva: f64,
+    /// Impedancia de placa, en porciento.
+    pub impedance_percent: f64,
+    /// Tensión del primario, en kV.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary_kv: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<Connection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mounting: Option<Mounting>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub brand: String,
+}
+
+/// Conexión de los devanados de un transformador.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Connection {
+    DeltaWye,
+    WyeWye,
+    DeltaDelta,
+    WyeDelta,
+    SinglePhase,
+}
+
+impl Connection {
+    pub const ALL: [Connection; 5] = [
+        Connection::DeltaWye,
+        Connection::WyeWye,
+        Connection::DeltaDelta,
+        Connection::WyeDelta,
+        Connection::SinglePhase,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Connection::DeltaWye => "Delta – estrella",
+            Connection::WyeWye => "Estrella – estrella",
+            Connection::DeltaDelta => "Delta – delta",
+            Connection::WyeDelta => "Estrella – delta",
+            Connection::SinglePhase => "Monofásico",
+        }
+    }
+}
+
+/// Montaje de un transformador.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Mounting {
+    Pole,
+    PadMounted,
+    Substation,
+    Dry,
+}
+
+impl Mounting {
+    pub const ALL: [Mounting; 4] = [
+        Mounting::Pole,
+        Mounting::PadMounted,
+        Mounting::Substation,
+        Mounting::Dry,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Mounting::Pole => "Tipo poste",
+            Mounting::PadMounted => "Tipo pedestal",
+            Mounting::Substation => "Tipo subestación",
+            Mounting::Dry => "Tipo seco",
+        }
+    }
+}
+
+/// Datos de catálogo de un interruptor, para el unifilar (requisito I.4) y
+/// para comparar su capacidad interruptiva con la corriente de falla. No
+/// cambian el cálculo de conductores ni de protección.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BreakerData {
+    /// Amperes de marco.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_a: Option<f64>,
+    /// Capacidad interruptiva, en kA.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interrupting_ka: Option<f64>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub model: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub brand: String,
+    /// Intervalo de ajuste de un interruptor electrónico: `0.4–1.0 In`.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub trip_range: String,
+}
+
+impl BreakerData {
+    pub fn is_empty(&self) -> bool {
+        *self == BreakerData::default()
+    }
+}
+
+/// Datos de catálogo de un tablero: los de su gabinete y sus barras.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Board {
+    /// Capacidad de las barras, en amperes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bus_a: Option<f64>,
+    /// Capacidad interruptiva de los interruptores del tablero, en kA. La
+    /// toma cada interruptor que no tiene la suya.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interrupting_ka: Option<f64>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub model: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub brand: String,
+}
+
+impl Board {
+    pub fn is_empty(&self) -> bool {
+        *self == Board::default()
+    }
 }
 
 /// Fase de un sistema.
@@ -146,6 +319,14 @@ pub struct Panel {
     /// secundario.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transformer: Option<Transformer>,
+    /// Gabinete y barras: marca, modelo, capacidad y la capacidad
+    /// interruptiva de sus interruptores.
+    #[serde(default, skip_serializing_if = "Board::is_empty")]
+    pub board: Board,
+    /// Capacidad interruptiva del tablero en los archivos de la decisión
+    /// 0013. Al leerlos pasa a `board`; ya no se escribe.
+    #[serde(default, skip_serializing)]
+    pub interrupting_ka: Option<f64>,
     #[serde(default)]
     pub circuits: Vec<Circuit>,
 }
@@ -170,6 +351,12 @@ pub struct Transformer {
     pub secondary_has_neutral: bool,
     #[serde(default)]
     pub secondary_overrides: Overrides,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<Connection>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mounting: Option<Mounting>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub brand: String,
 }
 
 /// Superficie de piso que atiende un tablero.
@@ -211,6 +398,10 @@ pub struct Feeder {
     pub has_neutral: bool,
     #[serde(default)]
     pub overrides: Overrides,
+    /// Capacidad interruptiva del interruptor en los archivos de la decisión
+    /// 0013. Al leerlos pasa a `overrides.breaker`; ya no se escribe.
+    #[serde(default, skip_serializing)]
+    pub interrupting_ka: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -341,6 +532,14 @@ pub struct Overrides {
     /// omisión cada juego lleva su tubo.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub single_raceway: bool,
+    /// Datos de catálogo del interruptor: marco, capacidad interruptiva,
+    /// modelo, marca y ajuste.
+    #[serde(skip_serializing_if = "BreakerData::is_empty")]
+    pub breaker: BreakerData,
+    /// Posiciones del interruptor en el tablero, como se escriben en el
+    /// unifilar: `1`, `2,4`, `13,15,17`. Sin ella el programa las propone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<String>,
 }
 
 fn yes() -> bool {
@@ -366,6 +565,18 @@ impl Project {
                 if (factor - 1.0).abs() > 1e-9 {
                     panel.feeder.demand = Demand::Custom(factor);
                 }
+            }
+            // Capacidad interruptiva de la decisión 0013: vuelve a usarse.
+            if let Some(ka) = panel.interrupting_ka.take() {
+                panel.board.interrupting_ka.get_or_insert(ka);
+            }
+            if let Some(ka) = panel.feeder.interrupting_ka.take() {
+                panel
+                    .feeder
+                    .overrides
+                    .breaker
+                    .interrupting_ka
+                    .get_or_insert(ka);
             }
         }
         Ok(project)
@@ -401,10 +612,12 @@ mod tests {
         assert!(!read.to_json().contains("demand_factor"));
     }
 
-    /// Un archivo escrito con el cortocircuito (antes de la decisión 0018)
-    /// abre sin error; sus datos de falla se ignoran y no se vuelven a escribir.
+    /// Un archivo escrito con el cortocircuito de la decisión 0013 abre sin
+    /// error. La corriente de falla de la suministradora y la capacidad
+    /// interruptiva vuelven a usarse (decisión 0023); el factor de motores
+    /// del proyecto se ignora porque ahora es del perfil.
     #[test]
-    fn old_fault_data_is_ignored() {
+    fn old_fault_data_is_read_again() {
         let project = crate::example::house();
         let json = project
             .to_json()
@@ -427,10 +640,20 @@ mod tests {
         assert!(json.contains("motor_fault_multiplier"));
         assert!(json.contains("interrupting_ka"));
         let read = Project::from_json(&json).unwrap();
-        assert_eq!(read, project);
+        assert_eq!(read.source.fault.available_ka, Some(10.0));
+        assert_eq!(
+            read.panels[0].feeder.overrides.breaker.interrupting_ka,
+            Some(10.0)
+        );
+        assert_eq!(read.panels[0].feeder.interrupting_ka, None);
         let written = read.to_json();
-        assert!(!written.contains("fault"));
-        assert!(!written.contains("interrupting"));
+        assert!(!written.contains("motor_fault_multiplier"));
+        // Se escribe en su lugar nuevo y se vuelve a leer igual.
+        assert_eq!(Project::from_json(&written).unwrap(), read);
+        let mut again = read.clone();
+        again.source.fault = SourceFault::default();
+        again.panels[0].feeder.overrides.breaker = BreakerData::default();
+        assert_eq!(again, project);
     }
 
     #[test]
