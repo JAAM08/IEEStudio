@@ -33,35 +33,66 @@ pub fn paint(painter: &egui::Painter, rect: Rect, symbol: Symbol, color: Color32
         );
     };
     match symbol {
-        // Luminario: dos circunferencias y la cruz.
+        // Salida de lámpara incandescente (figura 4.2.52): circunferencia
+        // con cuatro rayos en diagonal.
         Symbol::Load(LoadKind::Lighting) => {
-            painter.circle_stroke(c, r * 0.8, stroke);
-            painter.circle_stroke(c, r * 0.38, stroke);
-            painter.line_segment([c - Vec2::X * r * 1.3, c + Vec2::X * r * 1.3], stroke);
-            painter.line_segment([c - Vec2::Y * r * 1.3, c + Vec2::Y * r * 1.3], stroke);
+            painter.circle_stroke(c, r * 0.72, stroke);
+            for d in [
+                Vec2::new(1.0, 1.0),
+                Vec2::new(1.0, -1.0),
+                Vec2::new(-1.0, 1.0),
+                Vec2::new(-1.0, -1.0),
+            ] {
+                painter.line_segment([c + d * r * 0.58, c + d * r * 1.0], stroke);
+            }
         }
-        // Contacto: circunferencia con una diagonal.
+        // Receptáculo sencillo (figura 4.2.27): circunferencia con dos
+        // diagonales.
         Symbol::Load(LoadKind::Receptacles) => {
             painter.circle_stroke(c, r, stroke);
-            let d = r * 0.62;
-            painter.line_segment([c + Vec2::new(-d, d), c + Vec2::new(d, -d)], stroke);
+            painter.line_segment(
+                [
+                    c + Vec2::new(-0.82, 0.33) * r,
+                    c + Vec2::new(0.33, -0.82) * r,
+                ],
+                stroke,
+            );
+            painter.line_segment(
+                [
+                    c + Vec2::new(-0.33, 0.82) * r,
+                    c + Vec2::new(0.82, -0.33) * r,
+                ],
+                stroke,
+            );
         }
+        // Motor (figura 4.2.67).
         Symbol::Load(LoadKind::Motor) => {
             painter.circle_stroke(c, r, stroke);
             letters("M", 0.42);
         }
-        // Salidas especiales: la circunferencia con sus letras.
-        Symbol::Load(LoadKind::AirConditioning) => {
+        // Salida para propósito especial (figura 4.2.60): circunferencia con
+        // un triángulo; las letras de su función van dentro para que el
+        // símbolo se lea en chico.
+        Symbol::Load(
+            kind @ (LoadKind::AirConditioning | LoadKind::Appliance | LoadKind::KitchenEquipment),
+        ) => {
             painter.circle_stroke(c, r, stroke);
-            letters("AA", 0.27);
-        }
-        Symbol::Load(LoadKind::Appliance) => {
-            painter.circle_stroke(c, r, stroke);
-            letters("AF", 0.27);
-        }
-        Symbol::Load(LoadKind::KitchenEquipment) => {
-            painter.circle_stroke(c, r, stroke);
-            letters("EC", 0.27);
+            painter.add(egui::Shape::closed_line(
+                vec![
+                    c + Vec2::new(0.0, -0.88) * r,
+                    c + Vec2::new(0.76, 0.44) * r,
+                    c + Vec2::new(-0.76, 0.44) * r,
+                ],
+                Stroke::new(width * 0.8, color.gamma_multiply(0.55)),
+            ));
+            letters(
+                match kind {
+                    LoadKind::AirConditioning => "AA",
+                    LoadKind::Appliance => "AF",
+                    _ => "EC",
+                },
+                0.24,
+            );
         }
         // Otra carga: la flecha del unifilar.
         Symbol::Load(LoadKind::General) => {

@@ -173,6 +173,10 @@ pub struct Substation {
     pub kva: f64,
     /// Impedancia de placa, en porciento.
     pub impedance_percent: f64,
+    /// Sin dato de placa: la falla se calcula con la impedancia mínima de la
+    /// norma de fabricación para su tipo, potencia y tensión.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub impedance_from_table: bool,
     /// Tensión del primario, en kV.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub primary_kv: Option<f64>,

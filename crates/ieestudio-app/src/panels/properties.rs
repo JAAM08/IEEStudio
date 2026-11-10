@@ -913,6 +913,7 @@ pub(crate) fn source_inputs(
         .changed()
     {
         source.substation = has_substation.then(|| ieestudio_project::Substation {
+            impedance_from_table: Default::default(),
             kva: 112.5,
             impedance_percent: 3.0,
             primary_kv: Some(13.2),
@@ -926,10 +927,16 @@ pub(crate) fn source_inputs(
         property(ui, p, "Potencia", |ui| {
             changed |= number(ui, &mut sub.kva, 1.0, 1.0, 100_000.0, " kVA");
         });
-        property(ui, p, "Impedancia", |ui| {
-            changed |= number(ui, &mut sub.impedance_percent, 0.1, 0.5, 20.0, " %");
-        })
-        .on_hover_text("La de placa. Si no se tiene, el valor que da la norma de fabricación del transformador para su tipo y potencia.");
+        if !sub.impedance_from_table {
+            property(ui, p, "Impedancia", |ui| {
+                changed |= number(ui, &mut sub.impedance_percent, 0.1, 0.5, 20.0, " %");
+            })
+            .on_hover_text("La de placa. Se reduce por la tolerancia de fabricación antes de calcular la falla.");
+        }
+        changed |= ui
+            .checkbox(&mut sub.impedance_from_table, "Sin dato de placa: usar la mínima de la norma")
+            .on_hover_text("Toma la impedancia mínima de la Tabla 11 de la NMX-J-116-ANCE para el tipo, la potencia y la tensión del transformador. Ya incluye la tolerancia y da la falla mayor.")
+            .changed();
         property(ui, p, "Primario", |ui| {
             changed |= optional_number(ui, &mut sub.primary_kv, 13.2, " kV");
         });
@@ -952,6 +959,37 @@ pub(crate) fn source_inputs(
             );
         });
         changed |= text_property(ui, p, "Marca", &mut sub.brand, "Opcional");
+    }
+    if source
+        .substation
+        .as_ref()
+        .is_some_and(|s| s.impedance_from_table)
+    {
+        let profile = Profile::nom_001_sede_2012();
+        match ieestudio_project::fault::substation_impedance(profile, source) {
+            Ok(z) => {
+                ui.label(
+                    muted(
+                        p,
+                        format!(
+                            "Impedancia de la tabla: {z} % ({}).",
+                            profile.clause(ieestudio_rules::Rule::TransformerImpedanceLimits)
+                        ),
+                    )
+                    .size(11.5),
+                );
+            }
+            Err(why) => {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("{} Sin impedancia: {why}.", icon::WARNING))
+                            .color(p.warn)
+                            .size(12.0),
+                    )
+                    .wrap(),
+                );
+            }
+        }
     }
     if let Some(study) = study {
         ui.add_space(6.0);
