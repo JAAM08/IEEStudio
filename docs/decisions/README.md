@@ -29,5 +29,6 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0021 | [Agregar un circuito eligiendo primero qué se conecta](0021-agregar-por-tipo-de-carga.md) | Aceptada |
 | 0022 | [El unifilar con el formato de un plano eléctrico](0022-unifilar-como-plano.md) | Aceptada |
 | 0023 | [Capacidad interruptiva con la falla estimada por bus infinito](0023-falla-por-bus-infinito.md) | Aceptada |
+| 0024 | [El sistema decide qué conexiones existen](0024-sistema-y-conexion.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

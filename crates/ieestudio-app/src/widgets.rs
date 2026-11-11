@@ -4,7 +4,7 @@ use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke};
 use egui_phosphor::regular as icon;
 use ieestudio_core::{CircuitKind, ConduitType, Insulation, Material, MotorType, System};
 use ieestudio_project::verdict::{Calculation, Compliance, Verdict};
-use ieestudio_project::{hp_label, LoadKind, Status, Step};
+use ieestudio_project::{hp_label, LoadKind, Phase, Status, Step};
 
 use crate::theme::{semibold, Palette};
 
@@ -521,5 +521,148 @@ pub fn capitalize(text: &str) -> String {
     match chars.next() {
         Some(first) => first.to_uppercase().chain(chars).collect(),
         None => String::new(),
+    }
+}
+
+/// Tensión de una conexión en un sistema, si la tiene.
+pub fn connection_voltage(kind: CircuitKind, system: System) -> Option<f64> {
+    match kind {
+        CircuitKind::LineToNeutral => system.line_to_neutral_v,
+        CircuitKind::LineToLine | CircuitKind::ThreePhase => system.line_to_line_v,
+    }
+}
+
+/// Conexión con su tensión: `1F · 127 V`, `2F · 220 V`, `3F · 220 V`.
+pub fn connection_label(kind: CircuitKind, system: System) -> String {
+    match connection_voltage(kind, system) {
+        Some(v) => format!("{}F · {v:.0} V", kind.poles()),
+        None => format!("{}F", kind.poles()),
+    }
+}
+
+/// Elige la conexión de un tramo entre las que su sistema y su tablero
+/// tienen. Si solo hay una, se muestra y no se pregunta. Una conexión
+/// guardada que ya no existe se ve marcada hasta que se elige otra.
+pub fn connection_picker(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    kind: &mut CircuitKind,
+    system: System,
+    allowed: &[CircuitKind],
+) -> bool {
+    if allowed == [*kind] {
+        ui.label(connection_label(*kind, system))
+            .on_hover_text("Es la única conexión que hay aquí.");
+        return false;
+    }
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for &option in allowed {
+            let on = *kind == option;
+            let button = egui::Button::selectable(on, connection_label(option, system));
+            if ui.add(button).clicked() && !on {
+                *kind = option;
+                changed = true;
+            }
+        }
+        if !allowed.contains(kind) {
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new(format!(
+                    "{} {}",
+                    icon::WARNING,
+                    label_of(&KINDS, *kind)
+                ))
+                .color(p.bad),
+            )
+            .on_hover_text(
+                "Esta conexión no existe en el sistema o en el tablero que alimenta este tramo. Elige una de las disponibles.",
+            );
+        }
+    });
+    changed
+}
+
+/// La misma elección que [`connection_picker`], como lista, para donde no
+/// caben los botones.
+pub fn connection_combo(
+    ui: &mut egui::Ui,
+    id: &str,
+    kind: &mut CircuitKind,
+    system: System,
+    allowed: &[CircuitKind],
+) -> bool {
+    if allowed == [*kind] {
+        ui.label(connection_label(*kind, system))
+            .on_hover_text("Es la única conexión que tiene este sistema.");
+        return false;
+    }
+    let mut changed = false;
+    egui::ComboBox::from_id_salt(id)
+        .selected_text(connection_label(*kind, system))
+        .show_ui(ui, |ui| {
+            for &option in allowed {
+                changed |= ui
+                    .selectable_value(kind, option, connection_label(option, system))
+                    .changed();
+            }
+        });
+    changed
+}
+
+/// Letras de las fases de un circuito: `A`, `AB`, `ABC`.
+pub fn phase_letters(phases: &[Phase]) -> String {
+    phases
+        .iter()
+        .map(|phase| match phase {
+            Phase::A => 'A',
+            Phase::B => 'B',
+            Phase::C => 'C',
+        })
+        .collect()
+}
+
+/// Elige a qué fases del tablero se conecta un circuito. Solo pregunta
+/// cuando hay más de una forma válida; si la conexión ocupa todas las fases
+/// del tablero, las muestra y deja el dato correcto.
+pub fn phase_picker(
+    ui: &mut egui::Ui,
+    phases: &mut Vec<Phase>,
+    panel: CircuitKind,
+    circuit: CircuitKind,
+) -> bool {
+    let choices = ieestudio_project::connection::phase_choices(panel, circuit);
+    let same = |a: &[Phase], b: &[Phase]| a.len() == b.len() && a.iter().all(|x| b.contains(x));
+    match choices.as_slice() {
+        [] => {
+            ui.label("—");
+            false
+        }
+        [only] => {
+            ui.label(phase_letters(only))
+                .on_hover_text("Ocupa todas las fases del tablero.");
+            if same(phases, only) {
+                false
+            } else {
+                *phases = only.clone();
+                true
+            }
+        }
+        _ => {
+            let mut changed = false;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                for choice in &choices {
+                    let on = same(phases, choice);
+                    let button = egui::Button::selectable(on, phase_letters(choice));
+                    if ui.add(button).clicked() && !on {
+                        *phases = choice.clone();
+                        changed = true;
+                    }
+                }
+            });
+            changed
+        }
     }
 }

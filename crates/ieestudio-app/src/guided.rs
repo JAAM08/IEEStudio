@@ -544,10 +544,42 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                         for (label, system) in row {
                             let (phases, volts) = label.split_once(' ').unwrap_or((label, ""));
                             let on = project.source.system == *system;
-                            if choice(ui, p, on, volts, phases, card) && !on {
+                            let plain = match phases {
+                                "1F-2H" => "una fase y neutro",
+                                "1F-3H" => "monofásico de tres hilos",
+                                "3F-4H" => "trifásico con neutro",
+                                _ => "trifásico sin neutro",
+                            };
+                            let detail = format!("{phases} · {plain}");
+                            if choice(ui, p, on, volts, &detail, card) && !on {
                                 project.source.system = *system;
                                 changed = true;
                             }
+                        }
+                    });
+                    ui.add_space(10.0);
+                }
+                // Cambiar el suministro con tableros ya capturados puede
+                // dejar conexiones que el sistema nuevo no tiene.
+                let stale = ieestudio_project::connection::mismatches(project).len();
+                if stale > 0 {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(
+                            RichText::new(format!(
+                                "{} {} con fases que este suministro no tiene: no se calculan hasta ajustarlos.",
+                                icon::WARNING,
+                                if stale == 1 { "Hay 1 tramo capturado".to_string() } else { format!("Hay {stale} tramos capturados") }
+                            ))
+                            .color(p.bad)
+                            .size(12.5),
+                        );
+                        if ui
+                            .button("Ajustarlos")
+                            .on_hover_text("Pasa cada tramo a la conexión más cercana que sí existe. Se puede deshacer con Ctrl+Z.")
+                            .clicked()
+                        {
+                            ieestudio_project::connection::fix(project);
+                            changed = true;
                         }
                     });
                     ui.add_space(10.0);
@@ -1681,6 +1713,13 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         }
                     });
 
+                    // Antes que nada, lo que no se puede calcular: conexiones
+                    // que el sistema no tiene.
+                    if connection_review(ui, p, doc) {
+                        ieestudio_project::connection::fix(&mut doc.project);
+                        doc.edited();
+                    }
+
                     // Primero el tipo de carga: cambia todo lo demás del circuito.
                     if let Some((selection, kind)) = kind_review(ui, p, doc) {
                         if let Selection::Circuit(i, c) = selection {
@@ -1869,6 +1908,95 @@ fn suspicious_kinds(doc: &Doc) -> Vec<(usize, usize, LoadKind)> {
         }
     }
     out
+}
+
+/// Aviso en Revisar: tramos con una conexión que su sistema o su tablero no
+/// tienen (por ejemplo, tres fases en un servicio monofásico de tres hilos).
+/// Devuelve `true` si se pidió corregirlos.
+fn connection_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> bool {
+    use ieestudio_project::connection::{bus_system, feeder_system, mismatches};
+    let items = mismatches(&doc.project);
+    if items.is_empty() {
+        return false;
+    }
+    let mut fix = false;
+    ui.add_space(20.0);
+    label_caps(
+        ui,
+        p,
+        &format!("Conexiones que no existen · {}", items.len()),
+    );
+    ui.add_space(4.0);
+    egui::Frame::new()
+        .fill(p.panel)
+        .stroke(egui::Stroke::new(1.0, p.bad.gamma_multiply(0.6)))
+        .corner_radius(8)
+        .inner_margin(egui::Margin::symmetric(14, 10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width() - 2.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::X_CIRCLE).color(p.bad).size(16.0));
+                ui.add(
+                    egui::Label::new(strong(if items.len() == 1 {
+                        "Un tramo pide una conexión que aquí no hay".to_string()
+                    } else {
+                        format!("{} tramos piden una conexión que aquí no hay", items.len())
+                    }))
+                    .wrap(),
+                );
+            });
+            ui.add(
+                egui::Label::new(
+                    muted(
+                        p,
+                        "El suministro o el tablero de donde salen no tiene esas fases, así que no se calculan. Pasa cuando se cambia el suministro o la conexión de un tablero después de capturar.",
+                    )
+                    .size(12.5),
+                )
+                .wrap(),
+            );
+            ui.add_space(2.0);
+            for m in items.iter().take(8) {
+                let panel = &doc.project.panels[m.panel];
+                let (what, system) = match m.circuit {
+                    None => (
+                        format!("Alimentador de {}", panel.id),
+                        feeder_system(&doc.project, m.panel),
+                    ),
+                    Some(c) => (
+                        format!("{} · {}", panel.circuits[c].id, panel.circuits[c].name),
+                        bus_system(&doc.project, m.panel),
+                    ),
+                };
+                let to = m.nearest.map_or("sin conexión posible".to_string(), |k| {
+                    format!("pasaría a {}", crate::widgets::connection_label(k, system))
+                });
+                ui.label(
+                    RichText::new(format!(
+                        "{what}: {} → {to}",
+                        label_of(&KINDS, m.kind)
+                    ))
+                    .size(12.5),
+                );
+            }
+            if items.len() > 8 {
+                ui.label(muted(p, format!("… y {} más", items.len() - 8)).size(12.5));
+            }
+            ui.add_space(4.0);
+            if ui
+                .add(
+                    egui::Button::new(
+                        RichText::new("Corregir todas").color(p.on_accent),
+                    )
+                    .fill(p.accent),
+                )
+                .on_hover_text("Pasa cada tramo a la conexión más cercana que sí existe y acomoda sus fases. Se puede deshacer con Ctrl+Z.")
+                .clicked()
+            {
+                fix = true;
+            }
+        });
+    fix
 }
 
 /// Aviso en Revisar: un circuito que parece motor o aire acondicionado pero

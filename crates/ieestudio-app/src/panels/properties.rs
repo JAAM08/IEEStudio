@@ -6,8 +6,7 @@ use eframe::egui::{self, RichText};
 use egui_phosphor::regular as icon;
 use ieestudio_core::{CircuitKind, Size};
 use ieestudio_project::{
-    size_label, Area, CompressorLoad, Demand, LoadKind, MotorLoad, Overrides, Phase, RunResult,
-    Status,
+    size_label, Area, CompressorLoad, Demand, LoadKind, MotorLoad, Overrides, RunResult, Status,
 };
 use ieestudio_rules::{cite_all, Profile, Rule};
 
@@ -15,9 +14,10 @@ use super::Shared;
 use crate::state::{set_load_kind, Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{
-    combo, combo_override, load_kind_hint, motor_hp_combo, muted, number, optional_number,
-    property, proposed_text, reset_button, section, source_badge, status_text, strong, Source,
-    CONDUITS, INSULATIONS, KINDS, LOAD_KINDS, MATERIALS, MOTOR_TYPES, SYSTEMS,
+    combo, combo_override, connection_picker, load_kind_hint, motor_hp_combo, muted, number,
+    optional_number, phase_picker, property, proposed_text, reset_button, section, source_badge,
+    status_text, strong, Source, CONDUITS, INSULATIONS, LOAD_KINDS, MATERIALS, MOTOR_TYPES,
+    SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -293,6 +293,8 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
     if let Some(problem) = id_problem {
         ui.label(RichText::new(format!("{} {problem}", icon::WARNING)).color(p.bad));
     }
+    let feeder_system = ieestudio_project::connection::feeder_system(&doc.project, i);
+    let feeder_kinds = ieestudio_project::connection::feeder_kinds(&doc.project, i);
     let panel = &mut doc.project.panels[i];
     property(ui, p, "Nombre", |ui| {
         changed |= ui.text_edit_singleline(&mut panel.name).changed();
@@ -318,14 +320,16 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
     });
     section(ui, p, "Alimentador");
     property(ui, p, "Conexión", |ui| {
-        changed |= combo(ui, "conexion-tablero", &mut panel.kind, &KINDS);
+        changed |= connection_picker(ui, p, &mut panel.kind, feeder_system, &feeder_kinds);
     });
     property(ui, p, "Longitud", |ui| {
         changed |= number(ui, &mut panel.feeder.length_m, 0.5, 0.0, 5000.0, " m");
     });
-    changed |= ui
-        .checkbox(&mut panel.feeder.has_neutral, "Lleva neutro")
-        .changed();
+    if panel.kind != CircuitKind::LineToNeutral && feeder_system.line_to_neutral_v.is_some() {
+        changed |= ui
+            .checkbox(&mut panel.feeder.has_neutral, "Lleva neutro")
+            .changed();
+    }
     egui::CollapsingHeader::new(
         RichText::new("Interruptor del alimentador (catálogo)").color(p.ink2),
     )
@@ -611,6 +615,8 @@ pub(crate) fn circuit_form(
     // Lo que se necesita para la conexión, antes de tomar el circuito.
     let system = doc.bus_system(i);
     let panel_kind = doc.project.panels[i].kind;
+    let allowed_kinds = ieestudio_project::connection::circuit_kinds(&doc.project, i);
+    let has_neutral = system.line_to_neutral_v.is_some();
     let phases_for = |kind| doc.default_phases(i, kind);
     let suggested = [
         phases_for(CircuitKind::LineToNeutral),
@@ -709,7 +715,7 @@ pub(crate) fn circuit_form(
     }
     section(ui, p, "Conexión");
     property(ui, p, "Conexión", |ui| {
-        if connection(ui, &mut circuit.kind, system, panel_kind) {
+        if connection_picker(ui, p, &mut circuit.kind, system, &allowed_kinds) {
             // Las fases menos cargadas del tablero para la conexión nueva.
             circuit.phases = match circuit.kind {
                 CircuitKind::LineToNeutral => suggested[0].clone(),
@@ -721,19 +727,9 @@ pub(crate) fn circuit_form(
     })
     .on_hover_text("Fases y tensión a las que se conecta la carga. Solo se pueden elegir las que tiene el tablero.");
     property(ui, p, "Fases", |ui| {
-        for (label, phase) in [("A", Phase::A), ("B", Phase::B), ("C", Phase::C)] {
-            let mut on = circuit.phases.contains(&phase);
-            if ui.checkbox(&mut on, label).changed() {
-                if on {
-                    circuit.phases.push(phase);
-                } else {
-                    circuit.phases.retain(|x| *x != phase);
-                }
-                changed = true;
-            }
-        }
+        changed |= phase_picker(ui, &mut circuit.phases, panel_kind, circuit.kind);
     });
-    if !guided && circuit.kind != ieestudio_core::CircuitKind::LineToNeutral {
+    if !guided && circuit.kind != ieestudio_core::CircuitKind::LineToNeutral && has_neutral {
         changed |= ui
             .checkbox(&mut circuit.has_neutral, "Lleva neutro")
             .changed();
@@ -763,7 +759,7 @@ pub(crate) fn circuit_form(
         );
         changed |= id_field(ui, p, &mut circuit.id, None);
         changed |= load_details(ui, p, &mut circuit.load, equipment);
-        if circuit.kind != ieestudio_core::CircuitKind::LineToNeutral {
+        if circuit.kind != ieestudio_core::CircuitKind::LineToNeutral && has_neutral {
             changed |= ui
                 .checkbox(&mut circuit.has_neutral, "Lleva neutro")
                 .changed();
@@ -782,54 +778,6 @@ pub(crate) fn circuit_form(
             );
             changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
         });
-    changed
-}
-
-/// Tensión de una conexión en el sistema del tablero, si la tiene.
-fn connection_voltage(kind: CircuitKind, system: ieestudio_core::System) -> Option<f64> {
-    match kind {
-        CircuitKind::LineToNeutral => system.line_to_neutral_v,
-        CircuitKind::LineToLine | CircuitKind::ThreePhase => system.line_to_line_v,
-    }
-}
-
-/// Conexión como botones con su tensión: `1F · 127 V`, `2F · 220 V`,
-/// `3F · 220 V`. Las que el tablero no tiene quedan desactivadas.
-fn connection(
-    ui: &mut egui::Ui,
-    kind: &mut CircuitKind,
-    system: ieestudio_core::System,
-    panel: CircuitKind,
-) -> bool {
-    let mut changed = false;
-    let rank = |k: CircuitKind| match k {
-        CircuitKind::LineToNeutral => 1,
-        CircuitKind::LineToLine => 2,
-        CircuitKind::ThreePhase => 3,
-    };
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        for option in [
-            CircuitKind::LineToNeutral,
-            CircuitKind::LineToLine,
-            CircuitKind::ThreePhase,
-        ] {
-            let voltage = connection_voltage(option, system);
-            let text = match voltage {
-                Some(v) => format!("{}F · {v:.0} V", rank(option)),
-                None => format!("{}F", rank(option)),
-            };
-            let possible = voltage.is_some() && rank(option) <= rank(panel);
-            let on = *kind == option;
-            let response = ui
-                .add_enabled(possible || on, egui::Button::selectable(on, text))
-                .on_disabled_hover_text("El tablero no tiene esta conexión.");
-            if response.clicked() && !on {
-                *kind = option;
-                changed = true;
-            }
-        }
-    });
     changed
 }
 
