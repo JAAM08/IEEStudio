@@ -93,7 +93,7 @@ El orden importa. La corrección de sistema y conexión va primero porque hoy pr
 2. **Un solo conteo de pendientes** calculado en un lugar y usado por la barra de pasos, el pie, Revisar, la Memoria y el PDF. Se cuentan asuntos por resolver, no verificaciones internas.
 3. **Dos palabras para lo que no es cumple / no cumple:** «Sin evaluar» (falta un dato o la regla no cubre el caso) y «No concluyente» (se calculó con un método conservador y no alcanza para afirmar). Quitar «no evaluado» y «pendiente» como sinónimos en la interfaz; «Pendiente» queda solo para la aprobación profesional.
 4. **Nada encimado ni cortado a 1280 px ni a 1024 px:** la barra de pasos reduce a número los pasos que no caben; la columna Estado es un icono con color, fija a la derecha, con el texto en la ayuda y en la ficha; revisar el encabezado de la vista avanzada solo para quitar los textos encimados.
-5. **Textos engañosos:** «Responsable y cédula capturados» cuando faltan → «Falta responsable y cédula»; «0 contactos» → «sin contar»; el pie del cálculo rápido muestra el estado de ese cálculo, no el del proyecto; lo que no cumple va en rojo con su icono también en la lista de la Memoria.
+5. **Textos engañosos:** «Responsable y cédula capturados» cuando faltan → «Falta responsable y cédula»; «0 contactos» → «sin contar»; el pie del cálculo rápido debe decir que su dictamen es el de ese cálculo (hoy se confunde con el del proyecto, que aparece justo debajo); lo que no cumple va en rojo con su icono también en la lista de la Memoria.
 6. **Desbalance visible:** cuando pasa del límite del perfil, es un aviso con el botón «Balancear», no letra gris.
 7. **Contraste en tema claro:** el amarillo de acento no se usa como color de texto sobre fondo claro.
 
