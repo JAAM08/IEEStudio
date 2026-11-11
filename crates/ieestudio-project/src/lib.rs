@@ -5,6 +5,7 @@
 
 pub mod balance;
 mod calc;
+pub mod connection;
 mod demand;
 pub mod example;
 pub mod fault;

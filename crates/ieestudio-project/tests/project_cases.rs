@@ -927,3 +927,58 @@ fn fault_with_the_minimum_impedance_of_the_standard() {
     assert!(result.fault.is_none());
     assert!(!result.verdict.out_of_scope.is_empty());
 }
+
+/// Un proyecto guardado con una conexión que su sistema no tiene abre y se
+/// calcula, pero ese tramo queda sin evaluar con el motivo; nunca un número.
+#[test]
+fn an_impossible_connection_is_not_evaluated() {
+    use ieestudio_project::connection::{circuit_kinds, feeder_kinds, mismatches};
+
+    let mut project = example::house();
+    project.source.system = System::SPLIT_240_120;
+    // La casa de ejemplo es trifásica: su alimentador ya no existe.
+    assert_eq!(project.panels[0].kind, CircuitKind::ThreePhase);
+    let json = project.to_json();
+    let project = Project::from_json(&json).unwrap();
+    let result = calculate(&project).unwrap();
+    let feeder = &result.panels[0].feeder;
+    assert!(feeder.run.is_none());
+    assert_eq!(feeder.status, Status::NotEvaluated);
+    assert!(feeder.checks[0].detail.contains("no tiene tres fases"));
+
+    assert_eq!(
+        feeder_kinds(&project, 0),
+        vec![CircuitKind::LineToNeutral, CircuitKind::LineToLine]
+    );
+    let found = mismatches(&project);
+    assert_eq!(found[0].circuit, None);
+    assert_eq!(found[0].nearest, Some(CircuitKind::LineToLine));
+
+    // Con el alimentador a dos fases, los circuitos de una y dos se calculan.
+    let mut fixed = project.clone();
+    fixed.panels[0].kind = CircuitKind::LineToLine;
+    assert_eq!(
+        circuit_kinds(&fixed, 0),
+        vec![CircuitKind::LineToNeutral, CircuitKind::LineToLine]
+    );
+    let result = calculate(&fixed).unwrap();
+    assert!(result.panels[0].feeder.run.is_some());
+    assert!(mismatches(&fixed).iter().all(|m| m.circuit.is_some()));
+}
+
+/// Un circuito no puede tener más fases que su tablero, ni un subtablero más
+/// que el tablero que lo alimenta.
+#[test]
+fn a_run_cannot_have_more_phases_than_its_panel() {
+    let mut project = example::house();
+    project.panels[0].kind = CircuitKind::LineToLine;
+    project.panels[0].circuits[0].kind = CircuitKind::ThreePhase;
+    let result = calculate(&project).unwrap();
+    let run = &result.panels[0].circuits[0];
+    assert!(run.run.is_none());
+    assert!(
+        run.checks[0].detail.contains("es de dos fases"),
+        "{:?}",
+        run.checks[0]
+    );
+}

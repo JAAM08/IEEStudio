@@ -379,6 +379,8 @@ fn size_run(
     system: &System,
     spec: &RunSpec,
 ) -> Result<(Run, Vec<Check>), Error> {
+    // La conexión debe existir en el sistema antes de calcular nada.
+    spec.kind.reference_voltage(system)?;
     let ov = spec.overrides;
     if ov.conductors_per_phase.is_some() || ov.size.is_some() {
         let n = ov.conductors_per_phase.unwrap_or(1);
@@ -449,7 +451,9 @@ fn size_run_n(
     let conduit_type = ov.conduit.unwrap_or(settings.conduit);
 
     // Neutro como conductor portador de corriente, 310-15(b)(5).
-    let has_neutral = spec.kind == CircuitKind::LineToNeutral || spec.has_neutral;
+    // Un sistema sin neutro no lo lleva, diga lo que diga el dato guardado.
+    let has_neutral = spec.kind == CircuitKind::LineToNeutral
+        || (spec.has_neutral && system.line_to_neutral_v.is_some());
     let neutral_counts = has_neutral
         && match spec.kind {
             CircuitKind::LineToNeutral => true,
@@ -1065,25 +1069,36 @@ impl<'a> Context<'a> {
             _ => None,
         };
         let has_load = load.connected_w > 0.0;
+        // El alimentador no puede tener más fases que el tablero que lo
+        // alimenta.
+        let upstream = panel
+            .parent
+            .as_deref()
+            .and_then(|id| project.panels.iter().find(|p| p.id == id))
+            .map_or(Ok(()), |parent| {
+                crate::connection::fits_upstream(panel.kind, parent.kind, &parent.id)
+            });
         let feeder = if has_load {
-            let mut outcome = size_run(
-                self.profile,
-                settings,
-                system,
-                &RunSpec {
-                    kind: panel.kind,
-                    power_w: demanded_w,
-                    power_factor,
-                    continuous_fraction,
-                    length_m: panel.feeder.length_m,
-                    has_neutral: panel.feeder.has_neutral,
-                    overrides: &panel.feeder.overrides,
-                    drop_limit_percent: settings.feeder_drop_limit_percent,
-                    drop_rule: Rule::FeederDrop,
-                    upstream_drop_percent,
-                    given,
-                },
-            );
+            let mut outcome = upstream.and_then(|()| {
+                size_run(
+                    self.profile,
+                    settings,
+                    system,
+                    &RunSpec {
+                        kind: panel.kind,
+                        power_w: demanded_w,
+                        power_factor,
+                        continuous_fraction,
+                        length_m: panel.feeder.length_m,
+                        has_neutral: panel.feeder.has_neutral,
+                        overrides: &panel.feeder.overrides,
+                        drop_limit_percent: settings.feeder_drop_limit_percent,
+                        drop_rule: Rule::FeederDrop,
+                        upstream_drop_percent,
+                        given,
+                    },
+                )
+            });
             // Coordinación: un interruptor de alimentador menor que el del
             // motor mayor puede dispararse cuando el motor arranca.
             if let (Ok((run, _)), Some(motor_a)) = (&outcome, motor_breaker_a) {
@@ -1264,24 +1279,27 @@ impl<'a> Context<'a> {
                     }),
                     _ => None,
                 };
-                let outcome = size_run(
-                    self.profile,
-                    settings,
-                    system,
-                    &RunSpec {
-                        kind: c.kind,
-                        power_w: c.load.power_w,
-                        power_factor: c.load.power_factor,
-                        continuous_fraction: if c.load.continuous { 1.0 } else { 0.0 },
-                        length_m: c.length_m,
-                        has_neutral: c.has_neutral,
-                        overrides: &c.overrides,
-                        drop_limit_percent: settings.branch_drop_limit_percent,
-                        drop_rule: Rule::BranchDrop,
-                        upstream_drop_percent: panel_drop_percent,
-                        given,
-                    },
-                );
+                let outcome = crate::connection::fits_upstream(c.kind, panel.kind, &panel.id)
+                    .and_then(|()| {
+                        size_run(
+                            self.profile,
+                            settings,
+                            system,
+                            &RunSpec {
+                                kind: c.kind,
+                                power_w: c.load.power_w,
+                                power_factor: c.load.power_factor,
+                                continuous_fraction: if c.load.continuous { 1.0 } else { 0.0 },
+                                length_m: c.length_m,
+                                has_neutral: c.has_neutral,
+                                overrides: &c.overrides,
+                                drop_limit_percent: settings.branch_drop_limit_percent,
+                                drop_rule: Rule::BranchDrop,
+                                upstream_drop_percent: panel_drop_percent,
+                                given,
+                            },
+                        )
+                    });
                 let mut extra = match motor {
                     Some(Ok(m)) => m.checks,
                     Some(Err(e)) => vec![Check {

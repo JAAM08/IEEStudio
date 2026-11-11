@@ -290,7 +290,8 @@ fn protection(
 
     // Tubería: fases y neutro del calibre elegido, más la tierra desnuda. Con
     // paralelos, un juego completo por tubo.
-    let has_neutral = input.kind == CircuitKind::LineToNeutral || input.has_neutral;
+    let has_neutral = input.kind == CircuitKind::LineToNeutral
+        || (input.has_neutral && input.system.line_to_neutral_v.is_some());
     let mut groups = vec![ConductorGroup {
         count: poles(input.kind) + u32::from(has_neutral),
         size: input.size.clone(),

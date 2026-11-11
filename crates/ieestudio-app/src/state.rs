@@ -232,24 +232,7 @@ impl Doc {
     /// Sistema de las barras de un tablero: el de la fuente o el del
     /// secundario del transformador más cercano aguas arriba.
     pub fn bus_system(&self, panel: usize) -> System {
-        let panels = &self.project.panels;
-        let mut at = panel;
-        // Cada paso sube un tablero; el proyecto calculado no tiene ciclos,
-        // pero el límite evita quedarse aquí si los tuviera.
-        for _ in 0..=panels.len() {
-            if let Some(t) = &panels[at].transformer {
-                return t.secondary;
-            }
-            match panels[at]
-                .parent
-                .as_ref()
-                .and_then(|id| panels.iter().position(|p| &p.id == id))
-            {
-                Some(parent) => at = parent,
-                None => break,
-            }
-        }
-        self.project.source.system
+        ieestudio_project::connection::bus_system(&self.project, panel)
     }
 
     /// Clave estable de la selección, para recordar qué grupos se abrieron.
@@ -327,11 +310,16 @@ impl Doc {
     pub fn add_circuit_of(&mut self, panel: usize, kind: LoadKind) {
         let id = self.free_circuit_id(panel);
         // El aire acondicionado suele ir entre fases cuando el tablero las tiene.
-        let two_phases = self.project.panels[panel].kind != CircuitKind::LineToNeutral
-            && self.bus_system(panel).line_to_line_v.is_some();
+        let two_phases = ieestudio_project::connection::circuit_kinds(&self.project, panel)
+            .contains(&CircuitKind::LineToLine);
+        let allowed = ieestudio_project::connection::circuit_kinds(&self.project, panel);
         let circuit_kind = match kind {
             LoadKind::AirConditioning if two_phases => CircuitKind::LineToLine,
-            _ => CircuitKind::LineToNeutral,
+            // En un sistema sin neutro no hay circuitos de una fase.
+            _ => allowed
+                .first()
+                .copied()
+                .unwrap_or(CircuitKind::LineToNeutral),
         };
         let phases = self.default_phases(panel, circuit_kind);
         let name = match kind {

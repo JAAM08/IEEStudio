@@ -230,3 +230,22 @@ fn quick_circuit_goes_to_the_project() {
     close(c.load.power_w, 34_294.6, 0.1);
     assert_eq!(c.overrides.conductors_per_phase, Some(2));
 }
+
+/// El caso que reportó el dueño del proyecto: sistema monofásico de tres
+/// hilos con «3 fases». No debe salir un número.
+#[test]
+fn three_phases_on_a_split_phase_system_is_an_error() {
+    let input = QuickInput {
+        system: System::SPLIT_240_120,
+        kind: CircuitKind::ThreePhase,
+        power_w: 61_700.0,
+        ..QuickInput::default()
+    };
+    let error = quick_circuit(Profile::nom_001_sede_2012(), &input).unwrap_err();
+    assert!(error.contains("no tiene tres fases"), "{error}");
+    let two = QuickInput {
+        kind: CircuitKind::LineToLine,
+        ..input
+    };
+    assert!(quick_circuit(Profile::nom_001_sede_2012(), &two).is_ok());
+}

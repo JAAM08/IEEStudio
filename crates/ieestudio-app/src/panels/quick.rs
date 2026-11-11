@@ -18,6 +18,9 @@ pub struct QuickView {
     result: Result<QuickResult, String>,
     /// El usuario pidió pasar el circuito al proyecto abierto.
     send: bool,
+    /// Aviso de que la conexión cambió sola porque el sistema nuevo no
+    /// tenía la anterior.
+    moved: Option<String>,
 }
 
 impl Default for QuickView {
@@ -28,6 +31,7 @@ impl Default for QuickView {
             input,
             result,
             send: false,
+            moved: None,
         }
     }
 }
@@ -118,7 +122,7 @@ impl QuickView {
         let mut changed = false;
         egui::Panel::left("rapido-datos")
             .frame(side)
-            .default_size(270.0)
+            .default_size(290.0)
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| changed |= self.inputs(ui, p));
             });
@@ -156,6 +160,7 @@ impl QuickView {
     fn inputs(&mut self, ui: &mut egui::Ui, p: &Palette) -> bool {
         let muted = |t: &str| RichText::new(t).color(p.ink2);
         let input = &mut self.input;
+        let moved = &mut self.moved;
         let mut changed = false;
         ui.label(caption(p, "Cálculo rápido"));
         ui.label(
@@ -176,9 +181,45 @@ impl QuickView {
                 changed |= combo(ui, "rapido-sistema", &mut input.system, &SYSTEMS);
                 ui.end_row();
 
+                // El sistema ya dice qué conexiones hay: solo se ofrecen esas,
+                // y si la elegida deja de existir se pasa a la más cercana.
+                let allowed = input.system.kinds();
+                if !allowed.contains(&input.kind) {
+                    if let Some(kind) =
+                        ieestudio_project::connection::nearest_kind(&allowed, input.kind)
+                    {
+                        *moved = Some(format!(
+                            "{} no tiene {}; la conexión pasó a {}.",
+                            crate::widgets::label_of(&SYSTEMS, input.system),
+                            crate::widgets::label_of(&KINDS, input.kind),
+                            crate::widgets::connection_label(kind, input.system)
+                        ));
+                        input.kind = kind;
+                        changed = true;
+                    }
+                }
                 ui.label(muted("Conexión"));
-                changed |= combo(ui, "rapido-conexion", &mut input.kind, &KINDS);
+                let picked = crate::widgets::connection_combo(
+                    ui,
+                    "rapido-conexion",
+                    &mut input.kind,
+                    input.system,
+                    &allowed,
+                );
+                if picked {
+                    *moved = None;
+                }
+                changed |= picked;
                 ui.end_row();
+                if let Some(text) = moved.as_deref() {
+                    ui.label("");
+                    ui.add(egui::Label::new(RichText::new(text).color(p.warn).size(11.5)).wrap());
+                    ui.end_row();
+                }
+                if input.system.line_to_neutral_v.is_none() && input.has_neutral {
+                    input.has_neutral = false;
+                    changed = true;
+                }
 
                 ui.label(muted("Carga en"));
                 // 0: watts, 1: amperes, 2: motor por su potencia en hp.
@@ -304,7 +345,9 @@ impl QuickView {
                 changed |= combo(ui, "rapido-tubo", &mut input.conduit, &CONDUITS);
                 ui.end_row();
 
-                if input.kind != ieestudio_core::CircuitKind::LineToNeutral {
+                if input.kind != ieestudio_core::CircuitKind::LineToNeutral
+                    && input.system.line_to_neutral_v.is_some()
+                {
                     ui.label(muted("Neutro"));
                     changed |= ui
                         .checkbox(&mut input.has_neutral, "Lleva neutro")

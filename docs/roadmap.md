@@ -70,6 +70,11 @@
   conservador» o «no concluyente»; datos de catálogo de acometida,
   subestación, transformadores, tableros e interruptores, y posiciones
   propuestas en el tablero.
+- Sistema y conexión coherentes (decisión 0024): el sistema decide qué
+  conexiones existen, el cálculo rechaza las imposibles, la interfaz solo
+  ofrece las que hay con su tensión, las fases se eligen con botones y no se
+  preguntan cuando están determinadas, y los proyectos guardados con una
+  combinación imposible se corrigen con un botón.
 
 ## Pendiente, en orden
 
