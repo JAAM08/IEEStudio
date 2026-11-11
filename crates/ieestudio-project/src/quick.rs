@@ -423,7 +423,7 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
             steps.push(Step {
                 title: "Protección y conductor".into(),
                 formula: None,
-                substitution: "No evaluado".into(),
+                substitution: "Sin evaluar".into(),
                 note: Some(format!("No se pudo calcular: {e}.")),
                 references: vec![],
             });

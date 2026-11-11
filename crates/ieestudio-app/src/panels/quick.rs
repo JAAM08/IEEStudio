@@ -390,7 +390,7 @@ impl QuickView {
                 card(p).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
-                        RichText::new("— No evaluado")
+                        RichText::new("— Sin evaluar")
                             .color(p.warn)
                             .family(theme::semibold())
                             .size(18.0),
@@ -477,7 +477,7 @@ impl QuickView {
                         }
                         Err(message) => {
                             ui.label(big("—".to_string()).color(p.warn));
-                            ui.label(RichText::new("No evaluado").color(p.warn));
+                            ui.label(RichText::new("Sin evaluar").color(p.warn));
                             ui.label(muted(format!("{message}.")));
                         }
                     }

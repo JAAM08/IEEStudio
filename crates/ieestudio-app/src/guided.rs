@@ -97,7 +97,16 @@ fn step_done(step: Step, doc: &Doc) -> bool {
 }
 
 /// Barra de pasos para la barra superior. Devuelve el paso elegido.
-pub fn step_bar(ui: &mut egui::Ui, p: &Palette, current: Step, doc: &Doc) -> Option<Step> {
+///
+/// Con `compact`, los pasos que no son el actual muestran solo su número:
+/// así la barra cabe en ventanas angostas sin encimarse con lo demás.
+pub fn step_bar(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    current: Step,
+    doc: &Doc,
+    compact: bool,
+) -> Option<Step> {
     let mut chosen = None;
     let (fails, pending) = problem_counts(doc);
     for (k, step) in Step::ALL.into_iter().enumerate() {
@@ -120,7 +129,7 @@ pub fn step_bar(ui: &mut egui::Ui, p: &Palette, current: Step, doc: &Doc) -> Opt
             .corner_radius(14)
             .inner_margin(egui::Margin {
                 left: 6,
-                right: 12,
+                right: if compact && !now { 6 } else { 12 },
                 top: 3,
                 bottom: 3,
             })
@@ -141,22 +150,36 @@ pub fn step_bar(ui: &mut egui::Ui, p: &Palette, current: Step, doc: &Doc) -> Opt
                         egui::FontId::proportional(11.5),
                         bubble_ink,
                     );
-                    let label = RichText::new(step.title()).color(text_color);
-                    ui.label(if now { label.family(semibold()) } else { label });
-                    // Revisar avisa cuánto falta, desde cualquier paso.
+                    if now || !compact {
+                        let label = RichText::new(step.title()).color(text_color);
+                        ui.label(if now { label.family(semibold()) } else { label });
+                    }
+                    // Revisar avisa cuánto falta, desde cualquier paso: el
+                    // mismo total que lista ese paso.
                     if step == Step::Review && fails + pending > 0 {
-                        let (n, color) = if fails > 0 {
-                            (fails, p.bad)
-                        } else {
-                            (pending, p.warn)
-                        };
-                        ui.label(RichText::new(format!("· {n}")).color(color).size(12.0));
+                        let color = if fails > 0 { p.bad } else { p.warn };
+                        ui.label(
+                            RichText::new(format!("· {}", fails + pending))
+                                .color(color)
+                                .size(12.0),
+                        );
                     }
                 });
             })
             .response
             .interact(Sense::click())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
+        let response = if step == Step::Review && fails + pending > 0 {
+            response.on_hover_text(format!(
+                "Revisar: {} por resolver ({fails} no {}, {pending} sin evaluar)",
+                fails + pending,
+                if fails == 1 { "cumple" } else { "cumplen" }
+            ))
+        } else if compact && !now {
+            response.on_hover_text(step.title())
+        } else {
+            response
+        };
         if response.clicked() && !now {
             chosen = Some(step);
         }
@@ -309,6 +332,10 @@ pub fn show(
     let p = shared.palette;
     let mut go = None;
     let mut request = None;
+
+    if shared.diagram_full {
+        return diagram_page(ui, &p, step, doc, shared);
+    }
 
     egui::Panel::bottom("pie-guiado")
         .frame(
@@ -831,6 +858,16 @@ fn tree(
     if let Some(t) = &panel.transformer {
         sub.push_str(&format!(" · transformador de {} kVA", t.kva));
     }
+    // Lo que el tablero pide y lo que aguanta, sin abrir su ficha.
+    if let Some(r) = doc.panel_result(i) {
+        sub.push_str(&format!("\n{} VA", thousands(r.demanded_va)));
+        if let Some(run) = &r.feeder.run {
+            sub.push_str(&format!(" · {:.1} A", run.nominal_a));
+        }
+        if let Some(fault) = &r.fault {
+            sub.push_str(&format!(" · falla {:.2} kA", fault.total_ka));
+        }
+    }
     let status = doc.panel_result(i).map(|r| {
         let statuses: Vec<Status> = r.runs().map(|x| x.status).collect();
         let fails = statuses.iter().filter(|s| **s == Status::Fails).count();
@@ -863,12 +900,7 @@ fn tree(
             *action = Some(TreeAction::Select(i));
         }
         if ui
-            .add(
-                egui::Button::new(
-                    RichText::new(format!("{} Subtablero", icon::PLUS)).color(p.ink2),
-                )
-                .frame(false),
-            )
+            .button(format!("{} Subtablero", icon::PLUS))
             .on_hover_text(format!(
                 "Agregar un tablero que se alimenta de {}",
                 panel.id
@@ -951,36 +983,60 @@ fn circuits_step(
             let mut add = false;
             let mut balance = false;
             ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label(strong(format!("Circuitos de {}", panel.id)).size(22.0));
-                    if let Some(r) = &result {
-                        ui.horizontal(|ui| {
-                            let mut line = format!("{} VA calculados", thousands(r.demanded_va));
-                            if let Some(run) = &r.feeder.run {
-                                line.push_str(&format!(" · {:.1} A en el alimentador", run.nominal_a));
-                            }
-                            if let Some(i) = r.imbalance_percent {
-                                line.push_str(&format!(" · desbalance {i:.1} %"));
-                            }
-                            ui.label(muted(p, line).size(12.5));
-                            if r.imbalance_percent.is_some()
-                                && ui
-                                    .add(egui::Button::new(RichText::new("Balancear").color(p.accent_text).size(12.5)).frame(false))
-                                    .on_hover_text("Reparte las fases para dejar el tablero lo más balanceado posible. Se puede deshacer con Ctrl+Z.")
-                                    .clicked()
-                            {
-                                balance = true;
-                            }
-                        });
-                    }
-                });
+                ui.label(strong(format!("Circuitos de {}", panel.id)).size(22.0));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if primary(ui, p, &format!("{}  Agregar circuito", icon::PLUS)) {
                         add = true;
                     }
                 });
             });
-            ui.add_space(12.0);
+            {
+                {
+                    if let Some(r) = &result {
+                        ui.horizontal_wrapped(|ui| {
+                            let mut line = format!("{} VA calculados", thousands(r.demanded_va));
+                            if let Some(run) = &r.feeder.run {
+                                line.push_str(&format!(" · {:.1} A en el alimentador", run.nominal_a));
+                            }
+                            let limit = doc.project.settings.imbalance_warning_percent;
+                            let high = r.imbalance_percent.is_some_and(|i| i > limit);
+                            if let (Some(i), false) = (r.imbalance_percent, high) {
+                                line.push_str(&format!(" · desbalance {i:.1} %"));
+                            }
+                            ui.label(muted(p, line).size(12.5));
+                            // Un desbalance alto es un aviso con su arreglo a la
+                            // mano, no letra chica.
+                            if let (Some(i), true) = (r.imbalance_percent, high) {
+                                ui.label(
+                                    RichText::new(format!("{} Desbalance de {i:.1} %", icon::WARNING))
+                                        .color(p.warn)
+                                        .size(12.5),
+                                )
+                                .on_hover_text(format!("Pasa del {limit:.0} % que fijan los criterios del proyecto."));
+                            }
+                            if r.imbalance_percent.is_some() {
+                                let button = if high {
+                                    egui::Button::new(RichText::new("Balancear fases").size(12.5))
+                                } else {
+                                    egui::Button::new(RichText::new("Balancear").color(p.ink2).size(12.5)).frame(false)
+                                };
+                                if ui
+                                    .add(button)
+                                    .on_hover_text("Reparte las fases para dejar el tablero lo más balanceado posible. Se puede deshacer con Ctrl+Z.")
+                                    .clicked()
+                                {
+                                    balance = true;
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+            ui.add_space(8.0);
+            if interrupting_strip(ui, p, doc, panel_index) {
+                doc.edited();
+            }
+            ui.add_space(6.0);
             match &result {
                 Some(r) => {
                     if let Some(c) = circuit_table(ui, p, doc, panel_index, r, selected) {
@@ -1057,19 +1113,28 @@ fn subpanel_list(
                     symbols::show(ui, Symbol::Subpanel, 22.0, p.ink);
                     ui.add_space(4.0);
                     ui.label(strong(&panel.id));
-                    ui.add(egui::Label::new(muted(p, &panel.name)).truncate());
-                    let n = panel.circuits.len();
-                    ui.label(muted(
-                        p,
-                        format!(
-                            "· alimentador de {} m · {n} {}",
-                            panel.feeder.length_m,
-                            if n == 1 { "circuito" } else { "circuitos" }
-                        ),
-                    ));
                     if let Some(status) = status {
-                        ui.label(status_text(p, status));
+                        ui.label(crate::widgets::status_glyph(p, status))
+                            .on_hover_text(format!("Su alimentador: {}", status.label().to_lowercase()));
                     }
+                    let n = panel.circuits.len();
+                    let text = format!(
+                        "{} · alimentador de {} m · {n} {}",
+                        panel.name,
+                        panel.feeder.length_m,
+                        if n == 1 { "circuito" } else { "circuitos" }
+                    );
+                    // El texto ocupa lo que dejan los botones y se recorta;
+                    // nunca se encima con ellos.
+                    let width = (ui.available_width() - 300.0).max(60.0);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 20.0),
+                        Layout::left_to_right(Align::Center),
+                        |ui| {
+                            ui.add(egui::Label::new(muted(p, &text)).truncate())
+                                .on_hover_text(&text);
+                        },
+                    );
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui
                             .button(format!("{} Ficha del tablero", icon::SQUARES_FOUR))
@@ -1103,21 +1168,28 @@ fn circuit_table(
     selected: Option<usize>,
 ) -> Option<usize> {
     let panel = &doc.project.panels[panel_index];
-    let input = [
-        ("Tipo", 120.0),
-        ("Carga", 78.0),
-        ("Fase", 42.0),
-        ("Longitud", 66.0),
+    // La tabla debe caber completa: en una ventana angosta, Tipo y Estado se
+    // quedan con su ícono (el texto pasa a la ayuda) antes que cortar Estado.
+    // Más angosta todavía (1024 px con la ficha abierta), Fase y Longitud se
+    // leen en la ficha.
+    let compact = ui.available_width() < 800.0;
+    let narrow = ui.available_width() < 690.0;
+    let mut input = vec![
+        ("Tipo", if compact { 26.0 } else { 100.0 }),
+        ("Carga", 72.0),
     ];
+    if !narrow {
+        input.extend([("Fase", 36.0), ("Longitud", 56.0)]);
+    }
     let output = [
-        ("Cable", 92.0),
-        ("Interruptor", 80.0),
-        ("Caída total", 74.0),
-        ("Estado", 112.0),
+        ("Cable", 80.0),
+        ("Interruptor", 78.0),
+        ("Caída total", 66.0),
+        ("Estado", if compact { 44.0 } else { 92.0 }),
     ];
     const GAP: f32 = 12.0;
     let fixed: f32 = input.iter().chain(&output).map(|(_, w)| w + GAP).sum();
-    let name_width = (ui.available_width() - fixed - 40.0).max(150.0);
+    let name_width = (ui.available_width() - fixed - 22.0).max(110.0);
     let capture_width = name_width + input.iter().map(|(_, w)| w + GAP).sum::<f32>();
 
     // Encabezado de grupos.
@@ -1200,8 +1272,13 @@ fn circuit_table(
                             ui.add(egui::Label::new(muted(p, &circuit.name)).truncate());
                         });
                         row.col(|ui| {
-                            symbols::show(ui, Symbol::Load(circuit.load.kind), 20.0, p.ink2);
-                            ui.add(egui::Label::new(circuit.load.kind.label()).truncate());
+                            let symbol =
+                                symbols::show(ui, Symbol::Load(circuit.load.kind), 20.0, p.ink2);
+                            if compact {
+                                symbol.on_hover_text(circuit.load.kind.label());
+                            } else {
+                                ui.add(egui::Label::new(circuit.load.kind.label()).truncate());
+                            }
                         });
                         row.col(|ui| {
                             let load = match (&circuit.load.motor, circuit.load.kind) {
@@ -1212,18 +1289,21 @@ fn circuit_table(
                             };
                             ui.label(RichText::new(load).monospace());
                         });
-                        row.col(|ui| {
-                            let phases: String =
-                                circuit.phases.iter().map(|ph| format!("{ph:?}")).collect();
-                            ui.label(if phases.is_empty() {
-                                "—".to_string()
-                            } else {
-                                phases
+                        if !narrow {
+                            row.col(|ui| {
+                                let phases = crate::widgets::phase_letters(&circuit.phases);
+                                ui.label(if phases.is_empty() {
+                                    "—".to_string()
+                                } else {
+                                    phases
+                                });
                             });
-                        });
-                        row.col(|ui| {
-                            ui.label(RichText::new(format!("{} m", circuit.length_m)).monospace());
-                        });
+                            row.col(|ui| {
+                                ui.label(
+                                    RichText::new(format!("{} m", circuit.length_m)).monospace(),
+                                );
+                            });
+                        }
                         row.col(|ui| match run {
                             Some(r) => {
                                 let size = if r.conductors_per_phase > 1 {
@@ -1266,7 +1346,18 @@ fn circuit_table(
                             }));
                         });
                         row.col(|ui| {
-                            ui.label(status_text(p, item.status));
+                            let problem = main_problem(item)
+                                .map(|k| format!("{}: {}", k.name, sentence(&k.detail)));
+                            let label = if compact {
+                                ui.label(crate::widgets::status_glyph(p, item.status).size(15.0))
+                            } else {
+                                ui.label(status_text(p, item.status))
+                            };
+                            match problem {
+                                Some(text) => label.on_hover_text(text),
+                                None => label
+                                    .on_hover_text("Cumple todo lo que se verificó de su cálculo."),
+                            };
                         });
                         if row.response().clicked() {
                             clicked = Some(c);
@@ -1345,6 +1436,12 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
                         format!("Sin evaluar: {}", check.name.to_lowercase()),
                     ),
                 };
+                let more = item
+                    .checks
+                    .iter()
+                    .filter(|k| k.status != Status::Complies)
+                    .count()
+                    .min(if item.run.is_none() { 1 } else { usize::MAX });
                 egui::Frame::new()
                     .fill(color.gamma_multiply(0.10))
                     .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.55)))
@@ -1357,11 +1454,7 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
                         if let Some(cite) = cite_all(&check.references) {
                             ui.label(muted(p, cite).size(11.5));
                         }
-                        let others = item
-                            .checks
-                            .iter()
-                            .filter(|k| k.status != Status::Complies)
-                            .count();
+                        let others = more;
                         if others > 1 {
                             ui.label(
                                 muted(p, format!("Y {} más en Revisar.", others - 1)).size(11.5),
@@ -1424,6 +1517,18 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
                     ] {
                         ui.label(muted(p, label));
                         ui.label(RichText::new(value).monospace());
+                        ui.end_row();
+                    }
+                    // La capacidad interruptiva se resuelve en el tablero;
+                    // aquí solo se dice cómo quedó este interruptor.
+                    if let Some(check) = &item.interrupting {
+                        let (text, color) = interrupting_words(p, check);
+                        ui.label(muted(p, "Cap. interruptiva"));
+                        ui.label(RichText::new(text).color(color))
+                            .on_hover_text(format!(
+                            "{} Se captura en la ficha del tablero o en «Interruptor (catálogo)».",
+                            sentence(&check.detail)
+                        ));
                         ui.end_row();
                     }
                 });
@@ -1528,6 +1633,297 @@ fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunRes
     );
 }
 
+// ------------------------------------------------------ unifilar completo
+
+/// El unifilar a pantalla completa dentro de la vista guiada: es lo que el
+/// ingeniero entrega, así que tiene su lugar y no solo una miniatura.
+fn diagram_page(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    step: Step,
+    doc: &mut Doc,
+    shared: &mut Shared,
+) -> (Option<Step>, Option<Export>) {
+    let mut go = None;
+    let mut request = None;
+    egui::Panel::top("unifilar-completo-barra")
+        .frame(
+            egui::Frame::new()
+                .fill(p.bg)
+                .inner_margin(egui::Margin::symmetric(16, 8)),
+        )
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui
+                    .button(format!("{}  Volver a {}", icon::ARROW_LEFT, step.title()))
+                    .clicked()
+                {
+                    shared.diagram_full = false;
+                }
+                ui.add_space(8.0);
+                ui.label(strong("Diagrama unifilar").size(16.0));
+                ui.label(
+                    muted(p, "Haz clic en un tablero o circuito para ir a su ficha.").size(12.0),
+                );
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if primary(ui, p, &format!("{}  Exportar DXF", icon::FLOW_ARROW)) {
+                        request = Some(Export::Dxf);
+                    }
+                });
+            });
+        });
+    egui::CentralPanel::default()
+        .frame(
+            egui::Frame::new()
+                .fill(p.bg)
+                .inner_margin(egui::Margin::symmetric(16, 4)),
+        )
+        .show(ui, |ui| {
+            let Some(diagram) = shared.diagram(doc, shared.diagram_mode) else {
+                crate::widgets::empty_state(
+                    ui,
+                    p,
+                    icon::WARNING_CIRCLE,
+                    "No se pudo calcular el proyecto",
+                    &doc.calc_error().unwrap_or_default(),
+                );
+                return;
+            };
+            if shared.diagram_fit {
+                // Al ancho de la ventana: así se lee, y lo que no cabe a lo
+                // alto se recorre. Sin agrandarlo de más en pantallas grandes.
+                let fit = (ui.available_width() - 28.0) / diagram.width as f32;
+                shared.diagram_zoom = fit.clamp(0.4, 1.3);
+                shared.diagram_fit = false;
+            }
+            let selected = match doc.selection {
+                Selection::Feeder(i) | Selection::Secondary(i) => Some((i, None)),
+                Selection::Circuit(i, c) => Some((i, Some(c))),
+                Selection::Project => None,
+            };
+            let before = shared.diagram_mode;
+            if let Some(hit) = crate::panels::diagram::show(
+                ui,
+                p,
+                &diagram,
+                &mut shared.diagram_zoom,
+                &mut shared.diagram_mode,
+                selected,
+            ) {
+                doc.selection = match hit {
+                    (i, Some(c)) => Selection::Circuit(i, c),
+                    (i, None) => Selection::Feeder(i),
+                };
+                go = Some(match hit.1 {
+                    Some(_) => Step::Circuits,
+                    None => Step::Panels,
+                });
+                shared.diagram_full = false;
+            }
+            // La hoja del plano tiene otra proporción: se vuelve a ajustar.
+            if before != shared.diagram_mode {
+                shared.diagram_fit = true;
+            }
+        });
+    (go, request)
+}
+
+// ------------------------------------------------ capacidad interruptiva
+
+/// Cómo quedó un interruptor frente a la falla, en dos palabras.
+fn interrupting_words(p: &Palette, check: &Check) -> (&'static str, egui::Color32) {
+    match check.status {
+        Status::Complies => ("Cumple", p.ok),
+        _ if check.detail.starts_with("falta") => ("Falta el dato", p.warn),
+        _ => ("No concluyente", p.warn),
+    }
+}
+
+/// «No concluyente» si hay interruptores con dato que no alcanzan la falla
+/// estimada; «Sin evaluar» si solo faltan datos.
+fn interrupting_label(group: &ieestudio_project::fault::InterruptingGroup) -> &'static str {
+    match group.status {
+        Status::Complies => "Cumple",
+        _ if group.short() > 0 => "No concluyente",
+        _ => "Sin evaluar",
+    }
+}
+
+/// Franja en el paso Circuitos cuando la capacidad interruptiva del tablero
+/// no está resuelta: lo dice una vez, con el dato que la resuelve al lado,
+/// en lugar de marcar cada circuito. Devuelve `true` si se cambió el dato.
+fn interrupting_strip(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, panel_index: usize) -> bool {
+    let id = doc.project.panels[panel_index].id.clone();
+    let Some(group) = doc.result.as_ref().ok().and_then(|r| {
+        r.fault
+            .iter()
+            .flat_map(|f| &f.groups)
+            .find(|g| g.panel.as_deref() == Some(id.as_str()) && g.status != Status::Complies)
+            .cloned()
+    }) else {
+        return false;
+    };
+    let mut changed = false;
+    egui::Frame::new()
+        .fill(p.warn.gamma_multiply(0.08))
+        .stroke(egui::Stroke::new(1.0, p.warn.gamma_multiply(0.45)))
+        .corner_radius(6)
+        .inner_margin(egui::Margin::symmetric(10, 6))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width() - 2.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::CIRCLE_DASHED).color(p.warn));
+                let text = match (group.short(), group.board_ka) {
+                    (0, _) => format!(
+                        "Falta la capacidad interruptiva de {} (falla estimada de {:.2} kA).",
+                        if group.missing() == 1 { "1 interruptor".to_string() } else { format!("{} interruptores", group.missing()) },
+                        group.fault_ka
+                    ),
+                    (_, Some(ka)) => format!(
+                        "Capacidad interruptiva no concluyente: {ka} kA del tablero frente a {:.2} kA estimados.",
+                        group.fault_ka
+                    ),
+                    _ => format!(
+                        "Capacidad interruptiva no concluyente frente a {:.2} kA estimados.",
+                        group.fault_ka
+                    ),
+                };
+                // El texto ocupa lo que sobra; el dato que lo resuelve queda
+                // siempre a la vista, a la derecha.
+                let width = (ui.available_width() - 200.0).max(120.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 20.0),
+                    Layout::left_to_right(Align::Center),
+                    |ui| {
+                        ui.set_min_width(width);
+                        ui.add(egui::Label::new(RichText::new(text).size(12.5)).truncate())
+                            .on_hover_text(format!(
+                                "{} Es una sola verificación del tablero; no cambia el estado de cada circuito.",
+                                sentence(&group.summary())
+                            ));
+                    },
+                );
+                ui.label(muted(p, "kA del tablero").size(12.0));
+                changed |= crate::widgets::optional_number(
+                    ui,
+                    &mut doc.project.panels[panel_index].board.interrupting_ka,
+                    10.0,
+                    " kA",
+                );
+            });
+        });
+    changed
+}
+
+enum CardAction {
+    Changed,
+    Go(usize),
+}
+
+/// Tarjeta de Revisar para la capacidad interruptiva de un lugar: qué pasa,
+/// el dato que la resuelve y los interruptores que abarca.
+fn interrupting_card(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    doc: &mut Doc,
+    group: &ieestudio_project::fault::InterruptingGroup,
+) -> Option<CardAction> {
+    let mut action = None;
+    let index_of = |doc: &Doc, id: &str| doc.project.panels.iter().position(|x| x.id == id);
+    egui::Frame::new()
+        .fill(p.panel)
+        .stroke(egui::Stroke::new(1.0, p.line))
+        .corner_radius(8)
+        .inner_margin(egui::Margin::symmetric(14, 10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width() - 2.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(icon::CIRCLE_DASHED).color(p.warn).size(16.0));
+                ui.add(
+                    egui::Label::new(strong(format!(
+                        "Capacidad interruptiva en {}: {}",
+                        group.place,
+                        interrupting_label(group).to_lowercase()
+                    )))
+                    .wrap(),
+                );
+            });
+            // El título ya dice «no concluyente»; el detalle no lo repite.
+            let summary = group.summary();
+            let mut detail = sentence(summary.strip_prefix("no concluyente: ").unwrap_or(&summary));
+            if let Some(cite) = cite_all(&group.references) {
+                detail.push_str(&format!(" · {cite}"));
+            }
+            ui.add(egui::Label::new(muted(p, detail).size(12.5)).wrap());
+            ui.add_space(4.0);
+            match group.panel.as_deref().and_then(|id| index_of(doc, id)) {
+                // En las barras de un tablero: el dato del tablero lo toman
+                // todos sus interruptores sin dato propio.
+                Some(i) => {
+                    ui.horizontal(|ui| {
+                        ui.label("Capacidad interruptiva del tablero");
+                        if crate::widgets::optional_number(
+                            ui,
+                            &mut doc.project.panels[i].board.interrupting_ka,
+                            10.0,
+                            " kA",
+                        ) {
+                            action = Some(CardAction::Changed);
+                        }
+                        if ui.button("Ir al tablero").clicked() {
+                            action = Some(CardAction::Go(i));
+                        }
+                    });
+                }
+                // En el punto de conexión: el interruptor principal de cada
+                // tablero que sale de la acometida.
+                None => {
+                    for breaker in &group.breakers {
+                        let Some(i) = index_of(doc, &breaker.panel) else {
+                            continue;
+                        };
+                        ui.horizontal(|ui| {
+                            ui.label(format!("Interruptor principal de {}", breaker.panel));
+                            if crate::widgets::optional_number(
+                                ui,
+                                &mut doc.project.panels[i]
+                                    .feeder
+                                    .overrides
+                                    .breaker
+                                    .interrupting_ka,
+                                10.0,
+                                " kA",
+                            ) {
+                                action = Some(CardAction::Changed);
+                            }
+                            if ui.button("Ir al tablero").clicked() {
+                                action = Some(CardAction::Go(i));
+                            }
+                        });
+                    }
+                }
+            }
+            if group.breakers.len() > 1 {
+                egui::CollapsingHeader::new(
+                    muted(p, format!("Los {} interruptores", group.breakers.len())).size(12.5),
+                )
+                .id_salt(("interruptores", &group.place))
+                .show(ui, |ui| {
+                    for breaker in &group.breakers {
+                        let ka = breaker
+                            .ka
+                            .map_or("sin dato".to_string(), |ka| format!("{ka} kA"));
+                        ui.horizontal(|ui| {
+                            ui.label(crate::widgets::status_glyph(p, breaker.status));
+                            ui.label(RichText::new(format!("{} — {ka}", breaker.label)).size(12.5));
+                        });
+                    }
+                });
+            }
+        });
+    action
+}
+
 // ------------------------------------------------------------- 4 · revisar
 
 /// Un pendiente del proyecto: el tramo, la verificación y a dónde ir.
@@ -1575,6 +1971,10 @@ fn review_items(doc: &Doc) -> Vec<Pending> {
                 .filter(|k| k.status != Status::Complies)
                 .collect();
             checks.sort_by_key(|k| k.status != Status::Fails);
+            // Un tramo sin calcular es un solo pendiente: su motivo.
+            if item.run.is_none() {
+                checks.truncate(1);
+            }
             for check in checks {
                 items.push(Pending {
                     selection,
@@ -1604,17 +2004,29 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                 .id_salt("revisar-lateral")
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    label_caps(ui, p, "Unifilar");
-                    ui.label(muted(p, "Lo que no cumple también se marca aquí. Haz clic en un circuito para ir a él.").size(12.0));
+                    ui.horizontal(|ui| {
+                        label_caps(ui, p, "Unifilar");
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui
+                                .button(format!("{}  Abrir unifilar", icon::ARROWS_OUT))
+                                .on_hover_text("Verlo a pantalla completa, como revisión o como plano, y exportarlo.")
+                                .clicked()
+                            {
+                                shared.diagram_full = true;
+                                shared.diagram_fit = true;
+                            }
+                        });
+                    });
+                    ui.label(muted(p, "Vista en miniatura; lo que no cumple va marcado. Ábrelo para leerlo.").size(12.0));
                     ui.add_space(6.0);
-                    if let Ok(result) = &doc.result {
-                        let diagram = ieestudio_diagrams::single_line(&doc.project, result);
+                    let diagram = shared.diagram(doc, ieestudio_diagrams::Mode::Review);
+                    if let (Ok(result), Some(diagram)) = (&doc.result, diagram) {
                         // Ajustado al ancho del panel, sin barra de zoom: para
                         // verlo en grande está la vista avanzada.
                         let zoom = ((ui.available_width() - 4.0) / diagram.width as f32).clamp(0.2, 1.0);
                         egui::ScrollArea::vertical()
                             .id_salt("unifilar-guiado")
-                            .max_height(360.0)
+                            .max_height(300.0)
                             .show(ui, |ui| {
                                 if let Some(hit) = crate::panels::diagram::paint(ui, p, &diagram, zoom, false, None) {
                                     doc.selection = match hit {
@@ -1731,10 +2143,17 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                     }
 
                     let items = review_items(doc);
+                    let groups: Vec<_> = result
+                        .fault
+                        .iter()
+                        .flat_map(|f| &f.groups)
+                        .filter(|g| g.status != Status::Complies)
+                        .cloned()
+                        .collect();
                     ui.add_space(20.0);
-                    label_caps(ui, p, &format!("Por resolver · {}", items.len()));
+                    label_caps(ui, p, &format!("Por resolver · {}", items.len() + groups.len()));
                     ui.add_space(4.0);
-                    if items.is_empty() {
+                    if items.is_empty() && groups.is_empty() {
                         ui.label(RichText::new(format!("{} Nada pendiente: todo lo que verifica IEEStudio cumple.", icon::CHECK_CIRCLE)).color(p.ok));
                     }
                     let mut action: Option<(Selection, bool)> = None;
@@ -1779,6 +2198,19 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             });
                         if k + 1 < items.len() {
                             ui.add_space(6.0);
+                        }
+                    }
+                    // La capacidad interruptiva: una tarjeta por lugar, con
+                    // el dato que la resuelve ahí mismo.
+                    for group in &groups {
+                        ui.add_space(6.0);
+                        match interrupting_card(ui, p, doc, group) {
+                            Some(CardAction::Changed) => doc.edited(),
+                            Some(CardAction::Go(i)) => {
+                                doc.selection = Selection::Feeder(i);
+                                go = Some(Step::Panels);
+                            }
+                            None => {}
                         }
                     }
                     if let Some((selection, fix)) = action {
@@ -2181,14 +2613,26 @@ fn report_step(
                             1 => "1 verificación sin evaluar".to_string(),
                             n => format!("{n} verificaciones sin evaluar"),
                         }),
-                        (
-                            !info.responsible.trim().is_empty() && !info.license.trim().is_empty(),
-                            "Responsable y cédula capturados".to_string(),
-                        ),
+                        {
+                            let signed = !info.responsible.trim().is_empty() && !info.license.trim().is_empty();
+                            (
+                                signed,
+                                if signed { "Responsable y cédula capturados" } else { "Faltan el responsable o su cédula" }.to_string(),
+                            )
+                        },
                     ];
-                    for (ok, text) in checklist {
-                        let (glyph, color) = if ok { (icon::CHECK_CIRCLE, p.ok) } else { (icon::CIRCLE_DASHED, p.warn) };
-                        ui.label(RichText::new(format!("{glyph} {text}")).color(if ok { p.ink } else { color }));
+                    for (k, (ok, text)) in checklist.into_iter().enumerate() {
+                        // Lo que no cumple va en rojo; lo que falta, en ámbar.
+                        let (glyph, color) = match (ok, k) {
+                            (true, _) => (icon::CHECK_CIRCLE, p.ok),
+                            (false, 1) => (icon::X_CIRCLE, p.bad),
+                            (false, _) => (icon::CIRCLE_DASHED, p.warn),
+                        };
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 5.0;
+                            ui.label(RichText::new(glyph).color(color));
+                            ui.label(RichText::new(text).color(if ok { p.ink } else { color }));
+                        });
                     }
                     if let Ok(r) = &doc.result {
                         for o in &r.verdict.out_of_scope {
@@ -2197,18 +2641,24 @@ fn report_step(
                     }
 
                     ui.add_space(24.0);
-                    label_caps(ui, p, "Exportar");
+                    label_caps(ui, p, "También puedes exportar");
+                    ui.label(muted(p, "La memoria en PDF se exporta con el botón amarillo de abajo.").size(12.0));
                     ui.add_space(4.0);
-                    if primary(ui, p, &format!("{}  Memoria en PDF", icon::FILE_PDF)) {
-                        request = Some(Export::Pdf);
-                    }
-                    ui.add_space(4.0);
-                    ui.horizontal(|ui| {
+                    ui.horizontal_wrapped(|ui| {
                         if ui.button(format!("{}  Cuadro de cargas en Excel", icon::FILE_XLS)).clicked() {
                             request = Some(Export::Excel);
                         }
                         if ui.button(format!("{}  Unifilar en DXF", icon::FLOW_ARROW)).clicked() {
                             request = Some(Export::Dxf);
+                        }
+                        if ui
+                            .button(format!("{}  Ver el unifilar", icon::ARROWS_OUT))
+                            .on_hover_text("A pantalla completa, como revisión o como plano.")
+                            .clicked()
+                        {
+                            shared.diagram_full = true;
+                            shared.diagram_fit = true;
+                            shared.diagram_mode = ieestudio_diagrams::Mode::Plan;
                         }
                     });
                 });
@@ -2230,6 +2680,52 @@ fn report_step(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// El número de pendientes es uno solo: lo que marca la barra de pasos y
+    /// la memoria (del dictamen) es lo que lista Revisar.
+    #[test]
+    fn review_lists_exactly_what_the_step_bar_counts() {
+        let listed = |doc: &Doc| {
+            let groups = doc
+                .result
+                .as_ref()
+                .unwrap()
+                .fault
+                .iter()
+                .flat_map(|f| &f.groups)
+                .filter(|g| g.status != Status::Complies)
+                .count();
+            review_items(doc).len() + groups
+        };
+        let counted = |doc: &Doc| {
+            let (fails, pending) = problem_counts(doc);
+            fails + pending
+        };
+        // La casa de ejemplo, tal cual.
+        let house = ieestudio_project::example::house();
+        let doc = Doc::new(house.clone(), None);
+        assert_eq!(listed(&doc), counted(&doc));
+        // Con estudio de falla y kA que no alcanzan: un pendiente por lugar.
+        let mut project = house.clone();
+        project.source.substation = Some(ieestudio_project::Substation {
+            impedance_from_table: Default::default(),
+            kva: 112.5,
+            impedance_percent: 3.0,
+            primary_kv: Some(13.2),
+            connection: None,
+            mounting: None,
+            brand: String::new(),
+        });
+        project.panels[0].board.interrupting_ka = Some(10.0);
+        let with_fault = Doc::new(project, None);
+        assert_eq!(listed(&with_fault), counted(&with_fault));
+        assert_eq!(counted(&with_fault), counted(&doc) + 2);
+        // Con tramos que no se pudieron calcular: cada uno cuenta una vez.
+        let mut project = house;
+        project.source.system = ieestudio_core::System::SPLIT_240_120;
+        let broken = Doc::new(project, None);
+        assert_eq!(listed(&broken), counted(&broken));
+    }
 
     #[test]
     fn thousands_groups_digits() {

@@ -74,6 +74,110 @@ pub struct FaultStudy {
     /// Fracción en que se redujo la impedancia de placa de los
     /// transformadores.
     pub impedance_tolerance: f64,
+    /// Capacidad interruptiva resumida por lugar: el punto de conexión y
+    /// las barras de cada tablero con interruptores.
+    pub groups: Vec<InterruptingGroup>,
+}
+
+/// Nombre de la verificación de capacidad interruptiva.
+pub const INTERRUPTING: &str = "Capacidad interruptiva";
+
+/// Un interruptor comparado con la falla del lugar donde está instalado.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct BreakerVerdict {
+    /// Tablero al que pertenece el tramo.
+    pub panel: String,
+    /// `None` si es el alimentador o el secundario de ese tablero.
+    pub circuit: Option<String>,
+    /// `C-02 · Contactos cocina`, `Alimentador de TG-1`.
+    pub label: String,
+    /// Capacidad interruptiva que se le tomó, propia o la del tablero.
+    pub ka: Option<f64>,
+    pub status: Status,
+}
+
+/// La capacidad interruptiva de los interruptores instalados en un mismo
+/// lugar, que ven la misma corriente de falla. Es una sola verificación:
+/// cumple si todos la alcanzan.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct InterruptingGroup {
+    /// Tablero en cuyas barras están los interruptores. `None` en el punto
+    /// de conexión, de donde sale el alimentador principal.
+    pub panel: Option<String>,
+    /// `las barras de TG-1`, `el punto de conexión`.
+    pub place: String,
+    /// Corriente de falla del lugar, en kA.
+    pub fault_ka: f64,
+    /// Capacidad interruptiva capturada para el tablero, en kA.
+    pub board_ka: Option<f64>,
+    pub status: Status,
+    pub breakers: Vec<BreakerVerdict>,
+    pub references: Vec<ieestudio_rules::RuleReference>,
+}
+
+impl InterruptingGroup {
+    /// Interruptores sin dato de capacidad interruptiva.
+    pub fn missing(&self) -> usize {
+        self.breakers.iter().filter(|b| b.ka.is_none()).count()
+    }
+
+    /// Interruptores con dato que no alcanza la falla estimada.
+    pub fn short(&self) -> usize {
+        self.breakers
+            .iter()
+            .filter(|b| b.ka.is_some() && b.status != Status::Complies)
+            .count()
+    }
+
+    /// Una frase con lo que falta: para Revisar y la memoria.
+    pub fn summary(&self) -> String {
+        let n = self.breakers.len();
+        let (missing, short) = (self.missing(), self.short());
+        let count = |k: usize| {
+            if k == n && n > 1 {
+                format!("los {n} interruptores")
+            } else if k == 1 {
+                "1 interruptor".to_string()
+            } else {
+                format!("{k} interruptores")
+            }
+        };
+        let fault = format!("{:.2} kA", self.fault_ka);
+        match (missing, short) {
+            (0, 0) => format!(
+                "{} de {} {} los {fault} de falla estimada; cumple con un método conservador (bus infinito)",
+                capitalize(&count(n)),
+                self.place,
+                if n == 1 { "alcanza" } else { "alcanzan" }
+            ),
+            (_, 0) => format!(
+                "falta la capacidad interruptiva de {} en {}; la falla estimada es de {fault}",
+                count(missing),
+                self.place
+            ),
+            (0, _) => format!(
+                "no concluyente: {} de {} no {} los {fault} estimados por bus infinito, que es una cota superior; requiere estudio de cortocircuito",
+                count(short),
+                self.place,
+                if short == 1 { "alcanza" } else { "alcanzan" }
+            ),
+            _ => format!(
+                "no concluyente: en {}, {} no {} los {fault} estimados por bus infinito y a {} le falta el dato; requiere estudio de cortocircuito",
+                self.place,
+                count(short),
+                if short == 1 { "alcanza" } else { "alcanzan" },
+                count(missing)
+            ),
+        }
+    }
+}
+
+fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
 }
 
 /// Si el sistema es trifásico y la tensión con la que se calcula la
@@ -347,10 +451,8 @@ fn check_breaker(
     breaker_ka: Option<f64>,
     bus: &BusFault,
     bus_name: &str,
-) {
-    if item.run.is_none() {
-        return;
-    }
+) -> Option<(Option<f64>, Status)> {
+    item.run.as_ref()?;
     let mut rules = vec![Rule::InterruptingRating];
     match bus.origin {
         FaultOrigin::Supplier => {}
@@ -381,13 +483,25 @@ fn check_breaker(
         ),
     };
     let references = rules.iter().map(|r| profile.reference(*r)).collect();
-    item.checks.push(Check {
-        name: "Capacidad interruptiva".into(),
+    item.interrupting = Some(Check {
+        name: INTERRUPTING.into(),
         status,
         detail,
         references,
     });
-    item.status = worse(item.status, status);
+    Some((breaker_ka, status))
+}
+
+fn group_rules(bus: &BusFault) -> Vec<Rule> {
+    let mut rules = vec![Rule::InterruptingRating];
+    match bus.origin {
+        FaultOrigin::Supplier => {}
+        _ => rules.push(Rule::AvailableFault),
+    }
+    if bus.motor_ka > 0.0 {
+        rules.push(Rule::MotorFaultContribution);
+    }
+    rules
 }
 
 /// Hace el estudio y agrega la verificación de capacidad interruptiva a cada
@@ -457,6 +571,9 @@ pub(crate) fn study(
         }
     }
 
+    // Interruptores por lugar: índice 0 el punto de conexión, después las
+    // barras de cada tablero.
+    let mut found: Vec<Vec<BreakerVerdict>> = vec![Vec::new(); n + 1];
     for (i, panel) in project.panels.iter().enumerate() {
         let Some(own) = bus[i].clone() else {
             continue;
@@ -485,25 +602,88 @@ pub(crate) fn study(
                 .breaker
                 .interrupting_ka
                 .or(upstream_board_ka);
-            check_breaker(profile, &mut result.feeder, ka, up, &upstream_name);
+            if let Some((ka, status)) =
+                check_breaker(profile, &mut result.feeder, ka, up, &upstream_name)
+            {
+                found[parent.map_or(0, |k| k + 1)].push(BreakerVerdict {
+                    panel: panel.id.clone(),
+                    circuit: None,
+                    label: format!("Alimentador de {}", panel.id),
+                    ka,
+                    status,
+                });
+            }
         }
         let own_name = format!("las barras de {}", panel.id);
         let board_ka = panel.board.interrupting_ka;
         if let (Some(t), Some(secondary)) = (&panel.transformer, result.secondary.as_mut()) {
             if t.secondary_protection {
                 let ka = t.secondary_overrides.breaker.interrupting_ka.or(board_ka);
-                check_breaker(profile, secondary, ka, &own, &own_name);
+                if let Some((ka, status)) = check_breaker(profile, secondary, ka, &own, &own_name) {
+                    found[i + 1].push(BreakerVerdict {
+                        panel: panel.id.clone(),
+                        circuit: None,
+                        label: format!("Secundario de {}", panel.id),
+                        ka,
+                        status,
+                    });
+                }
             }
         }
         for (circuit, item) in panel.circuits.iter().zip(result.circuits.iter_mut()) {
             let ka = circuit.overrides.breaker.interrupting_ka.or(board_ka);
-            check_breaker(profile, item, ka, &own, &own_name);
+            if let Some((ka, status)) = check_breaker(profile, item, ka, &own, &own_name) {
+                found[i + 1].push(BreakerVerdict {
+                    panel: panel.id.clone(),
+                    circuit: Some(circuit.id.clone()),
+                    label: format!("{} · {}", circuit.id, circuit.name),
+                    ka,
+                    status,
+                });
+            }
         }
         result.fault = Some(own);
+    }
+    let mut groups = Vec::new();
+    for (k, breakers) in found.into_iter().enumerate() {
+        if breakers.is_empty() {
+            continue;
+        }
+        let (panel, place, at, board_ka) = match k.checked_sub(1) {
+            None => (
+                None,
+                "el punto de conexión".to_string(),
+                Some(&source),
+                None,
+            ),
+            Some(i) => (
+                Some(project.panels[i].id.clone()),
+                format!("las barras de {}", project.panels[i].id),
+                bus[i].as_ref(),
+                project.panels[i].board.interrupting_ka,
+            ),
+        };
+        let Some(at) = at else { continue };
+        let status = breakers
+            .iter()
+            .fold(Status::Complies, |all, b| worse(all, b.status));
+        groups.push(InterruptingGroup {
+            panel,
+            place,
+            fault_ka: at.total_ka,
+            board_ka,
+            status,
+            breakers,
+            references: group_rules(at)
+                .iter()
+                .map(|r| profile.reference(*r))
+                .collect(),
+        });
     }
     Some(FaultStudy {
         source,
         motors,
         impedance_tolerance: profile.parameters.fault_impedance_tolerance,
+        groups,
     })
 }

@@ -36,6 +36,13 @@ pub struct Shared {
     pub choose_load: Option<usize>,
     /// Unifilar como revisión (colores) o como plano (hoja para imprimir).
     pub diagram_mode: ieestudio_diagrams::Mode,
+    /// El unifilar ocupa toda la vista guiada.
+    pub diagram_full: bool,
+    /// Pendiente de ajustar el unifilar a la pantalla al abrirlo.
+    pub diagram_fit: bool,
+    /// Último unifilar dibujado, con la revisión del proyecto y el modo: se
+    /// reconstruye solo cuando cambian, no en cada cuadro.
+    diagram_cache: Option<(u64, Mode, std::rc::Rc<ieestudio_diagrams::Diagram>)>,
 }
 
 impl Shared {
@@ -52,8 +59,35 @@ impl Shared {
             open_tab: None,
             choose_load: None,
             diagram_mode: ieestudio_diagrams::Mode::Review,
+            diagram_full: false,
+            diagram_fit: false,
+            diagram_cache: None,
             preview: report::Preview::default(),
         }
+    }
+}
+
+impl Shared {
+    /// El unifilar del proyecto en el modo pedido. `None` si el proyecto no
+    /// se pudo calcular.
+    pub fn diagram(
+        &mut self,
+        doc: &Doc,
+        mode: Mode,
+    ) -> Option<std::rc::Rc<ieestudio_diagrams::Diagram>> {
+        let result = doc.result.as_ref().ok()?;
+        if let Some((revision, cached, diagram)) = &self.diagram_cache {
+            if *revision == doc.revision && *cached == mode {
+                return Some(diagram.clone());
+            }
+        }
+        let options = match mode {
+            Mode::Review => Options::REVIEW,
+            Mode::Plan => Options::PLAN,
+        };
+        let diagram = std::rc::Rc::new(single_line_with(&doc.project, result, options));
+        self.diagram_cache = Some((doc.revision, mode, diagram.clone()));
+        Some(diagram)
     }
 }
 
@@ -94,39 +128,36 @@ impl TabViewer for Viewer<'_> {
             Tab::Schedule => schedule::show(ui, self.doc, self.shared),
             Tab::Properties => padded(ui, |ui| properties::show(ui, self.doc, self.shared)),
             Tab::Procedure => padded(ui, |ui| procedure::show(ui, self.doc, self.shared)),
-            Tab::Diagram => padded(ui, |ui| match &self.doc.result {
-                Ok(result) => {
-                    let options = match self.shared.diagram_mode {
-                        Mode::Review => Options::REVIEW,
-                        Mode::Plan => Options::PLAN,
-                    };
-                    let d = single_line_with(&self.doc.project, result, options);
-                    let selected = match self.doc.selection {
-                        Selection::Feeder(i) | Selection::Secondary(i) => Some((i, None)),
-                        Selection::Circuit(i, c) => Some((i, Some(c))),
-                        Selection::Project => None,
-                    };
-                    if let Some(hit) = diagram::show(
+            Tab::Diagram => padded(ui, |ui| {
+                match self.shared.diagram(self.doc, self.shared.diagram_mode) {
+                    Some(d) => {
+                        let selected = match self.doc.selection {
+                            Selection::Feeder(i) | Selection::Secondary(i) => Some((i, None)),
+                            Selection::Circuit(i, c) => Some((i, Some(c))),
+                            Selection::Project => None,
+                        };
+                        if let Some(hit) = diagram::show(
+                            ui,
+                            &p,
+                            &d,
+                            &mut self.shared.diagram_zoom,
+                            &mut self.shared.diagram_mode,
+                            selected,
+                        ) {
+                            self.doc.selection = match hit {
+                                (i, Some(c)) => Selection::Circuit(i, c),
+                                (i, None) => Selection::Feeder(i),
+                            };
+                        }
+                    }
+                    None => crate::widgets::empty_state(
                         ui,
                         &p,
-                        &d,
-                        &mut self.shared.diagram_zoom,
-                        &mut self.shared.diagram_mode,
-                        selected,
-                    ) {
-                        self.doc.selection = match hit {
-                            (i, Some(c)) => Selection::Circuit(i, c),
-                            (i, None) => Selection::Feeder(i),
-                        };
-                    }
+                        egui_phosphor::regular::WARNING_CIRCLE,
+                        "No se pudo calcular el proyecto",
+                        &self.doc.calc_error().unwrap_or_default(),
+                    ),
                 }
-                Err(_) => crate::widgets::empty_state(
-                    ui,
-                    &p,
-                    egui_phosphor::regular::WARNING_CIRCLE,
-                    "No se pudo calcular el proyecto",
-                    &self.doc.calc_error().unwrap_or_default(),
-                ),
             }),
             Tab::Report => padded(ui, |ui| {
                 self.export_report |= report::show(ui, self.doc, self.shared);

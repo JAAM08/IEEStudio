@@ -562,7 +562,7 @@ fn conductor_lines(project: &Project, ctx: &RunContext) -> Vec<(String, Font, In
     let Some(run) = &ctx.item.run else {
         return vec![
             (ctx.label.clone(), Font::Bold, status_ink(ctx.item.status)),
-            ("No evaluado".to_string(), Font::Regular, Ink::NotEvaluated),
+            ("Sin evaluar".to_string(), Font::Regular, Ink::NotEvaluated),
         ];
     };
     let settings = &project.settings;

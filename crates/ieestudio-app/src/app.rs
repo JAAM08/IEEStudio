@@ -142,6 +142,8 @@ pub struct Options {
     pub advanced: bool,
     /// Empieza con la ventana «¿Qué vas a conectar?» abierta, para revisarla.
     pub chooser: bool,
+    /// Empieza con el unifilar a pantalla completa en la vista guiada.
+    pub diagram: bool,
 }
 
 impl App {
@@ -273,6 +275,10 @@ impl App {
         }
         if options.chooser {
             app.shared.choose_load = app.doc.panel_index();
+        }
+        if options.diagram {
+            app.shared.diagram_full = true;
+            app.shared.diagram_fit = true;
         }
         app
     }
@@ -909,10 +915,20 @@ impl App {
             {
                 self.doc.redo();
             }
-            ui.add_space(18.0);
-            if let Some(step) = guided::step_bar(ui, &p, if self.home { Step::ALL[0] } else { self.step }, &self.doc) {
+            ui.add_space(12.0);
+            // Los pasos completos necesitan unos 530 px y lo de la derecha
+            // 230: si no caben, los pasos se reducen a su número.
+            let compact = ui.available_width() < 780.0;
+            if let Some(step) = guided::step_bar(
+                ui,
+                &p,
+                if self.home { Step::ALL[0] } else { self.step },
+                &self.doc,
+                compact,
+            ) {
                 self.step = step;
                 self.home = false;
+                self.shared.diagram_full = false;
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let (glyph, tip) = if self.dark {
@@ -929,16 +945,30 @@ impl App {
                     self.restyle(ui.ctx());
                 }
                 if ui
-                    .button(RichText::new(format!("{}  Vista avanzada", icon::LAYOUT)).color(p.ink2))
-                    .on_hover_text("Paneles acoplables y espacios de trabajo, para quien ya domina el programa")
+                    .add(
+                        egui::Button::new(RichText::new(icon::LAYOUT).size(15.0).color(p.ink2))
+                            .frame(false),
+                    )
+                    .on_hover_text(
+                        "Vista avanzada: paneles acoplables, para quien ya domina el programa",
+                    )
                     .clicked()
                 {
                     self.guided = false;
                     self.home = false;
                 }
                 if ui
-                    .button(RichText::new(format!("{}  Buscar", icon::MAGNIFYING_GLASS)).color(p.ink2))
-                    .on_hover_text("Comandos, pasos, tableros y circuitos por su nombre (Ctrl+K)")
+                    .add(
+                        egui::Button::new(
+                            RichText::new(icon::MAGNIFYING_GLASS)
+                                .size(15.0)
+                                .color(p.ink2),
+                        )
+                        .frame(false),
+                    )
+                    .on_hover_text(
+                        "Buscar comandos, pasos, tableros y circuitos por su nombre (Ctrl+K)",
+                    )
                     .clicked()
                 {
                     self.commands.toggle();
@@ -1152,12 +1182,14 @@ impl App {
                 {
                     self.run_command(Command::Quick);
                 }
+                let search = if ui.available_width() < 720.0 {
+                    icon::MAGNIFYING_GLASS.to_string()
+                } else {
+                    format!("{}  Buscar   Ctrl+K", icon::MAGNIFYING_GLASS)
+                };
                 if ui
-                    .button(
-                        RichText::new(format!("{}  Buscar   Ctrl+K", icon::MAGNIFYING_GLASS))
-                            .color(p.ink2),
-                    )
-                    .on_hover_text("Comandos, paneles, tableros y circuitos por su nombre")
+                    .button(RichText::new(search).color(p.ink2))
+                    .on_hover_text("Buscar comandos, paneles, tableros y circuitos por su nombre (Ctrl+K)")
                     .clicked()
                 {
                     self.commands.toggle();
@@ -1221,8 +1253,14 @@ impl App {
                         |n| n.to_string_lossy().into_owned(),
                     );
                 let dirty = if self.doc.dirty { " •" } else { "" };
-                ui.label(muted(&p, format!("{file}{dirty}")));
-                ui.label(strong(&self.doc.project.name));
+                // Solo lo que cabe: en una ventana angosta el nombre no se
+                // encima con los botones de la izquierda.
+                if ui.available_width() > 260.0 {
+                    ui.label(muted(&p, format!("{file}{dirty}")));
+                }
+                if ui.available_width() > 110.0 {
+                    ui.add(egui::Label::new(strong(&self.doc.project.name)).truncate());
+                }
             });
         });
     }

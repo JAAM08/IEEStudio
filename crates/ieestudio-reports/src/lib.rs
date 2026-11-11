@@ -517,7 +517,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
     verdict_table(&mut out, &result.verdict, &profile.document.code);
     let _ = writeln!(
         out,
-        "De los tramos calculados, #text(fill: bien, font: \"IBM Plex Sans SmBld\")[{} cumplen], #text(fill: mal, font: \"IBM Plex Sans SmBld\")[{} no cumplen] y #text(fill: duda, font: \"IBM Plex Sans SmBld\")[{} no se evaluaron]. Un tramo «no evaluado» no está aprobado: falta un dato o su regla aún no está implementada.",
+        "De los tramos calculados, #text(fill: bien, font: \"IBM Plex Sans SmBld\")[{} cumplen], #text(fill: mal, font: \"IBM Plex Sans SmBld\")[{} no cumplen] y #text(fill: duda, font: \"IBM Plex Sans SmBld\")[{} quedaron sin evaluar]. Un tramo «sin evaluar» no está aprobado: falta un dato o su regla aún no está implementada. La capacidad interruptiva se revisa aparte, por tablero.",
         result.complies, result.fails, result.not_evaluated
     );
 
@@ -587,6 +587,19 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             }
         }
     }
+    // La capacidad interruptiva, una vez por lugar.
+    for group in result.fault.iter().flat_map(|f| &f.groups) {
+        if group.status == Status::Complies {
+            continue;
+        }
+        let cite = cite_all(&group.references).map_or(String::new(), |c| format!(" ({c})"));
+        notes.push(format!(
+            "- #estado({}) · #{}; · #{};",
+            q(interrupting_label(group)),
+            q(&format!("Capacidad interruptiva en {}:", group.place)),
+            q(&format!("{}{cite}", interrupting_detail(&group.summary())))
+        ));
+    }
     for warning in &result.warnings {
         notes.push(format!(
             "- #text(fill: duda, font: \"IBM Plex Sans SmBld\")[Aviso] · #{};",
@@ -636,6 +649,33 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
         out.push_str("\n== Falla en las barras de cada tablero\n");
         let rows: Vec<(&str, String)> = rows.iter().map(|(a, b)| (a.as_str(), b.clone())).collect();
         data_table(&mut out, &rows);
+        // Una verificación por lugar, con sus interruptores.
+        for group in &study.groups {
+            let _ = writeln!(
+                out,
+                "\n#block(breakable: false)[\n== #{};\n#estado({}) #h(6pt) #{};\n]",
+                q(&format!("Capacidad interruptiva en {}", group.place)),
+                q(interrupting_label(group)),
+                q(&format!(
+                    "{}.",
+                    capitalize(interrupting_detail(&group.summary()))
+                ))
+            );
+            let rows: Vec<(&str, String)> = group
+                .breakers
+                .iter()
+                .map(|b| {
+                    (
+                        b.label.as_str(),
+                        match b.ka {
+                            Some(ka) => format!("{ka} kA"),
+                            None => "Sin dato".to_string(),
+                        },
+                    )
+                })
+                .collect();
+            data_table(&mut out, &rows);
+        }
     }
 
     out.push_str("\n= Procedimiento de cálculo\n");
@@ -758,7 +798,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             }
         }
         Err(e) => {
-            rows.push(("Protección y conductor", format!("No evaluado: {e}")));
+            rows.push(("Protección y conductor", format!("Sin evaluar: {e}")));
         }
     }
     rows.push((
@@ -862,4 +902,19 @@ pub fn project_pdf(project: &Project, result: &ProjectResult) -> Result<Vec<u8>,
 /// Hoja de un cálculo rápido, en PDF.
 pub fn quick_pdf(input: &QuickInput, result: &QuickResult) -> Result<Vec<u8>, String> {
     render(quick_source(input, result))
+}
+
+/// «No concluyente» cuando hay interruptores con dato que no alcanzan la
+/// falla estimada; «Sin evaluar» cuando solo faltan datos.
+fn interrupting_label(group: &ieestudio_project::fault::InterruptingGroup) -> &'static str {
+    match group.status {
+        Status::Complies => "Cumple",
+        _ if group.short() > 0 => "No concluyente",
+        _ => "Sin evaluar",
+    }
+}
+
+/// El resumen sin el «no concluyente» inicial, que ya va como etiqueta.
+fn interrupting_detail(summary: &str) -> &str {
+    summary.strip_prefix("no concluyente: ").unwrap_or(summary)
 }

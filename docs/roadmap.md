@@ -75,6 +75,13 @@
   ofrece las que hay con su tensión, las fases se eligen con botones y no se
   preguntan cuando están determinadas, y los proyectos guardados con una
   combinación imposible se corrigen con un botón.
+- Estados claros (decisión 0025): el estado de cada circuito es el de su
+  cálculo, la capacidad interruptiva es una verificación por tablero con su
+  dato a la mano, y el número de pendientes es el mismo en todas las
+  pantallas. La tabla de circuitos y la barra de pasos caben sin cortarse.
+- Unifilar a pantalla completa en la vista guiada, desde Revisar y Memoria,
+  con Revisión / Plano y exportar; el dibujo se guarda entre cuadros y solo
+  se rehace cuando el proyecto cambia.
 
 ## Pendiente, en orden
 

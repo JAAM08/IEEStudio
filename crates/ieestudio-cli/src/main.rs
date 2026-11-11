@@ -157,7 +157,7 @@ fn print_report(result: &ProjectResult) {
         print_panel(panel);
     }
     println!(
-        "\nResumen: {} cumplen, {} no cumplen, {} no evaluados",
+        "\nResumen: {} cumplen, {} no cumplen, {} sin evaluar",
         result.complies, result.fails, result.not_evaluated
     );
     if let Some(g) = &result.grounding_electrode {
@@ -166,6 +166,12 @@ fn print_report(result: &ProjectResult) {
             ieestudio_project::size_label(&g.size),
             g.service
         );
+    }
+    // La capacidad interruptiva, una vez por lugar.
+    for group in result.fault.iter().flat_map(|f| &f.groups) {
+        if group.status != ieestudio_project::Status::Complies {
+            println!("Capacidad interruptiva: {}", group.summary());
+        }
     }
     for warning in &result.warnings {
         println!("Aviso: {warning}");

@@ -341,16 +341,30 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             ui.horizontal(|ui| {
                 ui.label(strong(format!("{} · {}", panel.id, panel.name)).size(17.0));
                 ui.add_space(6.0);
-                ui.label(
-                    muted(
-                        &p,
-                        format!(
-                            "{} · se alimenta de {feeds_from}",
-                            label_of(&crate::widgets::SYSTEMS, system)
-                        ),
-                    )
-                    .size(11.5),
-                );
+                // Lo que quepa junto a los conteos de la derecha; nunca
+                // encimado con ellos.
+                let room = ui.available_width() - 450.0;
+                if room > 60.0 {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(room, 18.0),
+                        Layout::left_to_right(Align::Center),
+                        |ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    muted(
+                                        &p,
+                                        format!(
+                                            "{} · se alimenta de {feeds_from}",
+                                            label_of(&crate::widgets::SYSTEMS, system)
+                                        ),
+                                    )
+                                    .size(11.5),
+                                )
+                                .truncate(),
+                            );
+                        },
+                    );
+                }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if doc.project.panels.len() > 1 {
                         let mut chosen = panel_index;
