@@ -555,6 +555,11 @@ pub fn connection_picker(
             .on_hover_text("Es la única conexión que hay aquí.");
         return false;
     }
+    // Donde los botones no caben (un panel angosto), la misma elección
+    // como lista.
+    if ui.available_width() < 78.0 * allowed.len() as f32 && allowed.contains(kind) {
+        return connection_combo(ui, "conexion-angosta", kind, system, allowed);
+    }
     let mut changed = false;
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 2.0;

@@ -39,7 +39,7 @@ impl Status {
         match self {
             Status::Complies => "Cumple",
             Status::Fails => "No cumple",
-            Status::NotEvaluated => "No evaluado",
+            Status::NotEvaluated => "Sin evaluar",
         }
     }
 }
@@ -157,10 +157,26 @@ pub struct Run {
 pub struct RunResult {
     pub id: String,
     pub name: String,
+    /// Estado del cálculo propio del tramo: carga, conductor, protección,
+    /// caída, tierra y tubería. La capacidad interruptiva de su interruptor
+    /// no entra aquí: es una verificación del tablero donde está instalado.
     pub status: Status,
     pub load_w: f64,
     pub run: Option<Run>,
     pub checks: Vec<Check>,
+    /// Capacidad interruptiva del interruptor contra la falla de las barras
+    /// de donde sale. `None` sin datos de la fuente (fuera de alcance) o si
+    /// el tramo no se calculó. Se resume por tablero en
+    /// [`crate::fault::FaultStudy::groups`].
+    pub interrupting: Option<Check>,
+}
+
+impl RunResult {
+    /// Todas las verificaciones del tramo, incluida la de capacidad
+    /// interruptiva.
+    pub fn all_checks(&self) -> impl Iterator<Item = &Check> {
+        self.checks.iter().chain(self.interrupting.as_ref())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -808,6 +824,7 @@ fn run_result(
         load_w,
         run,
         checks,
+        interrupting: None,
     }
 }
 
@@ -1508,9 +1525,12 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         runs.len(),
         runs.iter().filter(|r| r.run.is_none()).count(),
         // Las verificaciones de un tramo sin calcular ya cuentan como «sin calcular».
+        // La capacidad interruptiva cuenta una vez por tablero, no una por
+        // interruptor.
         runs.iter()
             .filter(|r| r.run.is_some())
-            .flat_map(|r| r.checks.iter().map(|c| c.status)),
+            .flat_map(|r| r.checks.iter().map(|c| c.status))
+            .chain(fault.iter().flat_map(|f| f.groups.iter().map(|g| g.status))),
     );
     // Con datos de la fuente la capacidad interruptiva se verifica por un
     // método conservador; sin ellos queda fuera de alcance (decisión 0018).

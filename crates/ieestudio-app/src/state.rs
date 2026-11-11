@@ -117,7 +117,10 @@ impl Doc {
 
     pub fn recalculate(&mut self) {
         self.result = calculate(&self.project);
-        self.revision += 1;
+        // Único entre documentos: lo que se guarda por revisión (la vista
+        // previa, el unifilar) no debe confundir un proyecto con otro.
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        self.revision = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.clamp_selection();
     }
 

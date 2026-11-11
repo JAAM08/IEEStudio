@@ -266,6 +266,18 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         .as_ref()
         .and_then(|id| doc.project.panels.iter().find(|x| &x.id == id))
         .and_then(|x| x.board.interrupting_ka);
+    let group = doc
+        .result
+        .as_ref()
+        .ok()
+        .and_then(|r| r.fault.as_ref())
+        .and_then(|f| {
+            let id = doc.project.panels[i].id.as_str();
+            f.groups
+                .iter()
+                .find(|g| g.panel.as_deref() == Some(id))
+                .cloned()
+        });
     let others = doc.feeder_candidates(i);
     let source_name = doc.project.source.name.clone();
     let settings = doc.project.settings.clone();
@@ -355,6 +367,26 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
             bus,
             motors.as_ref(),
         );
+        // La verificación del tablero: sus interruptores contra esa falla.
+        if let Some(group) = &group {
+            ui.add_space(4.0);
+            let color = crate::widgets::status_color(p, group.status);
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new(crate::widgets::status_icon(group.status)).color(color));
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(crate::widgets::capitalize(&group.summary()) + ".")
+                            .size(12.0)
+                            .color(if group.status == Status::Complies {
+                                p.ink2
+                            } else {
+                                color
+                            }),
+                    )
+                    .wrap(),
+                );
+            });
+        }
     }
 
     section(ui, p, "Transformador");
@@ -673,7 +705,26 @@ pub(crate) fn circuit_form(
         property(ui, p, "Salidas", |ui| {
             let mut n = circuit.load.outlets.unwrap_or(0);
             if ui
-                .add(egui::DragValue::new(&mut n).range(0..=500).suffix(" contactos"))
+                .add(
+                    egui::DragValue::new(&mut n)
+                        .range(0..=500)
+                        // Cero no es «0 contactos»: es que no se contaron y
+                        // la potencia se capturó directa.
+                        .custom_formatter(|n, _| {
+                            if n < 0.5 {
+                                "Sin contar".to_string()
+                            } else if n < 1.5 {
+                                "1 contacto".to_string()
+                            } else {
+                                format!("{n:.0} contactos")
+                            }
+                        })
+                        .custom_parser(|text| {
+                            let digits: String =
+                                text.chars().filter(char::is_ascii_digit).collect();
+                            Some(digits.parse().unwrap_or(0.0))
+                        }),
+                )
                 .changed()
             {
                 circuit.load.outlets = (n > 0).then_some(n);
@@ -1664,8 +1715,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab
     // también con su estado y su referencia.
     let traced: Vec<&str> = TRACE.iter().flat_map(|(_, n)| n.iter().copied()).collect();
     let others: Vec<&ieestudio_project::Check> = item
-        .checks
-        .iter()
+        .all_checks()
         .filter(|c| !traced.contains(&c.name.as_str()))
         .collect();
     if !others.is_empty() {
@@ -1821,7 +1871,7 @@ fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
 
 fn checks(ui: &mut egui::Ui, p: &Palette, item: &RunResult) {
     section(ui, p, "Verificaciones");
-    for check in &item.checks {
+    for check in item.all_checks() {
         ui.horizontal(|ui| {
             ui.label(strong(&check.name));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

@@ -3,7 +3,8 @@
 //!
 //! Uso en escritorio: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
 //! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--inicio] [--comandos]
-//! [--paso proyecto|tableros|circuitos|revisar|memoria] [--avanzada] [--agregar] [--captura imagen.png]`
+//! [--paso proyecto|tableros|circuitos|revisar|memoria] [--avanzada] [--agregar] [--unifilar-completo]
+//! [--tamano 1024x768] [--captura imagen.png]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -41,7 +42,9 @@ fn main() -> eframe::Result {
         step: None,
         advanced: false,
         chooser: false,
+        diagram: false,
     };
+    let mut size = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -52,6 +55,14 @@ fn main() -> eframe::Result {
             "--comandos" => options.palette = true,
             "--avanzada" => options.advanced = true,
             "--agregar" => options.chooser = true,
+            "--unifilar-completo" => options.diagram = true,
+            // Tamaño de la ventana para revisar pantallas angostas: 1024x768.
+            "--tamano" => {
+                size = args.next().and_then(|v| {
+                    let (w, h) = v.split_once('x')?;
+                    Some([w.parse::<f32>().ok()?, h.parse::<f32>().ok()?])
+                });
+            }
             "--paso" => {
                 options.step = match args.next().as_deref() {
                     Some("proyecto") => Some(guided::Step::Project),
@@ -98,7 +109,7 @@ fn main() -> eframe::Result {
         let options = options.clone();
         match eframe::run_native(
             "IEEStudio",
-            native_options(renderer),
+            native_options(renderer, size),
             Box::new(move |cc| Ok(Box::new(app::App::new(cc, options)))),
         ) {
             Ok(()) => return Ok(()),
@@ -115,19 +126,23 @@ fn main() -> eframe::Result {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn native_options(renderer: eframe::Renderer) -> eframe::NativeOptions {
+fn native_options(renderer: eframe::Renderer, size: Option<[f32; 2]>) -> eframe::NativeOptions {
     eframe::NativeOptions {
         renderer,
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("IEEStudio")
-            .with_inner_size([1440.0, 900.0])
-            .with_min_inner_size([1024.0, 640.0])
+            .with_inner_size(size.unwrap_or([1440.0, 900.0]))
+            .with_min_inner_size(
+                size.map_or([1024.0, 640.0], |s| [s[0].min(1024.0), s[1].min(640.0)]),
+            )
             .with_icon(
                 eframe::icon_data::from_png_bytes(include_bytes!(
                     "../../../assets/icon/ieestudio-256.png"
                 ))
                 .unwrap_or_default(),
             ),
+        // Con un tamaño pedido no se repone el de la última sesión.
+        persist_window: size.is_none(),
         ..Default::default()
     }
 }
@@ -195,6 +210,7 @@ fn main() {
         step: None,
         advanced: false,
         chooser: false,
+        diagram: false,
     };
     wasm_bindgen_futures::spawn_local(async move {
         let canvas = web_sys::window()

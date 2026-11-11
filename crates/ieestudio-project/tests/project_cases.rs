@@ -568,9 +568,7 @@ fn interrupting_rating_is_out_of_scope() {
         for panel in &result.panels {
             for run in panel.runs() {
                 assert!(
-                    run.checks
-                        .iter()
-                        .all(|c| c.name != "Capacidad interruptiva"),
+                    run.all_checks().all(|c| c.name != "Capacidad interruptiva"),
                     "{}: {}",
                     panel.id,
                     run.id
@@ -744,7 +742,7 @@ fn an_overloaded_transformer_fails() {
 }
 
 fn checks_named<'a>(run: &'a RunResult, name: &str) -> Vec<&'a ieestudio_project::Check> {
-    run.checks.iter().filter(|c| c.name == name).collect()
+    run.all_checks().filter(|c| c.name == name).collect()
 }
 
 /// Con el transformador de la acometida, la falla por bus infinito en el
@@ -981,4 +979,61 @@ fn a_run_cannot_have_more_phases_than_its_panel() {
         "{:?}",
         run.checks[0]
     );
+}
+
+/// La capacidad interruptiva es una verificación del tablero, no de cada
+/// circuito: un circuito bien calculado cumple aunque el interruptor no
+/// alcance la falla estimada, y el pendiente se cuenta una vez por lugar.
+#[test]
+fn interrupting_capacity_is_one_check_per_place() {
+    let mut project = example::house();
+    project.source.substation = Some(ieestudio_project::Substation {
+        impedance_from_table: Default::default(),
+        kva: 112.5,
+        impedance_percent: 3.0,
+        primary_kv: Some(13.2),
+        connection: None,
+        mounting: None,
+        brand: String::new(),
+    });
+    let before = calculate(&example::house()).unwrap();
+    project.panels[0].board.interrupting_ka = Some(10.0);
+    let result = calculate(&project).unwrap();
+    // El estado de cada tramo es el mismo que sin estudio de falla.
+    for (with, without) in result.panels[0].runs().zip(before.panels[0].runs()) {
+        assert_eq!(with.status, without.status, "{}", with.id);
+        assert!(with.interrupting.is_some());
+    }
+    let study = result.fault.as_ref().unwrap();
+    assert_eq!(study.groups.len(), 2);
+    let source = &study.groups[0];
+    assert_eq!(source.panel, None);
+    assert_eq!((source.breakers.len(), source.missing()), (1, 1));
+    assert!(source
+        .summary()
+        .starts_with("falta la capacidad interruptiva de 1 interruptor"));
+    let bars = &study.groups[1];
+    assert_eq!(bars.panel.as_deref(), Some("TG-1"));
+    assert_eq!(bars.status, Status::NotEvaluated);
+    assert_eq!(bars.short(), bars.breakers.len());
+    assert!(
+        bars.summary().starts_with("no concluyente: los "),
+        "{}",
+        bars.summary()
+    );
+    // Dos pendientes por la capacidad interruptiva, no uno por interruptor.
+    assert_eq!(
+        result.verdict.pending_checks,
+        before.verdict.pending_checks + 2
+    );
+
+    project.panels[0].board.interrupting_ka = Some(22.0);
+    project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(22.0);
+    let result = calculate(&project).unwrap();
+    let study = result.fault.as_ref().unwrap();
+    assert!(study.groups.iter().all(|g| g.status == Status::Complies));
+    assert!(study.groups[1]
+        .summary()
+        .contains("cumple con un método conservador"));
+    assert_eq!(result.verdict.pending_checks, before.verdict.pending_checks);
 }
