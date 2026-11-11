@@ -12,6 +12,11 @@ Escrito el 10 de noviembre de 2026. Este documento es la instrucción completa p
 6. **Cuadro de cargas con su formato:** en la app y en la exportación a Excel, con el archivo `CUADRO_DE_CARGAS_CMAPAS.xlsx` como base, y personalizable.
 7. **Que el programa no pregunte lo que ya sabe.** En el cálculo rápido eligió el sistema `1F-3H 240/120 V` y aun así pudo elegir «3 fases» en Conexión. Si el sistema ya dice cuántas fases hay, no debe volver a pedirlas ni permitir una combinación imposible.
 
+8. **Estados que se entiendan** (evaluación de la interfaz del 10-nov-2026, aceptada por Antonio): hoy casi todo sale «Sin evaluar» por un solo motivo, los conteos de pendientes no coinciden entre pantallas, hay textos encimados o cortados y el unifilar no tiene un lugar propio en la vista guiada. Ver la etapa 1B.
+9. **La vista avanzada queda congelada** (decisión de Antonio, 10-nov-2026): sigue funcionando en escritorio, pero no se adapta a teléfono ni recibe funciones nuevas. Lo que solo ella tiene (procedimiento completo, elegir columnas) se pasa a la vista guiada.
+10. **El aviso «pensado para pantallas grandes» debe desaparecer** en cuanto el teléfono sea de verdad utilizable (etapa 3).
+11. **Errores que aparezcan en el camino se arreglan**, sin pedir permiso, y se reportan. Para dejar la app a nivel profesional, quien ejecute toma la mejor decisión de diseño posible y la explica.
+
 ## 2. Estado actual (verifícalo antes de empezar)
 
 - Repositorio: `github.com/JAAM08/IEEStudio`, rama `main`. Rust, interfaz egui (escritorio y navegador por WebAssembly), memoria en PDF con Typst, Excel con `rust_xlsxwriter` y `calamine`.
@@ -36,7 +41,9 @@ Escrito el 10 de noviembre de 2026. Este documento es la instrucción completa p
 9. **El formato del archivo `.iees` no se rompe:** campos nuevos con valor por omisión; los proyectos viejos deben abrir igual. Agrega una prueba de lectura de un archivo anterior.
 10. **Todo debe funcionar también en el navegador:** archivos solo por el módulo `files` (decisión 0017), nada de `std::fs` directo, nada de hilos que WebAssembly no tenga sin su alternativa.
 11. **No preguntes lo que el programa ya sabe.** Antes de agregar un campo, revisa si su valor se deduce de otro dato ya capturado; si se deduce, muéstralo, no lo pidas. Si solo hay una opción válida, no pongas una lista.
-12. Si GitHub rechaza tus subidas, no insistas: empaqueta con `git bundle` y mándalo en el chat.
+12. **Mejora continua.** No des una pantalla por terminada porque ya existe: al tocarla, mírala como usuario nuevo. Si encuentras un error (de cálculo, de texto, de acomodo) mientras trabajas una etapa, arréglalo en el mismo PR si es chico o en uno aparte si no, y repórtalo. Solo las decisiones de ingeniería o de norma esperan a Antonio.
+13. **La vista avanzada no se toca** salvo para que siga compilando y no se rompa. Nada nuevo se construye en ella.
+14. Si GitHub rechaza tus subidas, no insistas: empaqueta con `git bundle` y mándalo en el chat.
 
 ## 4. Etapas
 
@@ -69,13 +76,30 @@ El orden importa. La corrección de sistema y conexión va primero porque hoy pr
 2. **En el cálculo rápido:** la lista «Conexión» ofrece solo las del sistema elegido, con su tensión (`1F · 120 V`, `2F · 240 V`), igual que la ficha del circuito. Si solo hay una, se muestra como texto, sin lista. Al cambiar el sistema, si la conexión ya no existe se pasa a la más cercana y se avisa. Para motores, la lista de hp sigue a la conexión (ya lo hace).
 3. **En el alimentador de un tablero:** la «Conexión» se limita a las del sistema de donde se alimenta (la fuente, el tablero padre o el secundario de su transformador) y a las del tablero padre.
 4. **En la ficha del circuito:** además del tablero, considerar el sistema (hoy se usa la tensión pero no la regla de 3 fases en monofásico).
-5. **Fases A, B, C:** si la conexión ocupa todas las fases del tablero (3 fases en un tablero trifásico, 2 en uno de dos fases, 1 en uno de una), no se preguntan: se muestran. Solo se eligen cuando hay opciones reales (por ejemplo, un circuito de 1 fase en un tablero de 3). «Lleva neutro» solo aparece si el sistema tiene neutro.
+5. **Fases A, B, C:** se eligen con botones excluyentes (A | B | C, o AB | BC | CA), no con tres casillas que dejan marcar una combinación inválida. Si la conexión ocupa todas las fases del tablero (3 fases en un tablero trifásico, 2 en uno de dos fases, 1 en uno de una), no se preguntan: se muestran. Solo se eligen cuando hay opciones reales (por ejemplo, un circuito de 1 fase en un tablero de 3). «Lleva neutro» solo aparece si el sistema tiene neutro.
 6. **Proyectos existentes con una combinación imposible:** deben abrir; el tramo queda «no evaluado» con el motivo y un botón para corregirlo. Agregar el aviso a Revisar.
 7. **Barrido del mismo defecto:** revisar todos los formularios (proyecto, tablero, circuito, cálculo rápido, transformador, acometida) y listar cada campo que pide algo que se deduce de otro. Corregir los claros; los dudosos, presentárselos a Antonio en una lista corta.
 
 **Pruebas:** una por cada renglón de la tabla de arriba, en el motor; una de que el cálculo rápido con `1F-3H` y 3 fases devuelve error; una de lectura de un proyecto viejo con la combinación imposible.
 
 **Listo cuando:** en ninguna pantalla se puede elegir una conexión que el sistema no tiene, y el caso de la captura de Antonio (`1F-3H 240/120 V`, 61 700 W) ya no ofrece «3 fases».
+
+### Etapa 1B — Claridad de estados
+
+**El problema** (visto en las capturas del proyecto de ejemplo con 10 kA en el tablero): 6 de 7 circuitos dicen «Sin evaluar» solo porque la falla por bus infinito no es concluyente; el pie dice «0 cumplen» aunque cable, interruptor y caída estén bien; en Revisar, 11 de 13 pendientes son el mismo aviso; el paso Revisar marca «2», la lista 13 y la Memoria 2 + 11; en la vista avanzada el alimentador dice «Cumple» y su tablero «No cumple».
+
+**Qué y cómo:**
+1. **Dos preguntas separadas.** El estado de un circuito o alimentador responde solo a su cálculo propio (carga, conductor, protección, caída, tierra, tubería). La **capacidad interruptiva** es una verificación del tablero: un solo aviso por tablero con la corriente de falla, los interruptores que no la alcanzan o no tienen dato, y el campo para capturar los kA ahí mismo. El dictamen global no cambia de criterio: mientras ese aviso exista, el proyecto no se marca conforme (nada se marca conforme si falta una verificación). En la ficha del circuito queda como un renglón, no como el recuadro principal.
+2. **Un solo conteo de pendientes** calculado en un lugar y usado por la barra de pasos, el pie, Revisar, la Memoria y el PDF. Se cuentan asuntos por resolver, no verificaciones internas.
+3. **Dos palabras para lo que no es cumple / no cumple:** «Sin evaluar» (falta un dato o la regla no cubre el caso) y «No concluyente» (se calculó con un método conservador y no alcanza para afirmar). Quitar «no evaluado» y «pendiente» como sinónimos en la interfaz; «Pendiente» queda solo para la aprobación profesional.
+4. **Nada encimado ni cortado a 1280 px ni a 1024 px:** la barra de pasos reduce a número los pasos que no caben; la columna Estado es un icono con color, fija a la derecha, con el texto en la ayuda y en la ficha; revisar el encabezado de la vista avanzada solo para quitar los textos encimados.
+5. **Textos engañosos:** «Responsable y cédula capturados» cuando faltan → «Falta responsable y cédula»; «0 contactos» → «sin contar»; el pie del cálculo rápido debe decir que su dictamen es el de ese cálculo (hoy se confunde con el del proyecto, que aparece justo debajo); lo que no cumple va en rojo con su icono también en la lista de la Memoria.
+6. **Desbalance visible:** cuando pasa del límite del perfil, es un aviso con el botón «Balancear», no letra gris.
+7. **Contraste en tema claro:** el amarillo de acento no se usa como color de texto sobre fondo claro.
+
+**Pruebas:** el conteo único tiene pruebas con el proyecto de ejemplo; una prueba de que un circuito con todo bien y sin kA concluyente aparece como «Cumple» y el tablero lleva el aviso; capturas a 1280 y 1024 px sin recortes.
+
+**Listo cuando:** en el proyecto de ejemplo los circuitos correctos se ven en verde, el único problema real (C-04) destaca, y el mismo número de pendientes aparece en todas las pantallas.
 
 ### Etapa 2 — Rendimiento, incluido el PDF
 
@@ -94,7 +118,7 @@ El orden importa. La corrección de sistema y conexión va primero porque hoy pr
 
 ### Etapa 3 — Base para teléfono
 
-**Antes de programar:** Antonio debe abrir la versión web actual en su teléfono y decir qué falla (teclado, desplazamiento, zoom, tamaño). Dale el enlace y una lista corta de qué probar. Ese resultado manda sobre las suposiciones de abajo.
+**Punto de partida:** Antonio ya la abrió en su teléfono: abre, pero es la pantalla de escritorio encogida y con el aviso de «pensado para pantallas grandes». No esperes otra prueba suya para empezar; revisa tú con capturas a tamaño de teléfono y mándale el enlace cuando haya algo que probar.
 
 **Qué y cómo:**
 1. **Tres tamaños** según el ancho disponible: teléfono (< 700 px), tablet (700–1100 px) y escritorio. Un solo lugar del código decide el tamaño; las pantallas lo consultan.
@@ -106,6 +130,9 @@ El orden importa. La corrección de sistema y conexión va primero porque hoy pr
 7. **Archivos en teléfono:** abrir, guardar y compartir el `.iees` y el PDF con lo que el navegador permita; guardado automático local para no perder trabajo en obra sin señal.
 8. **Instalable y sin conexión** (PWA): revisar que funcione sin red después de la primera carga.
 9. Opción de captura `--tamano telefono|tablet` para revisar sin teléfono.
+10. **Unifilar con lugar propio en la vista guiada:** botón «Abrir unifilar» a pantalla completa desde Revisar y Memoria, con Revisión / Plano y exportar. La miniatura ilegible de Revisar se cambia por un esquema simple de tableros con su estado.
+11. **Quitar el aviso de pantallas grandes** (`crates/ieestudio-app/web/index.html`), corregir la pregunta «¿Funciona en el celular?» de `website/guia/index.html` y anotar el cambio en las decisiones 0017 y 0020. Solo cuando lo anterior funcione: no se quita el aviso antes de merecerlo.
+12. La vista avanzada no se ofrece en teléfono.
 
 **Regla desde aquí:** toda pantalla nueva de las etapas siguientes se entrega también en tamaño teléfono, con su captura.
 
@@ -113,11 +140,16 @@ El orden importa. La corrección de sistema y conexión va primero porque hoy pr
 
 ### Etapa 4 — Uso diario
 
-1. **Avisos agrupados en Revisar.** Los de capacidad interruptiva se juntan en uno por tablero («11 interruptores sin capacidad interruptiva en TG-1») con un campo para capturar los kA del tablero ahí mismo. Revisar si otros avisos repetidos merecen lo mismo.
+1. **Avisos agrupados en Revisar.** El de capacidad interruptiva ya quedó por tablero en la etapa 1B; revisar si otros avisos repetidos merecen lo mismo.
 2. **Tabla de circuitos:** que quepa completa a 1280 px (hoy se corta la columna Estado); elegir qué columnas ver; **editar en la celda** nombre, carga, longitud y fases; teclas Tab y Enter para moverse.
 3. **Duplicar circuito y plantillas** («contactos de 180 VA × 6», «minisplit 1 t»), editables por el usuario.
 4. **«Es otra carga» se guarda** en el proyecto para que el aviso no regrese.
 5. **Excel de ida y vuelta completo:** que exportar e importar conserve tipo de carga, datos de motor y de placa, datos de catálogo y posiciones. Prueba: exportar → importar → el proyecto queda idéntico.
+
+6. **Proyectos recientes** en la pantalla de inicio (en el navegador, los guardados localmente).
+7. **Un solo botón para exportar el PDF** en Memoria (hoy hay tres).
+8. **Paso Tableros:** aprovechar el espacio vacío del lienzo y que la ficha no obligue a desplazarse para lo común.
+9. **Pasar a la vista guiada lo que solo tiene la avanzada:** el procedimiento completo del alimentador y elegir columnas.
 
 **Listo cuando:** capturar 40 circuitos se puede hacer sin abrir la ficha de cada uno, y la prueba de ida y vuelta pasa.
 
@@ -187,7 +219,6 @@ El orden importa. La corrección de sistema y conexión va primero porque hoy pr
 | Etapa | Decisión |
 |---|---|
 | 1 | La lista de campos dudosos que salga del barrido (qué más sobra en los formularios). |
-| 3 | Qué falló al probar la versión web en su teléfono. |
 | 5 | Si el catálogo de cargas reemplaza o convive con la captura por watts (recomendado: convive). |
 | 5 | Calibres en mm², AWG o ambos por omisión (su formato usa mm²; la app usa AWG). |
 | 5 | Qué hacer cuando los watts de un contacto del catálogo quedan por debajo de los 180 VA de la norma. |
