@@ -33,6 +33,10 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0025 | [El estado de un circuito es el de su cálculo; la capacidad interruptiva se revisa por tablero](0025-estado-propio-y-capacidad-interruptiva-por-tablero.md) | Aceptada |
 | 0026 | [Fuente única de datos eléctricos y propagación por la topología](0026-fuente-unica-y-topologia.md) | Aceptada |
 | 0027 | [Estados de evaluación, resultados parciales y trazabilidad](0027-estados-y-trazabilidad.md) | Aceptada; por ahora en el estudio de falla |
-| 0028 | [Contribución de motores y propagación de la corriente de falla](0028-motores-y-propagacion-de-la-falla.md) | Aceptada |
+| 0028 | [Contribución de motores y propagación de la corriente de falla](0028-motores-y-propagacion-de-la-falla.md) | Aceptada; aclarada por 0029 |
+| 0029 | [Alcance y criterios de la revisión de capacidad interruptiva (D-1 a D-8)](0029-alcance-y-criterios-de-la-capacidad-interruptiva.md) | Aceptada; se implementa en la etapa 1 |
 
-El estado del proyecto y lo pendiente están en `../roadmap.md`.
+El estado del proyecto y lo pendiente están en `../roadmap.md`. Las auditorías del
+PR #11 están en `../auditoria-modelo-y-falla.md` (Opus) y
+`../auditoria-fable-pr11.md` (Fable); el análisis de las decisiones D-1 a D-8,
+en `../decisiones-pendientes-d1-d8.md` (resueltas en la 0029).

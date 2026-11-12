@@ -1,0 +1,241 @@
+{
+  "format_version": 3,
+  "name": "Casa habitación (ejemplo)",
+  "profile": "nom-001-sede-2012",
+  "info": {
+    "client": "Familia Pérez",
+    "location": "Salamanca, Guanajuato",
+    "prepared_by": "",
+    "responsible": "",
+    "license": "",
+    "revision": "A",
+    "date": ""
+  },
+  "occupancy": "dwellings",
+  "settings": {
+    "branch_drop_limit_percent": 3.0,
+    "feeder_drop_limit_percent": 2.0,
+    "total_drop_limit_percent": 5.0,
+    "ambient_c": 30.0,
+    "material": "Copper",
+    "insulation": "Thw",
+    "wet_location": false,
+    "conduit": "Emt",
+    "bare_grounding": true,
+    "resistance_temperature_c": null,
+    "include_iec_ratings": false,
+    "imbalance_warning_percent": 5.0,
+    "largest_single_size": "500"
+  },
+  "source": {
+    "name": "Acometida",
+    "system": {
+      "line_to_line_v": 220.0,
+      "line_to_neutral_v": 127.0
+    },
+    "supplier": "CFE",
+    "frequency_hz": 60.0,
+    "meter": true
+  },
+  "panels": [
+    {
+      "id": "TG-1",
+      "name": "Tablero TG-1",
+      "parent": null,
+      "kind": "ThreePhase",
+      "feeder": {
+        "length_m": 12.0,
+        "demand": "Article220",
+        "has_neutral": true,
+        "overrides": {
+          "size": null,
+          "conductors_per_phase": null,
+          "material": null,
+          "insulation": null,
+          "conduit": null,
+          "nipple": false,
+          "nonlinear": false,
+          "other_current_carrying_conductors": 0
+        }
+      },
+      "areas": [
+        {
+          "description": "Planta baja y planta alta",
+          "occupancy": null,
+          "m2": 120.0
+        }
+      ],
+      "circuits": [
+        {
+          "id": "C-01",
+          "name": "Alumbrado planta baja",
+          "kind": "LineToNeutral",
+          "phases": [
+            "A"
+          ],
+          "load": {
+            "power_w": 1200.0,
+            "power_factor": 0.9,
+            "continuous": true,
+            "kind": "Lighting"
+          },
+          "length_m": 18.0,
+          "has_neutral": false,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        },
+        {
+          "id": "C-02",
+          "name": "Contactos cocina",
+          "kind": "LineToNeutral",
+          "phases": [
+            "B"
+          ],
+          "load": {
+            "power_w": 1800.0,
+            "power_factor": 0.9,
+            "continuous": false,
+            "kind": "Receptacles"
+          },
+          "length_m": 22.0,
+          "has_neutral": false,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        },
+        {
+          "id": "C-03",
+          "name": "Aire acondicionado",
+          "kind": "LineToLine",
+          "phases": [
+            "A",
+            "C"
+          ],
+          "load": {
+            "power_w": 2400.0,
+            "power_factor": 0.9,
+            "continuous": false,
+            "kind": "AirConditioning",
+            "compressor": {
+              "rated_load_a": null,
+              "branch_selection_a": null,
+              "minimum_circuit_a": 15.0,
+              "maximum_protection_a": 25.0
+            }
+          },
+          "length_m": 15.0,
+          "has_neutral": false,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        },
+        {
+          "id": "C-04",
+          "name": "Contactos sala",
+          "kind": "LineToNeutral",
+          "phases": [
+            "C"
+          ],
+          "load": {
+            "power_w": 1500.0,
+            "power_factor": 0.9,
+            "continuous": false,
+            "kind": "Receptacles"
+          },
+          "length_m": 35.0,
+          "has_neutral": false,
+          "overrides": {
+            "size": "12",
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        },
+        {
+          "id": "C-05",
+          "name": "Alumbrado exterior",
+          "kind": "LineToNeutral",
+          "phases": [
+            "B"
+          ],
+          "load": {
+            "power_w": 600.0,
+            "power_factor": 0.9,
+            "continuous": true,
+            "kind": "Lighting"
+          },
+          "length_m": 40.0,
+          "has_neutral": false,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        },
+        {
+          "id": "C-06",
+          "name": "Bomba de agua",
+          "kind": "LineToNeutral",
+          "phases": [
+            "A"
+          ],
+          "load": {
+            "power_w": 373.0,
+            "power_factor": 0.8,
+            "continuous": false,
+            "kind": "Motor",
+            "motor": {
+              "hp": "1/2",
+              "motor_type": "SquirrelCage",
+              "nameplate_a": null,
+              "service_factor_marked": false
+            }
+          },
+          "length_m": 12.0,
+          "has_neutral": false,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        }
+      ]
+    }
+  ]
+}
