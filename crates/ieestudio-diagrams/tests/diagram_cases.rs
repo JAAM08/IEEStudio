@@ -267,8 +267,8 @@ fn catalog_data_and_fault_current_are_drawn() {
     let mut house = example::house();
     house.source.substation = Some(ieestudio_project::Substation {
         impedance_from_table: Default::default(),
-        kva: 112.5,
-        impedance_percent: 3.0,
+        kva: Some(112.5),
+        impedance_percent: Some(3.0),
         primary_kv: Some(13.2),
         connection: Some(ieestudio_project::Connection::DeltaWye),
         mounting: Some(ieestudio_project::Mounting::Pole),
@@ -287,7 +287,7 @@ fn catalog_data_and_fault_current_are_drawn() {
     let diagram = plan(&house, &result);
     let t = texts(&diagram);
     for expected in [
-        "SUBESTACIÓN DE 112.5 kVA, Z = 3 %",
+        "TRANSFORMADOR DE 112.5 kVA, Z = 3 %",
         "13.2 kV – 220/127 V, 3F-4H, 60 Hz",
         "DELTA – ESTRELLA · TIPO POSTE · MARCA IMEM",
         "ACOMETIDA EN MEDIA TENSIÓN, 13.2 kV · CFE",

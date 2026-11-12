@@ -207,37 +207,23 @@ fn material_symbol(material: Material) -> &'static str {
     }
 }
 
-/// Sistema de las barras de un tablero: el de la fuente o el del
-/// secundario del transformador más cercano aguas arriba.
+/// Sistema de las barras de un tablero, del modelo de conexiones.
 fn bus_system(project: &Project, panel: usize) -> System {
-    let panels = &project.panels;
-    let mut at = panel;
-    for _ in 0..=panels.len() {
-        if let Some(t) = &panels[at].transformer {
-            return t.secondary;
-        }
-        match panels[at]
-            .parent
-            .as_ref()
-            .and_then(|id| panels.iter().position(|p| &p.id == id))
-        {
-            Some(parent) => at = parent,
-            None => break,
-        }
-    }
-    project.source.system
+    ieestudio_project::connection::bus_system(project, panel)
 }
 
 /// Sistema del que se alimenta un tablero: el de su tablero padre, o el de la
 /// fuente.
 fn upstream_system(project: &Project, panel: usize) -> System {
-    match project.panels[panel]
-        .parent
-        .as_ref()
-        .and_then(|id| project.panels.iter().position(|p| &p.id == id))
-    {
-        Some(parent) => bus_system(project, parent),
-        None => project.source.system,
+    ieestudio_project::connection::feeder_system(project, panel)
+}
+
+/// Un dato de placa con su unidad, o `missing`: el unifilar no muestra un
+/// valor que no se capturó.
+fn known(value: Option<f64>, unit: &str, missing: &str) -> String {
+    match value {
+        Some(v) => format!("{v} {unit}"),
+        None => missing.to_string(),
     }
 }
 
@@ -718,7 +704,15 @@ fn panel_header(project: &Project, panel: usize, result: &PanelResult) -> Vec<(S
     .chain(board_line(&p.board))
     .chain(result.fault.as_ref().map(|f| {
         (
-            format!("Icc = {:.2} kA ({})", f.total_ka, origin_text(&f.origin)),
+            if f.incomplete.is_empty() {
+                format!("Icc = {:.2} kA ({})", f.total_ka, origin_text(&f.origin))
+            } else {
+                format!(
+                    "Icc = {:.2} kA ({}, INCOMPLETA: FALTAN MOTORES)",
+                    f.total_ka,
+                    origin_text(&f.origin)
+                )
+            },
             Font::Regular,
             Ink::Text,
         )
@@ -731,6 +725,16 @@ fn frequency(project: &Project) -> String {
         Some(hz) => format!(", {hz:.0} Hz"),
         None => String::new(),
     }
+}
+
+/// Alguna barra tiene aportación de motores.
+fn has_motor_contribution(result: &ProjectResult) -> bool {
+    result
+        .fault
+        .iter()
+        .flat_map(|f| f.source.iter())
+        .chain(result.panels.iter().filter_map(|p| p.fault.as_ref()))
+        .any(|b| b.motor_ka > 0.0)
 }
 
 fn origin_text(origin: &FaultOrigin) -> &'static str {
@@ -850,7 +854,10 @@ impl Layout<'_> {
                 (feed_x + 18.0, tc - 8.0),
                 vec![
                     (
-                        format!("TRANSFORMADOR {} kVA", t.kva),
+                        format!(
+                            "TRANSFORMADOR {}",
+                            known(t.kva, "kVA", "(POTENCIA SIN DATO)")
+                        ),
                         Font::Bold,
                         Ink::Text,
                     ),
@@ -864,7 +871,7 @@ impl Layout<'_> {
                         Ink::Text,
                     ),
                     (
-                        format!("Z = {} %", t.impedance_percent),
+                        format!("Z = {}", known(t.impedance_percent, "%", "SIN DATO")),
                         Font::Regular,
                         Ink::Text,
                     ),
@@ -1268,13 +1275,10 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
             Ink::Text,
         ));
     }
-    if let Some(study) = &result.fault {
-        if study.source.origin == FaultOrigin::Supplier {
+    if let Some(source) = result.fault.as_ref().and_then(|f| f.source.as_ref()) {
+        if source.origin == FaultOrigin::Supplier {
             source_lines.push((
-                format!(
-                    "Icc = {} kA (DATO DE LA SUMINISTRADORA)",
-                    study.source.base_ka
-                ),
+                format!("Icc = {} kA (DATO DE LA SUMINISTRADORA)", source.base_ka),
                 Font::Regular,
                 Ink::Text,
             ));
@@ -1291,8 +1295,13 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
         let mut lines = vec![
             (
                 format!(
-                    "SUBESTACIÓN DE {} kVA, Z = {} %",
-                    sub.kva, sub.impedance_percent
+                    "TRANSFORMADOR DE {}, Z = {}",
+                    known(sub.kva, "kVA", "(POTENCIA SIN DATO)"),
+                    if sub.impedance_from_table {
+                        "MÍNIMA DE NORMA".to_string()
+                    } else {
+                        known(sub.impedance_percent, "%", "SIN DATO")
+                    }
                 ),
                 Font::Bold,
                 Ink::Text,
@@ -1311,10 +1320,10 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
             ),
         ];
         lines.extend(transformer_extra(sub.connection, sub.mounting, &sub.brand));
-        if let Some(study) = &result.fault {
-            if study.source.origin == FaultOrigin::Substation {
+        if let Some(source) = result.fault.as_ref().and_then(|f| f.source.as_ref()) {
+            if source.origin == FaultOrigin::Substation {
                 lines.push((
-                    format!("Icc = {:.2} kA (BUS INFINITO)", study.source.base_ka),
+                    format!("Icc = {:.2} kA (BUS INFINITO)", source.base_ka),
                     Font::Regular,
                     Ink::Text,
                 ));
@@ -1382,27 +1391,46 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
     }
     match &result.fault {
         Some(study) => {
-            let mut note = format!(
-                "Icc: corriente de falla estimada por bus infinito, con la impedancia de placa del transformador reducida {:.0} %",
-                study.impedance_tolerance * 100.0
-            );
-            if let Some(m) = &study.motors {
+            let any_infinite = study
+                .groups
+                .iter()
+                .any(|g| g.fault_ka.is_some() && g.infinite_bus);
+            let mut note = if any_infinite {
+                format!(
+                    "Icc: corriente de falla estimada; la de BUS INFINITO toma la red sin impedancia, con la impedancia de placa del transformador reducida {:.0} %",
+                    study.impedance_tolerance * 100.0
+                )
+            } else {
+                "Icc: corriente de falla con el dato de la suministradora, sin descontar los alimentadores".to_string()
+            };
+            if study.groups.iter().any(|g| g.fault_ka.is_some()) && has_motor_contribution(result) {
                 let _ = write!(
                     note,
-                    " y {} veces la corriente de {}",
-                    m.multiplier,
-                    if m.motors.len() == 1 {
-                        "un motor".to_string()
-                    } else {
-                        format!("{} motores", m.motors.len())
-                    }
+                    "; incluye {} veces la corriente de los motores de cada tensión y la que llega de otra tensión a través de su transformador",
+                    study.multiplier
                 );
             }
             note.push_str("; es una cota superior. kA: capacidad interruptiva de catálogo");
             notes.push(note);
+            if !study.incomplete_motors.is_empty() {
+                notes.push(format!(
+                    "La falla no incluye {} sin datos: la capacidad interruptiva que dependa de ellos no es concluyente",
+                    if study.incomplete_motors.len() == 1 {
+                        "1 motor".to_string()
+                    } else {
+                        format!("{} motores", study.incomplete_motors.len())
+                    }
+                ));
+            }
+            if !study.out_of_scope.is_empty() {
+                notes.push(format!(
+                    "Capacidad interruptiva no verificada en {}: falta la corriente de falla de la suministradora o los datos del transformador de la acometida",
+                    study.out_of_scope.join(", ")
+                ));
+            }
         }
         None => notes.push(
-            "Capacidad interruptiva no verificada: falta la corriente de falla de la suministradora o los datos de la subestación".into(),
+            "Capacidad interruptiva no verificada: falta la corriente de falla de la suministradora o los datos del transformador de la acometida".into(),
         ),
     }
     if !options.sheet {

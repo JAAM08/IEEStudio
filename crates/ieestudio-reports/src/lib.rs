@@ -418,19 +418,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             // lo dé por revisado (decisión 0018). Con datos de la fuente la
             // capacidad interruptiva se verifica por bus infinito (0023).
             match &result.fault {
-                Some(study) => (
-                    "Capacidad interruptiva",
-                    format!(
-                        "Verificada con la corriente de falla estimada por bus infinito ({}): {:.2} kA en el punto de conexión{}. Es una cota superior; un interruptor que no la alcanza queda no concluyente y requiere estudio de cortocircuito",
-                        profile.clause(Rule::AvailableFault),
-                        study.source.total_ka,
-                        study.motors.as_ref().map_or(String::new(), |m| format!(
-                            ", con {} veces la corriente de {} motores",
-                            m.multiplier,
-                            m.motors.len()
-                        ))
-                    ),
-                ),
+                Some(study) => ("Capacidad interruptiva", interrupting_basis(profile, study)),
                 None => (
                     "Fuera de alcance",
                     result
@@ -526,13 +514,16 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
         let [a, b, c] = panel.phase_va;
         let mut transformer = String::new();
         if let Some(t) = &panel.transformer {
-            transformer.push_str(&format!(
-                " Se alimenta por un transformador de {} kVA (primario {}, secundario {}), cargado al {:.0} %.",
-                t.kva,
-                t.primary_a.map_or("—".into(), |a| format!("{a:.2} A")),
-                t.secondary_a.map_or("—".into(), |a| format!("{a:.2} A")),
-                t.load_percent
-            ));
+            match (t.kva, t.load_percent) {
+                (Some(kva), Some(load)) => transformer.push_str(&format!(
+                    " Se alimenta por un transformador intermedio de {kva} kVA (primario {}, secundario {}), cargado al {load:.0} %.",
+                    t.primary_a.map_or("—".into(), |a| format!("{a:.2} A")),
+                    t.secondary_a.map_or("—".into(), |a| format!("{a:.2} A")),
+                )),
+                _ => transformer.push_str(
+                    " Se alimenta por un transformador intermedio sin potencia capturada: sus dos lados quedan sin calcular.",
+                ),
+            }
         }
         let balance = match panel.imbalance_percent {
             Some(i) => format!(
@@ -606,6 +597,18 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             q(warning)
         ));
     }
+    for flag in &result.duplicate_flags {
+        notes.push(format!(
+            "- #text(fill: duda, font: \"IBM Plex Sans SmBld\")[Aviso] · #{};",
+            q(&flag.text())
+        ));
+    }
+    for hint in &result.kind_hints {
+        notes.push(format!(
+            "- #text(fill: duda, font: \"IBM Plex Sans SmBld\")[Aviso] · #{};",
+            q(&hint.text())
+        ));
+    }
     out.push_str("\n= Observaciones\n");
     if notes.is_empty() {
         out.push_str("Todos los tramos cumplen y no hay avisos.\n");
@@ -616,26 +619,53 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
 
     if let Some(study) = &result.fault {
         out.push_str("\n= Corriente de falla y capacidad interruptiva\n");
-        out.push_str("#text(fill: gris)[Método conservador de bus infinito: la red se toma sin impedancia y no se descuenta la de los alimentadores, así que cada valor es la corriente mayor posible. Un interruptor que la soporta cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n");
+        out.push_str("#text(fill: gris)[Método conservador. Con el dato de la suministradora se usa tal cual; con un transformador, por bus infinito: la red aguas arriba se toma sin impedancia. No se descuenta la impedancia de los alimentadores, así que cada valor es una cota superior. Los motores de cada tensión aportan completos y los de otra tensión llegan a través de la impedancia de su transformador (decisión 0028). Un interruptor que alcanza la falla cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n");
         out.push_str("\n== Punto de conexión\n");
-        steps(&mut out, &study.source.steps);
-        if let Some(m) = &study.motors {
-            out.push_str("\n== Motores que aportan a la falla\n");
-            let rows: Vec<(&str, String)> = m
-                .motors
-                .iter()
-                .map(|x| (x.label.as_str(), format!("{:.2} A", x.full_load_a)))
-                .collect();
-            data_table(&mut out, &rows);
+        match (&study.source, &study.source_issue) {
+            (Some(bus), _) => {
+                steps(&mut out, &bus.steps);
+                motor_table(&mut out, bus);
+            }
+            (None, Some(issue)) => {
+                let _ = writeln!(
+                    out,
+                    "#text(fill: duda)[#{};]",
+                    q(&format!("Sin falla estimada: {}.", issue.reason))
+                );
+            }
+            (None, None) => {}
         }
         for panel in &result.panels {
-            let Some(bus) = &panel.fault else {
-                continue;
-            };
-            if let ieestudio_project::fault::FaultOrigin::Transformer { .. } = bus.origin {
-                let _ = writeln!(out, "\n== Barras de #{};", q(&panel.name));
-                steps(&mut out, &bus.steps);
+            match (&panel.fault, &panel.fault_issue) {
+                (Some(bus), _) => {
+                    if let ieestudio_project::fault::FaultOrigin::Transformer { .. } = bus.origin {
+                        let _ = writeln!(out, "\n== Barras de #{};", q(&panel.name));
+                        steps(&mut out, &bus.steps);
+                        motor_table(&mut out, bus);
+                    }
+                }
+                (None, Some(issue))
+                    if issue.kind == ieestudio_project::fault::IssueKind::Incomplete =>
+                {
+                    let _ = writeln!(out, "\n== Barras de #{};", q(&panel.name));
+                    let _ = writeln!(
+                        out,
+                        "#text(fill: duda)[#{};]",
+                        q(&format!("Sin falla estimada: {}.", issue.reason))
+                    );
+                }
+                _ => {}
             }
+        }
+        if !study.incomplete_motors.is_empty() {
+            out.push_str("\n== Motores sin datos\n");
+            out.push_str("#text(fill: gris)[Su aportación no se pudo calcular: la capacidad interruptiva de las barras a las que aportarían queda no concluyente.]\n");
+            let rows: Vec<(&str, String)> = study
+                .incomplete_motors
+                .iter()
+                .map(|m| (m.label.as_str(), capitalize(&m.missing)))
+                .collect();
+            data_table(&mut out, &rows);
         }
         let rows: Vec<(String, String)> = result
             .panels
@@ -661,6 +691,17 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                     capitalize(interrupting_detail(&group.summary()))
                 ))
             );
+            // Cómo se obtuvo: datos, hipótesis, lo que aporta y lo que falta.
+            for (title, items) in group.trace.sections() {
+                let _ = writeln!(
+                    out,
+                    "#text(size: 8.5pt, fill: gris, font: \"IBM Plex Sans SmBld\")[#{};]",
+                    q(title)
+                );
+                for item in items {
+                    let _ = writeln!(out, "#text(size: 8.5pt)[- #{};]", q(&item));
+                }
+            }
             let rows: Vec<(&str, String)> = group
                 .breakers
                 .iter()
@@ -904,14 +945,61 @@ pub fn quick_pdf(input: &QuickInput, result: &QuickResult) -> Result<Vec<u8>, St
     render(quick_source(input, result))
 }
 
+/// Cómo se verificó la capacidad interruptiva, para los datos del proyecto.
+fn interrupting_basis(profile: &Profile, study: &ieestudio_project::fault::FaultStudy) -> String {
+    let mut text = match &study.source {
+        Some(bus) => format!(
+            "Verificada con la corriente de falla estimada {} ({}): {:.2} kA en el punto de conexión",
+            bus.origin.basis(),
+            profile.clause(Rule::AvailableFault),
+            bus.total_ka
+        ),
+        None => format!(
+            "Verificada donde hay falla estimada ({})",
+            profile.clause(Rule::AvailableFault)
+        ),
+    };
+    text.push_str(". Es una cota superior; un interruptor que no la alcanza queda no concluyente y requiere estudio de cortocircuito");
+    if !study.out_of_scope.is_empty() {
+        text.push_str(&format!(
+            ". Fuera de alcance en {}: falta la corriente de falla de la suministradora o los datos del transformador de la acometida",
+            study.out_of_scope.join(", ")
+        ));
+    }
+    text
+}
+
+/// Motores que aportan a unas barras: los de su tensión y lo que llega a
+/// través de cada transformador.
+fn motor_table(out: &mut String, bus: &ieestudio_project::fault::BusFault) {
+    let Some(m) = &bus.motors else {
+        return;
+    };
+    let mut rows: Vec<(String, String)> = m
+        .motors
+        .iter()
+        .map(|x| {
+            (
+                x.label.clone(),
+                format!("{:.2} A a plena carga", x.full_load_a),
+            )
+        })
+        .collect();
+    rows.extend(m.through.iter().map(|t| {
+        (
+            format!("Motores detrás del transformador de {}", t.panel),
+            format!("{:.1} A en estas barras", t.contribution_a),
+        )
+    }));
+    out.push_str("\n=== Motores que aportan a la falla\n");
+    let rows: Vec<(&str, String)> = rows.iter().map(|(a, b)| (a.as_str(), b.clone())).collect();
+    data_table(out, &rows);
+}
+
 /// «No concluyente» cuando hay interruptores con dato que no alcanzan la
 /// falla estimada; «Sin evaluar» cuando solo faltan datos.
 fn interrupting_label(group: &ieestudio_project::fault::InterruptingGroup) -> &'static str {
-    match group.status {
-        Status::Complies => "Cumple",
-        _ if group.short() > 0 => "No concluyente",
-        _ => "Sin evaluar",
-    }
+    group.label()
 }
 
 /// El resumen sin el «no concluyente» inicial, que ya va como etiqueta.

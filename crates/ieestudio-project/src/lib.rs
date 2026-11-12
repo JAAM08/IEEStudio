@@ -7,6 +7,7 @@ pub mod balance;
 mod calc;
 pub mod connection;
 mod demand;
+pub mod evaluation;
 pub mod example;
 pub mod fault;
 mod model;
@@ -14,6 +15,7 @@ mod motors;
 pub mod positions;
 mod procedure;
 pub mod quick;
+pub mod review;
 mod transformer;
 pub mod verdict;
 

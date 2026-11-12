@@ -563,7 +563,7 @@ fn a_motor_without_data_is_not_evaluated() {
 /// (decisiones 0018 y 0023).
 #[test]
 fn interrupting_rating_is_out_of_scope() {
-    for project in [example::house(), industrial(), transformer_project()] {
+    for project in [example::house(), industrial()] {
         let result = calculate(&project).unwrap();
         for panel in &result.panels {
             for run in panel.runs() {
@@ -661,13 +661,14 @@ fn transformer_project() -> Project {
         brand: Default::default(),
         connection: Default::default(),
         mounting: Default::default(),
-        kva: 45.0,
-        impedance_percent: 3.0,
+        kva: Some(45.0),
+        impedance_percent: Some(3.0),
         secondary: System::WYE_220_127,
         secondary_protection: true,
-        secondary_length_m: 3.0,
+        secondary_length_m: Some(3.0),
         secondary_has_neutral: true,
         secondary_overrides: Overrides::default(),
+        confirmed_distinct: false,
     });
     project
 }
@@ -679,7 +680,7 @@ fn transformer_sizes_both_sides_by_its_rating() {
     let t = panel.transformer.as_ref().unwrap();
     close(t.primary_a.unwrap(), 54.13);
     close(t.secondary_a.unwrap(), 118.09);
-    close(t.load_percent, 44.44);
+    close(t.load_percent.unwrap(), 44.44);
 
     let primary = panel.feeder.run.as_ref().unwrap();
     close(primary.nominal_a, 24.06);
@@ -721,7 +722,7 @@ fn transformer_sizes_both_sides_by_its_rating() {
 fn an_overloaded_transformer_fails() {
     let mut project = transformer_project();
     let t = project.panels[1].transformer.as_mut().unwrap();
-    t.kva = 15.0;
+    t.kva = Some(15.0);
     t.secondary_protection = false;
     let result = calculate(&project).unwrap();
     let panel = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
@@ -754,8 +755,8 @@ fn fault_by_infinite_bus_with_motors() {
     let mut project = example::house();
     project.source.substation = Some(ieestudio_project::Substation {
         impedance_from_table: Default::default(),
-        kva: 112.5,
-        impedance_percent: 3.0,
+        kva: Some(112.5),
+        impedance_percent: Some(3.0),
         primary_kv: Some(13.2),
         connection: None,
         mounting: None,
@@ -763,21 +764,25 @@ fn fault_by_infinite_bus_with_motors() {
     });
     let result = calculate(&project).unwrap();
     let study = result.fault.as_ref().expect("con subestación hay estudio");
-    close(study.source.base_ka, 9.8412 / 0.9);
-    let motors = study.motors.as_ref().expect("el ejemplo tiene motores");
+    let source = study
+        .source
+        .as_ref()
+        .expect("falla en el punto de conexión");
+    close(source.base_ka, 9.8412 / 0.9);
+    let motors = source.motors.as_ref().expect("el ejemplo tiene motores");
     assert_eq!(motors.motors.len(), 2);
     assert_eq!(motors.multiplier, 4.0);
     close(motors.total_a, 4.0 * (8.9 + 12.0));
-    close(study.source.total_ka, 9.8412 / 0.9 + 0.0836);
+    close(source.total_ka, 9.8412 / 0.9 + 0.0836);
     // El tablero sin transformador ve la misma falla que el punto de conexión.
     let panel = &result.panels[0];
     let bus = panel.fault.as_ref().unwrap();
-    close(bus.total_ka, study.source.total_ka);
+    close(bus.total_ka, source.total_ka);
     // El procedimiento muestra la aportación de motores.
     assert!(bus
         .steps
         .iter()
-        .any(|s| s.title == "Aportación de los motores"));
+        .any(|s| s.title == "Aportación de los motores de esta tensión"));
     // Sin capacidad interruptiva capturada, cada interruptor queda sin evaluar
     // y la capacidad interruptiva ya no está fuera de alcance.
     for run in panel.runs() {
@@ -833,8 +838,8 @@ fn supplier_fault_current_takes_precedence() {
     let mut project = example::house();
     project.source.substation = Some(ieestudio_project::Substation {
         impedance_from_table: Default::default(),
-        kva: 112.5,
-        impedance_percent: 3.0,
+        kva: Some(112.5),
+        impedance_percent: Some(3.0),
         primary_kv: None,
         connection: None,
         mounting: None,
@@ -843,9 +848,10 @@ fn supplier_fault_current_takes_precedence() {
     project.source.fault.available_ka = Some(5.0);
     let result = calculate(&project).unwrap();
     let study = result.fault.unwrap();
-    assert_eq!(study.source.base_ka, 5.0);
+    let source = study.source.unwrap();
+    assert_eq!(source.base_ka, 5.0);
     assert_eq!(
-        study.source.origin,
+        source.origin,
         ieestudio_project::fault::FaultOrigin::Supplier
     );
 }
@@ -888,8 +894,8 @@ fn a_project_transformer_sets_its_own_fault() {
 fn fault_with_the_minimum_impedance_of_the_standard() {
     let mut project = example::house();
     project.source.substation = Some(ieestudio_project::Substation {
-        kva: 112.5,
-        impedance_percent: 3.0,
+        kva: Some(112.5),
+        impedance_percent: Some(3.0),
         impedance_from_table: true,
         primary_kv: Some(13.2),
         connection: None,
@@ -901,9 +907,11 @@ fn fault_with_the_minimum_impedance_of_the_standard() {
         .fault
         .as_ref()
         .expect("la tabla cubre este transformador");
-    close(study.source.base_ka, 14.7618);
+    close(study.source.as_ref().unwrap().base_ka, 14.7618);
     let step = study
         .source
+        .as_ref()
+        .unwrap()
         .steps
         .iter()
         .find(|s| s.title == "Impedancia para la falla")
@@ -915,15 +923,29 @@ fn fault_with_the_minimum_impedance_of_the_standard() {
         .unwrap()
         .contains("NMX-J-116"));
 
-    // Tipo pedestal no está en la tabla: no se supone un valor y la capacidad
-    // interruptiva vuelve a quedar fuera de alcance.
+    // Tipo pedestal no está en la tabla: no se supone un valor. Como sí se
+    // capturó el transformador, no es «fuera de alcance» sino un dato que
+    // falta: la capacidad interruptiva queda sin evaluar con la causa.
     let sub = project.source.substation.as_mut().unwrap();
     sub.mounting = Some(ieestudio_project::Mounting::PadMounted);
     let profile = ieestudio_rules::Profile::nom_001_sede_2012();
     assert!(ieestudio_project::fault::substation_impedance(profile, &project.source).is_err());
     let result = calculate(&project).unwrap();
-    assert!(result.fault.is_none());
-    assert!(!result.verdict.out_of_scope.is_empty());
+    let study = result.fault.as_ref().expect("el transformador se capturó");
+    assert!(study.source.is_none());
+    let issue = study.source_issue.as_ref().unwrap();
+    assert_eq!(issue.kind, ieestudio_project::fault::IssueKind::Incomplete);
+    assert!(
+        issue.reason.contains("captura la impedancia de placa"),
+        "{}",
+        issue.reason
+    );
+    for group in &study.groups {
+        assert_eq!(group.status, Status::NotEvaluated);
+        assert_eq!(group.fault_ka, None);
+        assert!(group.summary().contains("no se pudo estimar la falla"));
+    }
+    assert!(result.verdict.out_of_scope.is_empty());
 }
 
 /// Un proyecto guardado con una conexión que su sistema no tiene abre y se
@@ -989,8 +1011,8 @@ fn interrupting_capacity_is_one_check_per_place() {
     let mut project = example::house();
     project.source.substation = Some(ieestudio_project::Substation {
         impedance_from_table: Default::default(),
-        kva: 112.5,
-        impedance_percent: 3.0,
+        kva: Some(112.5),
+        impedance_percent: Some(3.0),
         primary_kv: Some(13.2),
         connection: None,
         mounting: None,
@@ -1036,4 +1058,576 @@ fn interrupting_capacity_is_one_check_per_place() {
         .summary()
         .contains("cumple con un método conservador"));
     assert_eq!(result.verdict.pending_checks, before.verdict.pending_checks);
+}
+
+// ---------------------------------------------------------------------------
+// Estudio de falla por zonas de tensión (decisiones 0026 y 0028).
+
+fn study(result: &ieestudio_project::ProjectResult) -> &ieestudio_project::fault::FaultStudy {
+    result.fault.as_ref().expect("hay estudio de falla")
+}
+
+fn panel<'a>(
+    result: &'a ieestudio_project::ProjectResult,
+    id: &str,
+) -> &'a ieestudio_project::PanelResult {
+    result.panels.iter().find(|p| p.id == id).unwrap()
+}
+
+/// Dos niveles de tensión con motores en cada uno: TGN a 480Y/277 V con un
+/// motor de 10 hp (Tabla 430-250, columna de 460 V: 14 A) y TF-1, detrás de
+/// un transformador de 45 kVA, 3 %, 480 – 220Y/127 V, con otro de 10 hp
+/// (columna de 230 V: 28 A).
+fn two_levels() -> Project {
+    let mut project = transformer_project();
+    project.panels[0]
+        .circuits
+        .push(motor_circuit("M-1", "10", 15.0));
+    project.panels[1].circuits = vec![motor_circuit("M-2", "10", 10.0)];
+    project
+}
+
+/// Con el dato de la suministradora, el punto de conexión suma los motores de
+/// 480 V completos y los de 220 V a través del transformador; el secundario
+/// es su bus infinito más los motores de 220 V, sin los de 480 V.
+#[test]
+fn motors_contribute_by_voltage_zone() {
+    let mut project = two_levels();
+    project.source.fault.available_ka = Some(25.0);
+    let result = calculate(&project).unwrap();
+    let study = study(&result);
+
+    // Secundario de TF-1: In = 45 000 / (√3 · 220) = 118.09 A; Z = 3 % · 0.9
+    // = 0.027; Icc = 4 373.9 A. Motores de 220 V: 4 · 28 = 112 A.
+    let tf = panel(&result, "TF-1").fault.as_ref().unwrap();
+    close(tf.base_ka, 4.3739);
+    let m = tf.motors.as_ref().unwrap();
+    assert_eq!(m.motors.len(), 1);
+    close(m.motors[0].full_load_a, 28.0);
+    assert!(m.through.is_empty(), "los motores de 480 V no cuentan aquí");
+    close(tf.motor_ka, 0.112);
+    close(tf.total_ka, 4.4859);
+
+    // Punto de conexión: 25 kA del dato más 4 · 14 = 56 A directos y lo que
+    // llega por el transformador: Ib₁ = 54.13 A, Ib₂ = 118.09 A,
+    // 54.13 / (0.027 + 118.09 / 112) = 50.05 A. Total 106.05 A.
+    let source = study.source.as_ref().unwrap();
+    assert_eq!(
+        source.origin,
+        ieestudio_project::fault::FaultOrigin::Supplier
+    );
+    let m = source.motors.as_ref().unwrap();
+    close(m.motors[0].full_load_a, 14.0);
+    assert_eq!(m.through.len(), 1);
+    assert_eq!(m.through[0].panel, "TF-1");
+    close(m.through[0].downstream_a, 112.0);
+    close(m.through[0].contribution_a, 50.05);
+    close(m.total_a, 106.05);
+    close(source.total_ka, 25.10605);
+    // TGN está en la zona de la fuente: la misma falla.
+    close(
+        panel(&result, "TGN").fault.as_ref().unwrap().total_ka,
+        source.total_ka,
+    );
+    // Nunca se suman amperes de 220 V tal cual en 480 V.
+    assert!(m.total_a < 4.0 * (14.0 + 28.0));
+    // El procedimiento lo muestra.
+    assert!(source
+        .steps
+        .iter()
+        .any(|s| s.title == "Aportación a través del transformador de TF-1"));
+}
+
+/// Sin dato de la suministradora ni transformador de la acometida, el
+/// transformador intermedio con sus datos se evalúa igual; lo que depende de
+/// la acometida queda fuera de alcance, sin inventar su falla.
+#[test]
+fn a_partial_study_evaluates_what_has_data() {
+    let mut project = two_levels();
+    project.panels[1].board.interrupting_ka = Some(10.0);
+    let result = calculate(&project).unwrap();
+    let study = study(&result);
+    assert!(study.source.is_none());
+    assert_eq!(
+        study.source_issue.as_ref().unwrap().kind,
+        ieestudio_project::fault::IssueKind::OutOfScope
+    );
+    assert_eq!(
+        study.out_of_scope,
+        vec![
+            "el punto de conexión".to_string(),
+            "las barras de TGN".to_string()
+        ]
+    );
+    // TF-1 se evalúa con su bus infinito: 4.49 kA < 10 kA, cumple.
+    let tf = panel(&result, "TF-1");
+    close(tf.fault.as_ref().unwrap().total_ka, 4.4859);
+    let group = study
+        .groups
+        .iter()
+        .find(|g| g.panel.as_deref() == Some("TF-1"))
+        .unwrap();
+    assert_eq!(group.status, Status::Complies, "{}", group.summary());
+    for run in tf.secondary.iter().chain(&tf.circuits) {
+        let c = checks_named(run, "Capacidad interruptiva");
+        assert_eq!(c[0].status, Status::Complies, "{}", c[0].detail);
+    }
+    // Lo de la acometida no lleva verificación: está fuera de alcance, y el
+    // veredicto dice dónde.
+    let tgn = panel(&result, "TGN");
+    assert!(tgn.fault.is_none());
+    for run in tgn.runs() {
+        assert!(checks_named(run, "Capacidad interruptiva").is_empty());
+    }
+    assert!(checks_named(&tf.feeder, "Capacidad interruptiva").is_empty());
+    let out = &result.verdict.out_of_scope;
+    assert_eq!(out.len(), 1);
+    assert!(out[0]
+        .name
+        .contains("el punto de conexión y las barras de TGN"));
+}
+
+/// Un transformador sin impedancia no hereda la falla de su primario, que
+/// está a otra tensión: su secundario queda sin evaluar con la causa, y los
+/// motores detrás de él dejan incompleta la falla de arriba.
+#[test]
+fn a_transformer_without_data_never_inherits_the_primary_fault() {
+    let mut project = two_levels();
+    project.source.fault.available_ka = Some(25.0);
+    project.panels[0].board.interrupting_ka = Some(35.0);
+    project.panels[1].board.interrupting_ka = Some(35.0);
+    project.panels[1]
+        .transformer
+        .as_mut()
+        .unwrap()
+        .impedance_percent = None;
+    let result = calculate(&project).unwrap();
+    let tf = panel(&result, "TF-1");
+    assert!(tf.fault.is_none());
+    let issue = tf.fault_issue.as_ref().unwrap();
+    assert_eq!(issue.kind, ieestudio_project::fault::IssueKind::Incomplete);
+    assert!(
+        issue.reason.contains("falta la impedancia"),
+        "{}",
+        issue.reason
+    );
+    for run in &tf.circuits {
+        let c = checks_named(run, "Capacidad interruptiva")[0];
+        assert_eq!(c.status, Status::NotEvaluated);
+        assert!(
+            c.detail.contains("no se pudo estimar la falla"),
+            "{}",
+            c.detail
+        );
+        assert!(!c.detail.contains("25"), "no usa la falla del primario");
+    }
+    // Arriba, la falla existe pero no incluye los motores de TF-1: con 35 kA
+    // el interruptor alcanza, pero no es concluyente.
+    let source = study(&result).source.as_ref().unwrap();
+    assert_eq!(source.incomplete.len(), 1);
+    assert!(source.incomplete[0].contains("TF-1"));
+    let group = study(&result)
+        .groups
+        .iter()
+        .find(|g| g.panel.as_deref() == Some("TGN"))
+        .unwrap();
+    assert_eq!(group.status, Status::NotEvaluated);
+    assert_eq!(group.label(), "No concluyente");
+}
+
+/// Un motor sin potencia no cuenta como cero ni desaparece: se lista con lo
+/// que le falta y deja no concluyente la capacidad interruptiva de las
+/// barras a las que aportaría, aunque el resto se siga evaluando.
+#[test]
+fn a_motor_without_power_makes_the_fault_incomplete() {
+    let mut project = two_levels();
+    project.source.fault.available_ka = Some(25.0);
+    project.panels[0].board.interrupting_ka = Some(35.0);
+    project.panels[1].board.interrupting_ka = Some(35.0);
+    project.panels[1]
+        .circuits
+        .push(motor_circuit("M-3", "", 10.0));
+    let result = calculate(&project).unwrap();
+    let study = study(&result);
+    assert_eq!(study.incomplete_motors.len(), 1);
+    assert_eq!(study.incomplete_motors[0].circuit, "M-3");
+    assert!(study.incomplete_motors[0].missing.contains("potencia"));
+    for id in ["TF-1", "TGN"] {
+        let group = study
+            .groups
+            .iter()
+            .find(|g| g.panel.as_deref() == Some(id))
+            .unwrap();
+        assert_eq!(group.incomplete_motors, 1, "{id}");
+        assert_eq!(group.label(), "No concluyente", "{id}");
+        assert!(
+            group.summary().contains("1 motor sin datos"),
+            "{}",
+            group.summary()
+        );
+    }
+    // El motor que sí tiene datos sigue en la falla.
+    let tf = panel(&result, "TF-1").fault.as_ref().unwrap();
+    close(tf.motor_ka, 0.112);
+    assert_ne!(
+        result.verdict.compliance,
+        ieestudio_project::verdict::Compliance::Conforms
+    );
+}
+
+/// Un transformador que alimenta dos fases de un secundario trifásico tiene
+/// la corriente de una fase, `S / V`, y no `S / (√3 · V)`: su falla es √3
+/// veces mayor de lo que salía antes. 45 kVA a 220 V: 204.55 A; Z = 0.027:
+/// 7.58 kA.
+#[test]
+fn a_two_phase_transformer_uses_its_single_phase_current() {
+    let mut project = transformer_project();
+    project.source.fault.available_ka = Some(25.0);
+    let tf = &mut project.panels[1];
+    tf.kind = CircuitKind::LineToLine;
+    tf.circuits[0].kind = CircuitKind::LineToLine;
+    tf.circuits[0].load.power_w = 5000.0;
+    let result = calculate(&project).unwrap();
+    let tf = panel(&result, "TF-1");
+    close(
+        tf.transformer.as_ref().unwrap().secondary_a.unwrap(),
+        204.55,
+    );
+    close(tf.fault.as_ref().unwrap().base_ka, 7.5758);
+}
+
+/// El secundario con la misma tensión que el primario delata el
+/// transformador de la acometida capturado otra vez en un tablero.
+#[test]
+fn a_transformer_with_equal_voltages_is_flagged() {
+    let mut project = transformer_project();
+    project.panels[1].transformer.as_mut().unwrap().secondary = System::WYE_480_277;
+    let result = calculate(&project).unwrap();
+    assert_eq!(result.duplicate_flags.len(), 1);
+    assert_eq!(result.duplicate_flags[0].panel_id, "TF-1");
+    assert!(result.duplicate_flags[0].reason.contains("relación 1:1"));
+    // Con tensiones distintas no hay aviso.
+    let result = calculate(&transformer_project()).unwrap();
+    assert!(result.duplicate_flags.is_empty());
+}
+
+/// Un transformador sin potencia no se dimensiona con un valor supuesto: sus
+/// dos lados quedan sin calcular y la falla de su secundario, sin estimar.
+#[test]
+fn a_transformer_without_power_is_not_evaluated() {
+    let mut project = transformer_project();
+    project.source.fault.available_ka = Some(25.0);
+    project.panels[1].transformer.as_mut().unwrap().kva = None;
+    let result = calculate(&project).unwrap();
+    let tf = panel(&result, "TF-1");
+    assert!(tf.feeder.run.is_none());
+    assert_eq!(tf.feeder.status, Status::NotEvaluated);
+    assert!(tf.secondary.as_ref().unwrap().run.is_none());
+    assert!(tf.fault.is_none());
+    assert!(tf
+        .fault_issue
+        .as_ref()
+        .unwrap()
+        .reason
+        .contains("falta la potencia"));
+    assert_eq!(tf.transformer.as_ref().unwrap().load_percent, None);
+}
+
+// ---------------------------------------------------------------------------
+// Estados, trazabilidad y escenarios del plan (decisiones 0026, 0027 y 0028).
+// Los valores se cotejaron con un cálculo independiente en ohms (informe de
+// la auditoría, sección «Cotejo independiente»).
+
+use ieestudio_project::evaluation::Evaluation;
+
+fn group<'a>(
+    result: &'a ieestudio_project::ProjectResult,
+    panel: Option<&str>,
+) -> &'a ieestudio_project::fault::InterruptingGroup {
+    study(result)
+        .groups
+        .iter()
+        .find(|g| g.panel.as_deref() == panel)
+        .unwrap_or_else(|| panic!("falta el lugar {panel:?}"))
+}
+
+/// Transformador de distribución de CFE con todos sus datos: la falla es
+/// válida, dice con qué datos e hipótesis se obtuvo y qué aporta.
+#[test]
+fn a_cfe_transformer_with_enough_data_is_valid() {
+    let mut project = example::house();
+    project.source.substation = Some(ieestudio_project::Substation {
+        impedance_from_table: false,
+        kva: Some(112.5),
+        impedance_percent: Some(3.0),
+        primary_kv: Some(13.2),
+        connection: Some(ieestudio_project::Connection::DeltaWye),
+        mounting: Some(ieestudio_project::Mounting::Pole),
+        brand: String::new(),
+    });
+    project.panels[0].board.interrupting_ka = Some(22.0);
+    project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(22.0);
+    let result = calculate(&project).unwrap();
+    let g = group(&result, Some(&project.panels[0].id));
+    assert_eq!(g.evaluation, Evaluation::Valid);
+    assert_eq!(g.label(), "Cumple");
+    let t = &g.trace;
+    assert!(t
+        .inputs
+        .iter()
+        .any(|d| d.name == "Transformador de la acometida" && d.value == "112.5 kVA"));
+    assert!(t.assumptions.iter().any(|a| a.starts_with("Bus infinito")));
+    assert!(t.assumptions.iter().any(|a| a.contains("reducida 10 %")));
+    // El transformador y los dos motores del ejemplo.
+    assert!(t.contributors[0].starts_with("Transformador de la acometida"));
+    assert_eq!(t.contributors.len(), 3);
+    assert!(t.missing.is_empty() && t.problems.is_empty());
+    assert_eq!(study(&result).source_trace.evaluation, Evaluation::Valid);
+}
+
+/// Alimentada en baja tensión con el dato de la suministradora: 10 kA más
+/// 0.0836 kA de motores. Un tablero de 10 kA no alcanza la cota: no
+/// concluyente, nunca «no cumple»; con 22 kA, cumple.
+#[test]
+fn low_voltage_service_with_the_supplier_fault() {
+    let mut project = example::house();
+    project.source.fault.available_ka = Some(10.0);
+    project.panels[0].board.interrupting_ka = Some(10.0);
+    project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(22.0);
+    let result = calculate(&project).unwrap();
+    let id = project.panels[0].id.clone();
+    let g = group(&result, Some(&id));
+    close(g.fault_ka.unwrap(), 10.0836);
+    assert!(!g.infinite_bus);
+    assert_eq!(g.evaluation, Evaluation::Inconclusive);
+    assert_eq!(g.label(), "No concluyente");
+    assert_eq!(g.status, Status::NotEvaluated);
+    assert!(g
+        .trace
+        .assumptions
+        .iter()
+        .any(|a| a.starts_with("Dato de la suministradora")));
+    assert!(g.trace.problems[0].contains("la cota superior: requiere estudio"));
+    project.panels[0].board.interrupting_ka = Some(22.0);
+    let result = calculate(&project).unwrap();
+    assert_eq!(group(&result, Some(&id)).label(), "Cumple");
+}
+
+/// Transformador de la acometida (500 kVA, 5.75 %, 480Y/277 V) y un
+/// transformador propio aguas abajo: cada zona con su bus infinito.
+/// Acometida: 601.41 A / 0.05175 = 11.6214 kA; con 56 A de motores de 480 V
+/// y 50.05 A de los de 220 V, 11.7274 kA. TF-1: 4.4859 kA.
+#[test]
+fn service_transformer_and_an_own_transformer_downstream() {
+    let mut project = two_levels();
+    project.source.substation = Some(ieestudio_project::Substation {
+        impedance_from_table: false,
+        kva: Some(500.0),
+        impedance_percent: Some(5.75),
+        primary_kv: Some(13.2),
+        connection: None,
+        mounting: None,
+        brand: String::new(),
+    });
+    let result = calculate(&project).unwrap();
+    let source = study(&result).source.as_ref().unwrap();
+    assert_eq!(
+        source.origin,
+        ieestudio_project::fault::FaultOrigin::Substation
+    );
+    close(source.base_ka, 11.6214);
+    close(source.total_ka, 11.7274);
+    let tf = panel(&result, "TF-1").fault.as_ref().unwrap();
+    close(tf.total_ka, 4.4859);
+    // Dos equipos distintos: el intermedio no sale de la acometida.
+    assert!(result.duplicate_flags.is_empty());
+    let trace = panel(&result, "TF-1").fault_trace.as_ref().unwrap();
+    assert!(trace
+        .inputs
+        .iter()
+        .any(|d| d.name == "Primario" && d.value == "480/277 V"));
+    assert!(trace
+        .inputs
+        .iter()
+        .any(|d| d.name == "Secundario" && d.value == "220/127 V"));
+}
+
+/// Datos inválidos (no faltantes): impedancia cero o potencia negativa. El
+/// resultado es «dato inválido» con el problema, no «sin evaluar», y nunca
+/// toma la falla del primario.
+#[test]
+fn an_intermediate_transformer_with_invalid_data() {
+    for (kva, z, what) in [
+        (Some(45.0), Some(0.0), "impedancia"),
+        (Some(-45.0), Some(3.0), "potencia"),
+    ] {
+        let mut project = two_levels();
+        project.source.fault.available_ka = Some(25.0);
+        project.panels[1].board.interrupting_ka = Some(35.0);
+        let t = project.panels[1].transformer.as_mut().unwrap();
+        t.kva = kva;
+        t.impedance_percent = z;
+        let result = calculate(&project).unwrap();
+        let tf = panel(&result, "TF-1");
+        assert!(tf.fault.is_none());
+        assert_eq!(
+            tf.fault_issue.as_ref().unwrap().kind,
+            ieestudio_project::fault::IssueKind::Invalid
+        );
+        let g = group(&result, Some("TF-1"));
+        assert_eq!(g.evaluation, Evaluation::Invalid, "{what}");
+        assert_eq!(g.label(), "Dato inválido");
+        assert!(g.trace.problems[0].contains(what), "{:?}", g.trace.problems);
+        assert!(g.trace.problems[0].contains("mayor que cero"));
+        for run in &tf.circuits {
+            let c = checks_named(run, "Capacidad interruptiva")[0];
+            assert!(c.detail.starts_with("dato inválido"), "{}", c.detail);
+        }
+    }
+}
+
+/// Sin ningún dato de falla: no hay estudio, ninguna barra tiene falla ni
+/// trazabilidad inventada y el veredicto lo declara fuera de alcance.
+#[test]
+fn no_fault_data_at_all() {
+    let result = calculate(&industrial()).unwrap();
+    assert!(result.fault.is_none());
+    for p in &result.panels {
+        assert!(p.fault.is_none() && p.fault_trace.is_none());
+    }
+    assert_eq!(result.verdict.out_of_scope.len(), 1);
+}
+
+/// Dos transformadores de la misma potencia en lugares distintos no son
+/// duplicados; el mismo intermedio junto a la acometida sí se avisa, y el
+/// usuario puede confirmar que son equipos distintos.
+#[test]
+fn equal_ratings_are_flagged_only_beside_the_service() {
+    let mut project = transformer_project();
+    project.source.substation = Some(ieestudio_project::Substation {
+        impedance_from_table: false,
+        kva: Some(45.0),
+        impedance_percent: Some(3.0),
+        primary_kv: Some(13.2),
+        connection: None,
+        mounting: None,
+        brand: String::new(),
+    });
+    // TF-1 cuelga de TGN: misma potencia, otro lugar. No se marca.
+    let result = calculate(&project).unwrap();
+    assert!(result.duplicate_flags.is_empty());
+    // Directo de la acometida y con la misma potencia: se avisa.
+    project.panels[1].parent = None;
+    let result = calculate(&project).unwrap();
+    assert_eq!(result.duplicate_flags.len(), 1);
+    assert!(result.duplicate_flags[0].reason.contains("misma potencia"));
+    // Confirmado como otro equipo, ya no.
+    project.panels[1]
+        .transformer
+        .as_mut()
+        .unwrap()
+        .confirmed_distinct = true;
+    let result = calculate(&project).unwrap();
+    assert!(result.duplicate_flags.is_empty());
+}
+
+/// Un transformador 1:1 (aislamiento) se avisa pero no se rechaza: se
+/// dimensiona y su falla se calcula igual; al confirmarlo, el aviso se va y
+/// los resultados no cambian.
+#[test]
+fn a_one_to_one_transformer_is_not_rejected() {
+    let mut project = transformer_project();
+    project.source.fault.available_ka = Some(25.0);
+    let t = project.panels[1].transformer.as_mut().unwrap();
+    t.secondary = System::WYE_480_277;
+    let result = calculate(&project).unwrap();
+    assert_eq!(result.duplicate_flags.len(), 1);
+    let tf = panel(&result, "TF-1");
+    assert!(tf.feeder.run.is_some());
+    assert!(tf.secondary.as_ref().unwrap().run.is_some());
+    // 45 kVA a 480 V: 54.13 A / 0.027 = 2.0047 kA.
+    close(tf.fault.as_ref().unwrap().base_ka, 2.0047);
+    project.panels[1]
+        .transformer
+        .as_mut()
+        .unwrap()
+        .confirmed_distinct = true;
+    let confirmed = calculate(&project).unwrap();
+    assert!(confirmed.duplicate_flags.is_empty());
+    assert_eq!(confirmed.panels, result.panels);
+}
+
+/// Tensión y falla se propagan por varios tableros: TGN (480 V) → TF-1
+/// (transformador a 220Y/127 V) → T-2 → T-3. T-3 trabaja a 220Y/127 V, sus
+/// circuitos de una fase a 127 V, ve la falla de la zona de TF-1 y su motor
+/// de 5 hp (15.2 A) aporta ahí: 4.3739 + 4 · 15.2 A = 4.4347 kA.
+#[test]
+fn voltage_and_fault_propagate_through_several_panels() {
+    let mut project = transformer_project();
+    project.source.fault.available_ka = Some(25.0);
+    let mut t2 = project.panels[1].clone();
+    t2.id = "T-2".into();
+    t2.name = "Subtablero".into();
+    t2.parent = Some("TF-1".into());
+    t2.transformer = None;
+    t2.circuits.clear();
+    let mut t3 = t2.clone();
+    t3.id = "T-3".into();
+    t3.parent = Some("T-2".into());
+    let mut motor = motor_circuit("M-5", "5", 10.0);
+    motor.load.motor.as_mut().unwrap().nameplate_a = Some(15.0);
+    let mut lamp = motor_circuit("A-1", "", 10.0);
+    lamp.name = "Alumbrado".into();
+    lamp.kind = CircuitKind::LineToNeutral;
+    lamp.phases = vec![ieestudio_project::Phase::A];
+    lamp.has_neutral = true;
+    lamp.load = Load {
+        power_w: 1270.0,
+        power_factor: 1.0,
+        continuous: false,
+        kind: LoadKind::Lighting,
+        outlets: None,
+        motor: None,
+        compressor: None,
+    };
+    t3.circuits = vec![motor, lamp];
+    project.panels.push(t2);
+    project.panels.push(t3);
+    let index = project.panels.len() - 1;
+    assert_eq!(
+        ieestudio_project::connection::bus_system(&project, index),
+        System::WYE_220_127
+    );
+    let result = calculate(&project).unwrap();
+    let t3 = panel(&result, "T-3");
+    let lamp = circuit(&t3.circuits, "A-1").run.as_ref().unwrap();
+    close(lamp.nominal_a, 10.0);
+    let motor = circuit(&t3.circuits, "M-5").run.as_ref().unwrap();
+    close(motor.nominal_a, 15.2);
+    let bus = t3.fault.as_ref().unwrap();
+    assert_eq!(
+        bus.origin,
+        ieestudio_project::fault::FaultOrigin::Transformer {
+            panel: "TF-1".into()
+        }
+    );
+    close(bus.total_ka, 4.4347);
+    close(
+        panel(&result, "T-2").fault.as_ref().unwrap().total_ka,
+        4.4347,
+    );
+    assert!(bus.motors.as_ref().unwrap().motors[0]
+        .label
+        .starts_with("T-3"));
+    // Hacia arriba llega a través del transformador, no como 60.8 A sueltos.
+    let through = &study(&result)
+        .source
+        .as_ref()
+        .unwrap()
+        .motors
+        .as_ref()
+        .unwrap()
+        .through;
+    assert_eq!(through[0].panel, "TF-1");
+    assert!(through[0].contribution_a < 60.8 * 220.0 / 480.0);
 }
