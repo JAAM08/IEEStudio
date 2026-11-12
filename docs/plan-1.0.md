@@ -1,231 +1,456 @@
 # IEEStudio — Plan de trabajo hacia la 1.0
 
-Escrito el 10 de noviembre de 2026. Este documento es la instrucción completa para cualquier modelo de Claude que continúe el trabajo. Si eres ese modelo: léelo entero antes de tocar nada, trabaja **una etapa a la vez** y no pases a la siguiente sin cumplir su «Listo cuando».
+**Revisión del plan:** 12 de noviembre de 2026.  
+**Rama base revisada:** `main`, commit `d4665fbcf638002670184280ca844c20772d458c` (PR #11).  
+**Objetivo:** cerrar las observaciones técnicas de Opus/Fable, estabilizar la entrega de escritorio y navegador, y después definir e implementar una única interfaz adaptativa antes de publicar la 1.0.
 
-## 1. Qué pidió el dueño del proyecto (Antonio)
+Este documento reemplaza la secuencia anterior. Claude debe leerlo completo, revisar el estado real de `main` antes de cada etapa y trabajar una etapa a la vez. No debe dar por hecho que una tarea sigue pendiente si ya está integrada. Tampoco debe adelantar el rediseño visual: primero se estabilizan el modelo, los resultados y la publicación.
 
-1. **Teléfono ya, no después.** Un ingeniero en obra lleva su celular, no una laptop. La app debe poder usarse completa en un teléfono antes de la 1.0.
-2. **Mejoras de uso diario** (el «punto 2» de la revisión): avisos agrupados, tabla de circuitos cómoda y editable, avisos que no regresan, Excel completo.
-3. **Unifilar fase 3:** DXF con bloques y atributos, y tamaños de hoja.
-4. **Rendimiento:** la app debe estar bien optimizada, **incluida la generación del PDF**.
-5. **PDF personalizable (membrete):** que no sea un reporte genérico. Cada usuario debe poder poner portada, logotipo, colores y membrete a su gusto.
-6. **Cuadro de cargas con su formato:** en la app y en la exportación a Excel, con el archivo `CUADRO_DE_CARGAS_CMAPAS.xlsx` como base, y personalizable.
-7. **Que el programa no pregunte lo que ya sabe.** En el cálculo rápido eligió el sistema `1F-3H 240/120 V` y aun así pudo elegir «3 fases» en Conexión. Si el sistema ya dice cuántas fases hay, no debe volver a pedirlas ni permitir una combinación imposible.
+## 1. Decisiones del dueño del proyecto
 
-8. **Estados que se entiendan** (evaluación de la interfaz del 10-nov-2026, aceptada por Antonio): hoy casi todo sale «Sin evaluar» por un solo motivo, los conteos de pendientes no coinciden entre pantallas, hay textos encimados o cortados y el unifilar no tiene un lugar propio en la vista guiada. Ver la etapa 1B.
-9. **La vista avanzada queda congelada** (decisión de Antonio, 10-nov-2026): sigue funcionando en escritorio, pero no se adapta a teléfono ni recibe funciones nuevas. Lo que solo ella tiene (procedimiento completo, elegir columnas) se pasa a la vista guiada.
-10. **El aviso «pensado para pantallas grandes» debe desaparecer** en cuanto el teléfono sea de verdad utilizable (etapa 3).
-11. **Errores que aparezcan en el camino se arreglan**, sin pedir permiso, y se reportan. Para dejar la app a nivel profesional, quien ejecute toma la mejor decisión de diseño posible y la explica.
+1. IEEStudio debe ser utilizable en escritorio, tablet y teléfono antes de la 1.0.
+2. Debe existir **una sola interfaz adaptativa**, no dos aplicaciones o modos separados llamados «Guiado» y «Avanzado». El usuario nuevo debe encontrar un recorrido sugerido; el usuario experto debe poder trabajar sin pasos forzados. Se conserva un solo modelo `Doc`, una sola selección y una sola fuente de resultados.
+3. El flujo Proyecto → Tableros → Circuitos → Revisar → Memoria se conserva como orientación, checklist o navegación contextual, pero no como una segunda interfaz independiente ni como un asistente que obliga a avanzar en orden.
+4. El unifilar nuevo (formato de plano de la decisión 0022) debe verse igual en escritorio y navegador. No se acepta que la versión web muestre un renderer anterior.
+5. No se publicará una nueva Release mientras las observaciones críticas de Fable sigan abiertas.
+6. Los cambios de cálculo deben ser técnicamente trazables y verificables. No se inventan datos ni valores normativos. Si el método no permite concluir, el resultado debe decirlo.
+7. El rediseño visual se revisa y aprueba antes de implementarlo. La dirección acordada es una interfaz profesional, adaptable y de densidad equilibrada, con carbón + amarillo eléctrico + IBM Plex; referencias de refinamiento Apple, herramientas técnicas Autodesk y organización Adobe, sin copiar literalmente sus interfaces.
+8. El dueño revisa el comportamiento con explicaciones en español, enlaces y capturas; no necesita revisar código.
 
-## 2. Estado actual (verifícalo antes de empezar)
+## 2. Estado real comprobado en GitHub
 
-- Repositorio: `github.com/JAAM08/IEEStudio`, rama `main`. Rust, interfaz egui (escritorio y navegador por WebAssembly), memoria en PDF con Typst, Excel con `rust_xlsxwriter` y `calamine`.
-- El PR #6 ya está en `main` (10-nov-2026): unifilar como plano (decisión 0022), cortocircuito por bus infinito con datos de catálogo (0023) y símbolos de norma. Compruébalo: debe existir `crates/ieestudio-project/src/fault.rs`.
-- Lee primero: `CLAUDE.md`, `docs/architecture.md`, `docs/engineering-methodology.md`, `docs/roadmap.md` y las decisiones `0017` (versión web), `0020` (vista guiada), `0021`, `0022`, `0023`, `0014` (Excel) y `0006` (memoria Typst).
-- Hechos comprobados en el código:
-  - El unifilar se reconstruye completo **en cada cuadro de pantalla** (`panels/mod.rs` y `guided.rs` llaman a `single_line…` dentro del dibujo).
-  - Cada edición recalcula **todo el proyecto** (`Doc::edited` → `calculate`).
-  - Tres archivos de la interfaz pasan de 1 900 líneas (`guided.rs`, `properties.rs`, `app.rs`) y `ieestudio-diagrams/src/lib.rs` también.
-  - **Sistema y conexión no se validan entre sí.** `CircuitKind::reference_voltage` solo revisa que el sistema tenga la tensión, así que un circuito de «3 fases» en un sistema monofásico de tres hilos (240/120 V) se calcula con √3 y 240 V y da un resultado que parece válido. El cálculo rápido (`panels/quick.rs`) y la «Conexión» del alimentador de un tablero (`properties.rs`, `feeder_inputs`) ofrecen siempre las tres conexiones. La ficha del circuito ya limita las opciones a las del tablero, pero no al sistema.
+### 2.1 Base de código
 
-## 3. Reglas para quien ejecute (obligatorias)
+- Repositorio: `JAAM08/IEEStudio`; rama principal `main`.
+- Rust + egui/eframe; escritorio y WebAssembly comparten `ieestudio-app`.
+- El PR #11 está integrado en `main` en `d4665fb`; incluye las decisiones 0026, 0027 y 0028, fuente única/topología, estados y trazabilidad, y propagación de motores por zonas.
+- La auditoría de Opus documenta 20 hallazgos; 16 marcados corregidos y cuatro pendientes. Ver `docs/auditoria-modelo-y-falla.md`.
+- La auditoría independiente de Fable se conserva como `docs/auditoria-fable-pr11.md`. Su dictamen es **APROBADO CON OBSERVACIONES**: confirma las 16 correcciones, pero identifica 18 hallazgos adicionales o persistentes (H-01 a H-18), con tres prioritarios.
+- Las decisiones 0024 y 0025 (sistema/conexión y claridad del estado propio/capacidad interruptiva por tablero) ya aparecen en el roadmap como trabajo hecho. Verificar su estado en el código; no rehacerlas sin un fallo reproducible.
 
-1. **Antonio revisa el funcionamiento, no el código.** Explícale cada cambio en términos de lo que el programa hace, en español, con capturas.
-2. **No uses control de su computadora** (computer use). Si necesita probar algo, mándale el archivo o el enlace y él lo corre.
-3. **Antes de cada etapa:** preséntale maquetas o capturas de lo que vas a construir cuando la etapa cambie pantallas o formatos, y espera su visto bueno. Para decisiones de diseño menores, decide tú y explica por qué.
-4. **Decisiones de ingeniería o de norma son de Antonio.** No inventes valores normativos ni supongas datos: lo que no se puede evaluar se muestra «no evaluado». Los valores van en `data/<perfil>/*.csv`, nunca en el código.
-5. **Un pull request por etapa (o subetapa), siempre contra `main`.** No encadenes PR sobre otras ramas: ya pasó que se fusionaron en la rama equivocada. Si una etapa depende de otra sin fusionar, espera o pide que la acepte.
-6. **Antes de cada commit** deben pasar: `cargo fmt --all`, `cargo clippy --all-targets -- -D warnings`, `cargo test` y `cargo clippy --target wasm32-unknown-unknown -p ieestudio-app -- -D warnings`.
-7. **Revisa la interfaz con capturas** (`xvfb-run -a cargo run -p ieestudio-app -- … --captura x.png`) en tema oscuro y claro, y desde la etapa 2 también a tamaño de teléfono. Mira las capturas tú mismo antes de mandarlas.
-8. **Cada regla de cálculo nueva** lleva su `Rule`, su referencia y sus tres pruebas (matemática, de referencia en `fixtures/`, normativa). Cada cambio de comportamiento lleva su decisión en `docs/decisions/` y su renglón en `docs/roadmap.md`.
-9. **El formato del archivo `.iees` no se rompe:** campos nuevos con valor por omisión; los proyectos viejos deben abrir igual. Agrega una prueba de lectura de un archivo anterior.
-10. **Todo debe funcionar también en el navegador:** archivos solo por el módulo `files` (decisión 0017), nada de `std::fs` directo, nada de hilos que WebAssembly no tenga sin su alternativa.
-11. **No preguntes lo que el programa ya sabe.** Antes de agregar un campo, revisa si su valor se deduce de otro dato ya capturado; si se deduce, muéstralo, no lo pidas. Si solo hay una opción válida, no pongas una lista.
-12. **Mejora continua.** No des una pantalla por terminada porque ya existe: al tocarla, mírala como usuario nuevo. Si encuentras un error (de cálculo, de texto, de acomodo) mientras trabajas una etapa, arréglalo en el mismo PR si es chico o en uno aparte si no, y repórtalo. Solo las decisiones de ingeniería o de norma esperan a Antonio.
-13. **La vista avanzada no se toca** salvo para que siga compilando y no se rompa. Nada nuevo se construye en ella.
-14. Si GitHub rechaza tus subidas, no insistas: empaqueta con `git bundle` y mándalo en el chat.
+### 2.2 CI, instalador, sitio y Releases
 
-## 4. Etapas
+La ejecución de GitHub Actions **43148932851**, asociada al commit `d4665fb`, terminó correctamente:
+- pruebas, formato y clippy en Linux y Windows;
+- compilación de ejecutables;
+- generación y prueba automatizada del instalador de Windows;
+- clippy y compilación WebAssembly;
+- generación del sitio, artefacto `ieestudio-sitio` y despliegue de GitHub Pages.
 
-El orden importa. La corrección de sistema y conexión va primero porque hoy produce resultados equivocados. El rendimiento sigue porque el teléfono lo necesita; la base de teléfono va antes que las pantallas nuevas para que cada una nazca ya adaptada.
+Esto demuestra que el commit se compiló y que el instalador se generó y pasó la prueba automatizada de instalación/arranque en CI. **No significa que el instalador esté publicado como Release ni que Antonio haya validado la aplicación manualmente.**
 
-### Etapa 0 — Preparación (corta)
+La última Release visible al revisar el repositorio sigue siendo `v0.3.0-alpha.3`, publicada el 14 de octubre de 2026. Contiene instalador y paquete del sitio, pero no los cambios del PR #11. No crear una etiqueta o Release nueva hasta cerrar las etapas técnicas y verificar la entrega.
 
-**Qué:** dejar el terreno listo y poder medir.
-- Confirmar que este plan está en `docs/plan-1.0.md`.
-- Crear un proyecto de prueba grande generado por código: 12 tableros en 3 niveles, 400 circuitos, motores y un transformador. Guardarlo como generador en las pruebas, no como archivo enorme.
-- Medir y anotar en el PR, con ese proyecto: tiempo de recálculo, tiempo de un cuadro de pantalla en cada paso, tiempo de generar el PDF, tamaño del `.wasm`.
-- Agregar una opción `--medir` (o una prueba) que repita esas mediciones, para comparar después.
-- Pruebas de interfaz por captura: un script que tome las capturas clave y las compare contra las guardadas, con tolerancia.
+El flujo de CI actual funciona así:
+- push a `main`: pruebas y despliegue de ieestudio.com;
+- `workflow_dispatch`: permite volver a ejecutar el workflow y publicar el sitio;
+- etiqueta `v*`: crea/actualiza la Release y adjunta el instalador; el job web adjunta también el ZIP del sitio.
+- Los artefactos de Actions caducan; una Release conserva los binarios y ZIP publicados.
 
-**Listo cuando:** hay una tabla de tiempos «antes» y un comando para repetirla.
+Archivos relevantes: `.github/workflows/ci.yml`, `tools/sitio-web.sh`, `website/README.md`, `installer/ieestudio.iss`, `crates/ieestudio-app/web/`.
 
-### Etapa 1 — Sistema y conexión coherentes (corrección)
+### 2.3 Unifilar de la aplicación web
 
-**El problema:** el sistema ya define qué conexiones existen, y el programa las vuelve a preguntar y acepta las imposibles.
+En el código de `main`:
+- El renderer del unifilar vive en `crates/ieestudio-diagrams/src/lib.rs`.
+- `crates/ieestudio-app/src/panels/mod.rs` llama a `single_line_with` y guarda el resultado en caché por revisión y modo.
+- `guided.rs` solicita el diagrama a `shared.diagram(doc, shared.diagram_mode)`.
+- La aplicación web se compila desde el mismo crate `ieestudio-app` y enlaza el mismo crate `ieestudio-diagrams`; no se encontró un renderer separado exclusivo de WebAssembly en las búsquedas realizadas.
 
-| Sistema | Conexiones posibles |
-|---|---|
-| `1F-2H 127 V` | Solo 1 fase y neutro |
-| `1F-3H 240/120 V` | 1 fase y neutro (120 V) o 2 fases (240 V). **Nunca 3 fases** |
-| `3F-4H 220Y/127 V`, `480Y/277 V` | 1 fase y neutro, 2 fases o 3 fases |
-| `3F-3H` sin neutro | 2 fases o 3 fases; nunca fase y neutro |
+Por eso, si el navegador muestra el unifilar de la primera versión mientras el escritorio muestra el nuevo, **no asumir que falta copiar un archivo de diseño**. Primero demostrar cuál build y renderer está ejecutando. Posibles causas que se deben discriminar: versión WebAssembly antigua, caché del navegador/service worker, ruta/panel que no usa el renderer compartido, modo Revisión/Plano confundido, o un defecto de integración. No declarar resuelto con solo recompilar.
 
-**Qué y cómo:**
-1. **En el motor de cálculo** (`ieestudio-core`): una sola función que diga qué conexiones admite un sistema (por ejemplo `System::allows(kind)` y `System::kinds()`), deducida de sus tensiones (relación entre fases y neutro de 2 = monofásico de tres hilos; de √3 = trifásico). `reference_voltage`, el cálculo del proyecto y el cálculo rápido deben **rechazar con un error claro** la combinación imposible: se muestra «no evaluado: un sistema monofásico de tres hilos no tiene tres fases», nunca un número.
-2. **En el cálculo rápido:** la lista «Conexión» ofrece solo las del sistema elegido, con su tensión (`1F · 120 V`, `2F · 240 V`), igual que la ficha del circuito. Si solo hay una, se muestra como texto, sin lista. Al cambiar el sistema, si la conexión ya no existe se pasa a la más cercana y se avisa. Para motores, la lista de hp sigue a la conexión (ya lo hace).
-3. **En el alimentador de un tablero:** la «Conexión» se limita a las del sistema de donde se alimenta (la fuente, el tablero padre o el secundario de su transformador) y a las del tablero padre.
-4. **En la ficha del circuito:** además del tablero, considerar el sistema (hoy se usa la tensión pero no la regla de 3 fases en monofásico).
-5. **Fases A, B, C:** se eligen con botones excluyentes (A | B | C, o AB | BC | CA), no con tres casillas que dejan marcar una combinación inválida. Si la conexión ocupa todas las fases del tablero (3 fases en un tablero trifásico, 2 en uno de dos fases, 1 en uno de una), no se preguntan: se muestran. Solo se eligen cuando hay opciones reales (por ejemplo, un circuito de 1 fase en un tablero de 3). «Lleva neutro» solo aparece si el sistema tiene neutro.
-6. **Proyectos existentes con una combinación imposible:** deben abrir; el tramo queda «no evaluado» con el motivo y un botón para corregirlo. Agregar el aviso a Revisar.
-7. **Barrido del mismo defecto:** revisar todos los formularios (proyecto, tablero, circuito, cálculo rápido, transformador, acometida) y listar cada campo que pide algo que se deduce de otro. Corregir los claros; los dudosos, presentárselos a Antonio en una lista corta.
+La aplicación tiene un service worker (`crates/ieestudio-app/web/sw.js`) que crea una caché con versión derivada del hash del WASM. La prueba web debe verificar actualización real en una instalación PWA existente y en una sesión limpia.
 
-**Pruebas:** una por cada renglón de la tabla de arriba, en el motor; una de que el cálculo rápido con `1F-3H` y 3 fases devuelve error; una de lectura de un proyecto viejo con la combinación imposible.
+## 3. Reglas obligatorias para Claude
 
-**Listo cuando:** en ninguna pantalla se puede elegir una conexión que el sistema no tiene, y el caso de la captura de Antonio (`1F-3H 240/120 V`, 61 700 W) ya no ofrece «3 fases».
+1. **Leer antes de tocar:** `CLAUDE.md`, `docs/architecture.md`, `docs/engineering-methodology.md`, `docs/roadmap.md`, `docs/auditoria-modelo-y-falla.md`, `docs/auditoria-fable-pr11.md`, decisiones 0017, 0020, 0022–0028 y las decisiones pertinentes al módulo que se cambie.
+2. **No tocar `main` directamente.** Una rama por etapa o subetapa, un PR dirigido a `main`. No apilar PRs dependientes entre sí. Esperar a que se integre la etapa previa.
+3. **No cambiar cálculos por intuición.** Toda decisión de ingeniería o normativa debe tener una decisión documentada, hipótesis explícitas, fuente identificable y pruebas. Cuando requiera aprobación de Antonio, presentar alternativas, impacto y recomendación antes de implementar.
+4. **No inventar valores.** Datos ausentes siguen ausentes. Los valores normativos viven en `data/<perfil>/*.csv`; no codificar tablas o factores en la interfaz ni en el motor.
+5. **Modelo único.** La interfaz, CLI, memoria, Excel, DXF y WebAssembly deben consumir el mismo proyecto y los mismos resultados. No duplicar motores ni reglas en UI.
+6. **Compatibilidad de archivos:** toda migración debe leer proyectos anteriores, conservar sus datos y emitir un diagnóstico claro. No prometer que versiones antiguas abren archivos nuevos salvo que exista prueba real. Nunca descartar silenciosamente campos desconocidos o datos inválidos.
+7. **Escritorio y navegador son paridad funcional.** Todo cambio de modelo, cálculo, diagrama, exportación o interacción debe probarse en ambos targets. Acceso a archivos por el módulo `files`, según decisión 0017; no usar `std::fs` ni `rfd` en rutas WebAssembly.
+8. **Pruebas obligatorias antes de cada commit:**
+   - `cargo fmt --all -- --check`
+   - `cargo clippy --all-targets -- -D warnings`
+   - `cargo test --workspace`
+   - `cargo clippy --target wasm32-unknown-unknown -p ieestudio-app -- -D warnings`
+   - compilación release de escritorio y WebAssembly cuando aplique.
+9. **Pruebas visuales:** capturas de tema claro y oscuro, tamaños 1440×900, 1280×800, 1024×768, tablet 768×1024 y teléfono 390×844. Revisar las imágenes antes de enviarlas. No basta con que compile.
+10. **No usar el equipo de Antonio por control remoto.** Entregar instaladores, enlaces y pasos breves para que él pruebe.
+11. **Reportar cada etapa en español:** comportamiento visible, archivos o módulos importantes, pruebas ejecutadas y resultado, capturas, riesgos y pendientes, enlace al PR.
+12. **No modificar releases o publicar versiones** como efecto secundario de un PR. Solo la etapa de publicación puede crear etiqueta/Release y requiere autorización expresa de Antonio.
+13. **No iniciar el rediseño final** hasta que las etapas 1–4 estén cerradas y el dueño confirme el cierre técnico.
+14. Si el alcance crece, registrar el hallazgo y priorizarlo; no esconderlo ni introducir una refactorización masiva sin PR separado.
 
-### Etapa 1B — Claridad de estados
+## 4. Plan de ejecución
 
-**El problema** (visto en las capturas del proyecto de ejemplo con 10 kA en el tablero): 6 de 7 circuitos dicen «Sin evaluar» solo porque la falla por bus infinito no es concluyente; el pie dice «0 cumplen» aunque cable, interruptor y caída estén bien; en Revisar, 11 de 13 pendientes son el mismo aviso; el paso Revisar marca «2», la lista 13 y la Memoria 2 + 11; en la vista avanzada el alimentador dice «Cumple» y su tablero «No cumple».
+### Etapa 0 — Congelar la línea base y preparar la auditoría
 
-**Qué y cómo:**
-1. **Dos preguntas separadas.** El estado de un circuito o alimentador responde solo a su cálculo propio (carga, conductor, protección, caída, tierra, tubería). La **capacidad interruptiva** es una verificación del tablero: un solo aviso por tablero con la corriente de falla, los interruptores que no la alcanzan o no tienen dato, y el campo para capturar los kA ahí mismo. El dictamen global no cambia de criterio: mientras ese aviso exista, el proyecto no se marca conforme (nada se marca conforme si falta una verificación). En la ficha del circuito queda como un renglón, no como el recuadro principal.
-2. **Un solo conteo de pendientes** calculado en un lugar y usado por la barra de pasos, el pie, Revisar, la Memoria y el PDF. Se cuentan asuntos por resolver, no verificaciones internas.
-3. **Dos palabras para lo que no es cumple / no cumple:** «Sin evaluar» (falta un dato o la regla no cubre el caso) y «No concluyente» (se calculó con un método conservador y no alcanza para afirmar). Quitar «no evaluado» y «pendiente» como sinónimos en la interfaz; «Pendiente» queda solo para la aprobación profesional.
-4. **Nada encimado ni cortado a 1280 px ni a 1024 px:** la barra de pasos reduce a número los pasos que no caben; la columna Estado es un icono con color, fija a la derecha, con el texto en la ayuda y en la ficha; revisar el encabezado de la vista avanzada solo para quitar los textos encimados.
-5. **Textos engañosos:** «Responsable y cédula capturados» cuando faltan → «Falta responsable y cédula»; «0 contactos» → «sin contar»; el pie del cálculo rápido debe decir que su dictamen es el de ese cálculo (hoy se confunde con el del proyecto, que aparece justo debajo); lo que no cumple va en rojo con su icono también en la lista de la Memoria.
-6. **Desbalance visible:** cuando pasa del límite del perfil, es un aviso con el botón «Balancear», no letra gris.
-7. **Contraste en tema claro:** el amarillo de acento no se usa como color de texto sobre fondo claro.
+**Objetivo:** dejar claro qué commit se está corrigiendo y hacer reproducibles los hallazgos.
 
-**Pruebas:** el conteo único tiene pruebas con el proyecto de ejemplo; una prueba de que un circuito con todo bien y sin kA concluyente aparece como «Cumple» y el tablero lleva el aviso; capturas a 1280 y 1024 px sin recortes.
+1. Confirmar que el checkout está en `main` y parte de `d4665fb` o de su descendiente.
+2. Revisar el informe Opus y el informe Fable. Marcar cada hallazgo como: corregido, pendiente, no reproducido o requiere decisión de Antonio.
+3. Incorporar `docs/auditoria-fable-pr11.md` al repositorio y enlazarlo desde `docs/roadmap.md` y `docs/decisions/README.md` si procede.
+4. Preparar fixtures mínimos para H-01 a H-18 y para los pendientes 17–20 de la auditoría de Opus.
+5. Guardar una copia de referencia de los proyectos antiguos y actuales usados para probar compatibilidad.
+6. Registrar una tabla inicial de pruebas, tiempos y capturas de escritorio/WebAssembly.
 
-**Listo cuando:** en el proyecto de ejemplo los circuitos correctos se ven en verde, el único problema real (C-04) destaca, y el mismo número de pendientes aparece en todas las pantallas.
+**Listo cuando:** cada hallazgo tiene un caso reproducible o una nota de por qué no se reproduce; se conoce el SHA de la base y se puede repetir la batería de pruebas.
 
-### Etapa 2 — Rendimiento, incluido el PDF
+### Etapa 1 — Cerrar primero los riesgos de cálculo y de dictamen
 
-**Qué y cómo:**
-1. **Unifilar en memoria.** Guardar el diagrama junto con el número de revisión del documento (`Doc::revision`), el modo y las opciones; reconstruirlo solo cuando cambien. Aplica al panel Unifilar, a la miniatura de Revisar y a la exportación.
-2. **Dibujo solo de lo visible.** En el unifilar y en las tablas, no enviar a pantalla lo que queda fuera del área visible.
-3. **Recalcular sin trabar la escritura.** Mientras el usuario arrastra un número o escribe, recalcular como máximo una vez por cuadro; si con el proyecto grande pasa de 30 ms, recalcular al soltar. Evaluar recálculo parcial (solo el tablero editado y sus ancestros) únicamente si la medición lo justifica.
-4. **Sin copias por cuadro.** Buscar los `clone()` de resultados dentro de funciones de dibujo y cambiarlos por referencias o por valores guardados por revisión.
-5. **PDF:** generarlo fuera del hilo de la interfaz en escritorio (con indicador de avance y botón cancelar) y en el navegador sin congelar la pantalla (por partes o en un Web Worker). Reutilizar entre generaciones lo que no cambia (fuentes y plantilla ya cargadas). Guardar en memoria el último PDF por revisión para que «vista previa» y «guardar» no lo generen dos veces.
-6. **Tamaño y arranque en el navegador:** medir el `.wasm`, activar optimización por tamaño si no rompe tiempos, y mostrar una pantalla de carga con avance.
-7. **Dividir los archivos grandes** de la interfaz por pantalla o por sección, sin cambiar comportamiento (un commit aparte, verificable con las capturas).
+**Prioridad P0. No iniciar rediseño antes de completar esta etapa.**
 
-**Metas con el proyecto grande, en una laptop común:** cuadro de pantalla < 16 ms en todos los pasos; edición de un número sin retraso visible; PDF < 5 s en escritorio y sin congelar la pantalla en el navegador. Si una meta no se alcanza, repórtalo con números; no la declares cumplida.
+#### 1A. H-01 — Falla fase-neutro en sistemas 1F-3H 240/120 V
 
-**Listo cuando:** la tabla «antes / después» está en el PR y las capturas no cambiaron.
+El informe Fable demuestra que el programa puede mostrar 3.86 kA y «Cumple» para un interruptor de 5 kA, aunque el escenario de fase-neutro podría ser 5.1–6.4 kA. La etiqueta «cota superior» no es defendible si no se ha evaluado esa condición.
 
-### Etapa 3 — Base para teléfono
+- Revisar el método aplicable a transformadores monofásicos con derivación central y los casos de falla fase-fase y fase-neutro.
+- No introducir automáticamente un multiplicador 1.5 como si fuera un requisito normativo. Fable lo propone como recomendación de ingeniería y cita el método punto a punto Bussmann; hay que cotejar la fuente, sus condiciones y la base del cálculo.
+- Recomendación provisional: hasta que Antonio apruebe el método y se verifique su fuente, el estudio de capacidad interruptiva de 1F-3H debe ser **No concluyente** cuando la fase-neutro pueda gobernar. No debe dar «Cumple» ni «Conforme» por una falla fase-fase menor.
+- Si se aprueba una estimación conservadora, guardarla en el perfil con fuente y limitaciones, no como constante escondida.
+- Pruebas: el caso de 25 kVA, 3 %, 240/120 V; acometida y transformador intermedio; interruptores de 5 kA y 10 kA; verificar el estado del resultado y el texto de trazabilidad.
 
-**Punto de partida:** Antonio ya la abrió en su teléfono: abre, pero es la pantalla de escritorio encogida y con el aviso de «pensado para pantallas grandes». No esperes otra prueba suya para empezar; revisa tú con capturas a tamaño de teléfono y mándale el enlace cuando haya algo que probar.
+#### 1B. H-02 — Tensión de referencia del dato de falla de CFE/suministradora
 
-**Qué y cómo:**
-1. **Tres tamaños** según el ancho disponible: teléfono (< 700 px), tablet (700–1100 px) y escritorio. Un solo lugar del código decide el tamaño; las pantallas lo consultan.
-2. **En teléfono, vista guiada por paso a pantalla completa:** barra inferior con los cinco pasos (Proyecto, Tableros, Circuitos, Revisar, Memoria); la ficha del tablero o del circuito se abre como hoja a pantalla completa con botón «Listo»; las tablas se vuelven listas de tarjetas (una por circuito con lo esencial y su estado).
-3. **El cálculo rápido en teléfono** es la herramienta de obra más probable: datos arriba, resultado abajo, sin paneles lado a lado.
-4. **Tacto:** controles de al menos 44 px, campos numéricos con teclado numérico, nada que dependa de pasar el cursor (cada ayuda emergente debe tener un botón «i» equivalente), desplazamiento por arrastre.
-5. **Teclado en pantalla:** el campo activo no debe quedar tapado.
-6. **Unifilar en teléfono:** pellizco para acercar, arrastre para mover, tocar un circuito abre su ficha.
-7. **Archivos en teléfono:** abrir, guardar y compartir el `.iees` y el PDF con lo que el navegador permita; guardado automático local para no perder trabajo en obra sin señal.
-8. **Instalable y sin conexión** (PWA): revisar que funcione sin red después de la primera carga.
-9. Opción de captura `--tamano telefono|tablet` para revisar sin teléfono.
-10. **Unifilar con lugar propio en la vista guiada:** botón «Abrir unifilar» a pantalla completa desde Revisar y Memoria, con Revisión / Plano y exportar. La miniatura ilegible de Revisar se cambia por un esquema simple de tableros con su estado.
-11. **Quitar el aviso de pantallas grandes** (`crates/ieestudio-app/web/index.html`), corregir la pregunta «¿Funciona en el celular?» de `website/guia/index.html` y anotar el cambio en las decisiones 0017 y 0020. Solo cuando lo anterior funcione: no se quita el aviso antes de merecerlo.
-12. La vista avanzada no se ofrece en teléfono.
+- El modelo debe identificar la tensión en la que está expresada la corriente de falla disponible.
+- Si el dato corresponde a media tensión, no copiar sus kA directamente al secundario. Modelar el paso por el transformador con impedancias y relación de tensiones correctas.
+- Validar el dato contra la impedancia y capacidad del transformador cuando ambos estén disponibles; detectar contradicciones y explicar qué dato prevalece o por qué el estudio queda incompleto.
+- No inferir que un dato de 5 kA está en baja tensión si el usuario no lo especificó.
+- Pruebas: dato de 5 kA en el primario de 13.2 kV con transformación a 480 V; dato expresado en el secundario; dato superior a la falla de bus infinito; ausencia de tensión de referencia.
 
-**Regla desde aquí:** toda pantalla nueva de las etapas siguientes se entrega también en tamaño teléfono, con su captura.
+#### 1C. H-03 — Cargas sospechosas de ser motores
 
-**Listo cuando:** Antonio captura en su teléfono un proyecto chico de principio a fin (tablero, 5 circuitos con un motor, revisar, PDF) y un cálculo rápido, y lo confirma.
+- Si `review.rs` identifica una carga que parece motor o compresor, pero el usuario la dejó como «Otra carga», no se debe dar un resultado concluyente de capacidad interruptiva si esa aportación puede modificarlo.
+- La confirmación «Es otra carga» debe persistir dentro del proyecto, tener trazabilidad y eliminar el aviso en Revisar, memoria y CLI.
+- Si el usuario confirma que sí es motor, ofrecer la conversión conservando datos y recalcular.
+- El estado de la falla debe distinguir entre sospecha sin resolver, motor confirmado sin datos y motor confirmado con datos.
+- Pruebas: caso Bomba 50 hp capturada como Otra carga; misma carga convertida a Motor; confirmación persistida al guardar/cerrar/reabrir.
 
-### Etapa 4 — Uso diario
+#### 1D. H-04 y H-05 — Coherencia de conexiones, sistemas e impedancias
 
-1. **Avisos agrupados en Revisar.** El de capacidad interruptiva ya quedó por tablero en la etapa 1B; revisar si otros avisos repetidos merecen lo mismo.
-2. **Tabla de circuitos:** que quepa completa a 1280 px (hoy se corta la columna Estado); elegir qué columnas ver; **editar en la celda** nombre, carga, longitud y fases; teclas Tab y Enter para moverse.
-3. **Duplicar circuito y plantillas** («contactos de 180 VA × 6», «minisplit 1 t»), editables por el usuario.
-4. **«Es otra carga» se guarda** en el proyecto para que el aviso no regrese.
-5. **Excel de ida y vuelta completo:** que exportar e importar conserve tipo de carga, datos de motor y de placa, datos de catálogo y posiciones. Prueba: exportar → importar → el proyecto queda idéntico.
+- Unificar el criterio de trifásico en `System::has_three_phases` o función equivalente; eliminar umbrales contradictorios en `fault.rs`, `system.rs` y `calc.rs`.
+- Detectar una conexión de transformador que contradiga el sistema eléctrico del punto correspondiente.
+- Detectar impedancias fuera del rango válido de la tabla o clase de equipo; no inventar límites: deben venir de fuente aprobada y estar documentados.
+- Pruebas: relación de tensión 1.88; relación 2.1; transformador monofásico asociado a sistema 220Y/127 V; impedancia anómala; cada caso debe mostrar error/advertencia con estado correcto y no generar un «Cumple» falso.
 
-6. **Proyectos recientes** en la pantalla de inicio (en el navegador, los guardados localmente).
-7. **Un solo botón para exportar el PDF** en Memoria (hoy hay tres).
-8. **Paso Tableros:** aprovechar el espacio vacío del lienzo y que la ficha no obligue a desplazarse para lo común.
-9. **Pasar a la vista guiada lo que solo tiene la avanzada:** el procedimiento completo del alimentador y elegir columnas.
+#### 1E. H-06, H-07, H-10 y H-11 — Capacidad, dictamen y presentación consistente
 
-**Listo cuando:** capturar 40 circuitos se puede hacer sin abrir la ficha de cada uno, y la prueba de ida y vuelta pasa.
+- H-06: evaluar la capacidad del transformador de acometida cuando sea equipo propio y haya datos de carga y placa suficientes. Distinguir claramente transformador de CFE y transformador del usuario. No emitir verificación si faltan datos.
+- H-07: el dictamen debe usar «Conforme en lo evaluado» y explicar el alcance. No afirmar cumplimiento integral de NOM-001-SEDE-2012 por el hecho de que las reglas implementadas hayan pasado.
+- H-10: el unifilar debe mostrar el origen real de la falla por zona. Si no hay estimación, mostrar «Icc SIN ESTIMAR» y la causa; no imprimir «dato de suministradora», «bus infinito» o «impedancia reducida 10 %» si no corresponde al caso.
+- H-11: conservar «Dato inválido» como tal en Revisar, propiedades, memoria, unifilar y CLI; no convertirlo en «Sin evaluar» ni «Fuera de alcance».
+- Pruebas cruzadas: misma instalación y dato inválido inspeccionados en interfaz, PDF, DXF/diagrama y CLI.
 
-### Etapa 5 — Cuadro de cargas con el formato de Antonio
+**Listo cuando:** ningún escenario P0 produce «Cumple» o «Conforme» con una falla potencialmente subestimada, con dato de referencia ambiguo o con motor sospechoso sin resolver. Todos los outputs expresan el mismo origen y estado.
 
-**El formato base** (archivo `CUADRO_DE_CARGAS_CMAPAS.xlsx`, una hoja por tablero, horizontal):
-- **Encabezado:** Nombre del tablero, Ubicación, Tipo de carga eléctrica (Normal, Emergencia), Voltaje de operación (`220 3F, 4H`), Marca y modelo.
-- **Renglones:** uno por circuito, con «No. / Etapa» y «Circuito / Áreas».
-- **Columnas de tipos de carga:** una por cada tipo de equipo del tablero («Luminaria STL 6004», «Contacto normal», «Contacto regulado»…), con su **símbolo**, sus **watts por unidad** y, en cada renglón, la **cantidad** de ese equipo en el circuito. En tableros generales las columnas son los subtableros.
-- **Columnas de resultado:** Carga total (W), Fases A / B / C, Volts, Amp., I.T.M. (`1X15`, `3X100`), factor de corrección o de agrupamiento, I corregida, conductor de fase, neutro y tierra **en mm²**, longitud (m), % de caída, diámetro del tubo (mm).
-- **Pie:** renglón «CARGA INSTALADA» con las sumas y los datos del alimentador; «Desbalanceo máximo entre fases» A-B, A-C y B-C.
+### Etapa 2 — Completar los pendientes de la auditoría Opus y los hallazgos menores de Fable
 
-**Lo que hay que construir:**
-1. **Catálogo de cargas del proyecto** (dato nuevo): tipos de equipo con nombre, watts por unidad, factor de potencia opcional, tipo de carga (alumbrado, contactos…) y símbolo. Cada circuito puede llevar **cantidades por tipo**; su potencia sale de la suma. Capturar la potencia directa, como hoy, debe seguir funcionando. Para contactos, respetar la regla de 180 VA por salida ya existente: si hay conflicto entre los watts del catálogo y el mínimo de norma, decide Antonio.
-2. **Datos nuevos del tablero:** ubicación y tipo de carga eléctrica (normal, emergencia, regulada).
-3. **Vista «Cuadro de cargas» en la app** con ese mismo acomodo (matriz de cantidades editable), además de la tabla actual.
-4. **Exportación a Excel con ese formato:** una hoja por tablero, encabezado, símbolos como imagen, **fórmulas vivas** (carga total = Σ cantidad × watts; amperes; sumas; desbalanceo) para que quien lo abra pueda seguir el cálculo; los valores que IEEStudio calcula con tablas de norma (conductor, interruptor, caída) van como valor con una nota de que vienen del programa. Tamaño de impresión ajustado a una hoja horizontal.
-5. **Cuadro de cargas en el PDF** de la memoria con el mismo formato.
-6. **Personalizable:** qué columnas aparecen y en qué orden, calibres en mm², AWG o ambos, textos del encabezado, y si lleva símbolos. Se guarda como parte de la plantilla de la etapa 6.
-7. **Importar** un Excel con este formato para crear los circuitos (al menos el que exporta la app).
+**Objetivo:** cerrar el modelo de conexiones, los estados y la integridad de captura.
 
-**Diferencias que debes señalarle a Antonio, no resolver solo:** su archivo calcula la caída con fórmulas y factores propios por renglón; IEEStudio usa su método con las tablas del perfil. El cuadro debe mostrar los resultados de IEEStudio; si quiere otra cosa, que lo decida.
+#### 2A. Pendientes 17–20 de `docs/auditoria-modelo-y-falla.md`
 
-**Listo cuando:** el proyecto de ejemplo exportado se ve como su archivo (compara captura contra captura) y Antonio lo aprueba.
+1. **17 — Conexión propia del secundario del transformador.** Revisar el modelo `Panel.transformer`: el secundario no debe heredar automáticamente la conexión del primario si el transformador puede tener otra configuración. Añadir el dato explícito donde proceda, validaciones y migración de proyectos.
+2. **18 — Falla fase-neutro 120/240 V.** Se resuelve dentro de H-01; no crear dos métodos independientes.
+3. **19 — Datos iniciales de circuitos/alimentadores.** Eliminar valores automáticos supuestos de 1,000 W y 10 m. Campos desconocidos vacíos; longitud 0 m debe rechazarse o tener significado explícito aprobado. Un circuito nuevo no puede aparentar cálculo completo sin datos.
+4. **20 — Estados de conductor, protección, caída y tierra.** Migrar a estados de evaluación diferenciados: Válido, No concluyente, Sin evaluar y Dato inválido, sin confundirlos con Cumple/No cumple. La verificación normativa y el veredicto permanecen separados.
 
-### Etapa 6 — Membrete y plantilla de documentos
+#### 2B. Hallazgos menores H-12 a H-18
 
-**Qué:** que cada usuario le dé su imagen a todo lo que sale del programa: memoria en PDF, hoja del cálculo rápido, cuadro de cargas (PDF y Excel) y cajetín del unifilar.
+- H-12: unificar el conteo de motores incompletos a través de transformadores y en la memoria.
+- H-13: corregir la referencia de `references.csv` que todavía dice «en cada tablero».
+- H-14: agregar fixtures de referencia para las reglas nuevas de propagación y transformadores; dejar `reviewed_by` vacío hasta revisión humana real, no inventar una firma.
+- H-15: corregir la nota de compresores que omite que su corriente también entra al estudio de falla.
+- H-16: detectar transformadores 1:1 comparando las tensiones de la conexión real, incluido 127 → 127 V.
+- H-17: cuando un valor introducido se rechace (cero, negativo o texto), marcar el campo y explicar por qué; no ignorarlo silenciosamente.
+- H-18: documentar la suma de magnitudes de impedancia y su diferencia menor de 0.2 %; evaluar si debe calcularse impedancia compleja. No llamar «cota superior» a un método que no garantice matemáticamente esa propiedad.
 
-**La plantilla guarda:**
-- Datos de la empresa: nombre, dirección, teléfono, correo, sitio, RFC opcional, responsable y cédula.
-- Logotipo (PNG, JPG o SVG) y, opcional, un segundo logotipo (del cliente).
-- Colores: principal, secundario y de tablas. Tipografía de entre las incluidas.
-- **Portada:** generada (logotipo, título, obra, cliente, fecha, revisión) con dos o tres acomodos a elegir, **o una imagen o PDF de portada propio** que se inserta tal cual.
-- **Membrete:** encabezado y pie de cada página (logotipo, datos, número de página, leyenda), o una hoja membretada propia como fondo.
-- Qué secciones lleva la memoria y en qué orden; texto libre de introducción y de notas finales.
-- Las preferencias del cuadro de cargas de la etapa 5.
+#### 2C. Reglas de captura
 
-**Cómo:**
-- La plantilla es un archivo aparte (`.ieesplantilla`) que se guarda en la configuración de la app y se puede exportar e importar para compartirla en un despacho. El proyecto recuerda qué plantilla usa; si no está en esa máquina, usa la genérica y avisa.
-- Editor de plantilla con **vista previa en vivo** de la portada y de una página interior.
-- En Typst: convertir el preámbulo actual en una plantilla con parámetros; no duplicar el reporte.
-- La plantilla genérica actual queda como predeterminada. La leyenda «No constituye aprobación profesional» **no se puede quitar**.
-- Imágenes: limitar tamaño y reducirlas al guardarlas, para no inflar archivos ni alentar el PDF (liga con la etapa 2).
+- Circuitos y alimentadores nuevos deben nacer sin potencia ni longitud asumidas.
+- Longitud cero: decidir si representa conexión sin tramo, dato faltante o valor inválido; no tratarla indistintamente.
+- Los proyectos anteriores deben abrir sin perder valores existentes; si un valor por omisión antiguo estaba guardado, no borrarlo automáticamente.
+- Revisar el resto de formularios para evitar pedir datos que el sistema ya deduce.
 
-**Listo cuando:** con una plantilla de prueba (logotipo, colores y portada propios) la memoria, el cuadro de cargas y el unifilar salen con esa imagen, en escritorio y en el navegador.
+**Listo cuando:** todos los hallazgos 17–20 y H-12–H-18 están corregidos o explícitamente diferidos con motivo y aceptación de Antonio; los estados se conservan igual en todas las salidas.
 
-### Etapa 7 — Unifilar fase 3
+### Etapa 3 — Decisiones de ingeniería que debe aprobar Antonio
 
-1. **DXF con bloques:** cada símbolo (interruptor, medidor, transformador, tablero, cada tipo de carga) como bloque con nombre, insertado con **atributos** editables (identificador, amperes, calibre, etc.). Capas con nombres claros por tipo de elemento. Probar abriéndolo en AutoCAD o, si no hay, en LibreCAD u ODA; decirle a Antonio cuál se usó.
-2. **Tamaños de hoja:** carta, doble carta, 60×90 y 90×120 cm, horizontal; marco, cajetín y escala de texto ajustados a la hoja; cajetín con el logotipo de la plantilla.
-3. **Diagramas grandes:** si no cabe legible en la hoja elegida, repartir en varias hojas (una por tablero principal o por subárbol) con referencias «continúa en hoja N».
-4. **PDF del plano solo**, además del que va en la memoria.
-5. Probar con varios niveles de subtableros y nombres largos; corregir textos encimados.
+Claude debe preparar una nota breve por decisión con alternativas, pros/contras, ejemplo numérico, referencias exactas y recomendación. **No debe elegir silenciosamente por el usuario.**
 
-**Listo cuando:** el DXF del proyecto grande abre con bloques y atributos editables, y el PDF en doble carta es legible.
+| Decisión | Recomendación inicial para Antonio | Condición antes de implementar |
+|---|---|---|
+| D-1 Falla fase-neutro | Recomendación conservadora: marcar No concluyente mientras no se valide el método. Evaluar el factor 1.5 citado por Fable, sin asumir que es norma. | Revisar la fuente Bussmann, sus hipótesis y el método aplicable al sistema 1F-3H. |
+| D-2 Tensión de falla CFE | Capturar explícitamente la tensión de referencia y transformar el dato entre primario/secundario. | Definir qué datos de transformador son obligatorios y cómo se trata un dato ambiguo. |
+| D-3 Sospecha de motor | No concluyente hasta que el usuario clasifique; guardar confirmación. | Aprobar texto y persistencia de «Es otra carga». |
+| D-4 Falla en transformador intermedio | No cambiar aún la decisión 0028. Comparar bus infinito local con propagación de la falla aguas arriba y determinar cuál es conservadora y físicamente consistente. | Presentar cálculo cotejado para el caso de 72.9 kA frente a 9.49 kA indicado por Fable, explicar bases y supuestos, y aprobar el método. |
+| D-5 Transformador de acometida | Verificar capacidad del transformador propio; distinguirlo del equipo de CFE. | Definir dato «propio/CFE», potencia de carga aplicable y criterio normativo. |
+| D-6 Dictamen | Adoptar «Conforme en lo evaluado» siempre. | Aplicar en UI, PDF, CLI y cualquier exportación. |
+| D-7 Formato `.iees` | Migrar a versión 4 si los campos nuevos no son legibles por versiones previas. | Añadir migración v3→v4, pruebas de archivos históricos y documentar compatibilidad hacia atrás/adelante sin promesas falsas. |
+| D-8 NMX-J-116 | Cotejar tabla de impedancias y tolerancia con el documento normativo original. | No afirmar validación normativa hasta tener revisión profesional y referencia trazable. |
 
-### Etapa 8 — Cierre de la 1.0
+También deben revisarse con fuente vigente NOM-001-SEDE-2012, NMX-J-116, NMX-J-136-ANCE-2019 e IEC 60909 cuando aplique. La aprobación de un algoritmo por pruebas matemáticas no equivale a aprobación normativa.
 
-- Actualizar las capturas y la guía del sitio; revisar el instalador y su firma.
-- Pendientes de norma que dependen de Antonio: firmar los casos de `fixtures/` (`reviewed_by`), cotejar la tabla de la NMX-J-116 y los símbolos con la NMX-J-136-ANCE-2019.
-- Probar un proyecto real de Antonio de punta a punta contra su memoria original.
-- Subir la versión, notas de la versión y lista de lo que queda para después.
+**Listo cuando:** Antonio aprobó las decisiones que afectan el método, y cada decisión aceptada está registrada en `docs/decisions/` y `docs/roadmap.md`.
 
-## 5. Decisiones que Antonio debe tomar (pregúntale al llegar a cada una)
+### Etapa 4 — Verificación del unifilar web y de la cadena de publicación
 
-| Etapa | Decisión |
-|---|---|
-| 1 | La lista de campos dudosos que salga del barrido (qué más sobra en los formularios). |
-| 5 | Si el catálogo de cargas reemplaza o convive con la captura por watts (recomendado: convive). |
-| 5 | Calibres en mm², AWG o ambos por omisión (su formato usa mm²; la app usa AWG). |
-| 5 | Qué hacer cuando los watts de un contacto del catálogo quedan por debajo de los 180 VA de la norma. |
-| 5 | Que el cuadro muestre la caída de tensión de IEEStudio y no la de las fórmulas de su Excel. |
-| 6 | Qué acomodos de portada quiere y si tiene un membrete propio para usar de ejemplo. |
-| 7 | Con qué programa abre los DXF, para probar ahí. |
+**Prioridad alta. Resolver antes del rediseño final.**
 
-## 6. Cómo reportar al terminar cada etapa
+El reporte de Antonio: al abrir IEEStudio en el navegador, el unifilar todavía parece el de la primera versión, mientras que el diseño nuevo se trabajó en escritorio.
 
-Un mensaje corto con: qué cambió para quien usa el programa, capturas (escritorio y teléfono), la tabla de tiempos si aplica, qué quedó pendiente y por qué, y el enlace del pull request contra `main`.
+#### 4A. Diagnóstico reproducible
+
+1. Confirmar SHA de `main`, ejecución de Actions y URL de Pages publicada.
+2. En el mismo proyecto de prueba, abrir el unifilar en escritorio y en navegador con el mismo modo (Revisión o Plano).
+3. Añadir temporalmente una identificación de build visible en «Acerca de» o en diagnóstico técnico: versión, SHA corto y fecha/identificador de build. No mostrar texto de desarrollo al usuario final en la Release.
+4. Verificar que la ruta web usa `Shared::diagram` y el mismo `single_line_with` de `ieestudio-diagrams`; comprobar que no exista una ruta alternativa o una imagen estática confundida con el diagrama vivo.
+5. Comparar el resultado de `ieestudio-diagrams` y sus elementos/hotspots entre targets para el mismo fixture.
+6. Revisar el caché `diagram_cache`: invalidación por `Doc::revision`, modo y opciones. Evitar que la revisión o modo quede obsoleto.
+7. Probar en navegador limpio, navegador con service worker previo, PWA instalada y después de actualizar. Registrar qué versión de `ieestudio-app_bg.wasm` y `sw.js` se descarga.
+8. Comprobar que el service worker instala la caché nueva y elimina la anterior; si es necesario, implementar una estrategia de actualización que no deje al usuario ejecutando indefinidamente el WASM anterior.
+9. No borrar datos de proyectos del usuario al actualizar la PWA. La invalidación debe afectar recursos de aplicación, no almacenamiento local de proyectos.
+
+#### 4B. Corrección y aceptación
+
+- Si era caché, corregir versión/activación y documentar cómo forzar actualización segura.
+- Si era un build antiguo, corregir pipeline/despliegue y añadir verificación del SHA publicado.
+- Si era un renderer diferente, eliminar la duplicación y conectar la web al renderer compartido.
+- Si era el modo equivocado, aclarar selector y persistencia de Revisión/Plano.
+- Si el renderer compartido produce el diagrama nuevo pero visualmente sigue siendo la primera versión, revisar el código del renderer y el commit de la decisión 0022; no sustituirlo con capturas ni imágenes estáticas.
+
+**Listo cuando:** para el mismo fixture, escritorio y navegador muestran el mismo diagrama actualizado; una PWA que tenía instalada la versión anterior recibe la nueva tras el ciclo normal de actualización; las capturas y el SHA desplegado quedan en el PR.
+
+### Etapa 5 — Rendimiento y robustez
+
+Partir de mediciones antes de optimizar. Usar un generador de proyecto de prueba reproducible: 12 tableros, 3 niveles, 400 circuitos, motores y transformador.
+
+Medir:
+- tiempo de cálculo del proyecto;
+- duración de un cuadro de interfaz y del render del unifilar;
+- tiempo y memoria de generación de PDF;
+- tamaño del WASM comprimido y sin comprimir;
+- tiempo de carga inicial y de reapertura desde caché.
+
+Acciones:
+1. Mantener el unifilar cacheado por revisión y opciones; no reconstruirlo en cada cuadro.
+2. Dibujar solo elementos visibles en diagramas y tablas cuando el tamaño del proyecto lo amerite.
+3. Evitar copias de resultados dentro de funciones de dibujo.
+4. Evitar recálculos repetidos al editar; medir primero y evaluar cálculo diferido o parcial solo si los números lo justifican.
+5. Generación PDF: escritorio fuera del hilo UI si el backend lo permite; navegador sin bloquear la interacción, con progreso/estado. No afirmar que existe Web Worker si Typst o dependencias no lo soportan.
+6. Reutilizar plantillas y recursos PDF; cachear por revisión/opciones.
+7. Dividir módulos grandes en cambios mecánicos separados, sin mezclar refactor con correcciones de cálculo.
+8. No introducir optimizaciones que cambien resultados.
+
+Metas iniciales a validar, no promesas:
+- interfaz estable a 60 fps en proyecto de prueba, evitando trabajo sostenido superior a 16 ms por frame;
+- PDF en escritorio por debajo de 5 s en el proyecto de referencia o documentar el límite;
+- ninguna generación/exportación debe congelar el navegador sin mensaje de progreso;
+- registrar tamaño de WASM y carga real antes/después.
+
+**Listo cuando:** PR incluye tabla antes/después, pruebas y capturas, y cada meta está marcada alcanzada o no alcanzada con evidencia.
+
+### Etapa 6 — Entrega de escritorio, web y versiones
+
+**No crear Release hasta que las etapas 1–5 estén aceptadas.**
+
+1. Comprobar que CI ejecuta pruebas Windows/Linux, clippy WebAssembly, build web, build release y prueba de instalador.
+2. Validar el instalador generado: nombre, versión, firma si la hubiera, accesos directos, asociación `.iees`, desinstalación y actualización sobre la versión anterior.
+3. Probar instalación limpia y actualización desde `v0.3.0-alpha.3` en una máquina de prueba Windows. Confirmar que los proyectos y preferencias sobreviven.
+4. Probar ejecutable portátil si se distribuye por separado; documentar requisitos.
+5. Generar sitio con `tools/sitio-web.sh`; probar /app, PWA, archivos, PDF, Excel, DXF, proyecto local y offline.
+6. Verificar las páginas informativas y actualizar las capturas/guía solo cuando la interfaz se haya estabilizado.
+7. Preparar notas de versión con correcciones, limitaciones y cambios de formato.
+8. Confirmar que los artefactos correctos se adjuntan a la Release: instalador Windows, ZIP del sitio web y ejecutables adicionales si se decide publicarlos.
+9. Crear etiqueta nueva solo con aprobación expresa de Antonio. No usar una etiqueta existente para reemplazar binarios publicados salvo decisión explícita y justificada.
+
+**Listo cuando:** Antonio instala la versión candidata, abre un proyecto antiguo, crea uno nuevo, calcula, revisa el unifilar y genera PDF/Excel/DXF; el navegador refleja la misma versión funcional.
+
+### Etapa 7 — Definición y aprobación del rediseño de interfaz (NO IMPLEMENTAR TODAVÍA)
+
+Esta etapa comienza únicamente después de que Antonio acepte el cierre técnico de las etapas 1–6 o autorice explícitamente adelantar la propuesta visual sin tocar el código.
+
+#### Principio de producto
+
+**Una interfaz adaptativa, un solo modelo y una sola experiencia.**
+- No mantener dos modos completos Guiado/Avanzado.
+- El flujo Proyecto → Tableros → Circuitos → Revisar → Memoria funciona como orientación no lineal, indicadores de avance y accesos contextuales.
+- El usuario experto puede saltar directamente al tablero, circuito, revisión, unifilar o memoria.
+- Revelación progresiva: los datos esenciales visibles; opciones avanzadas y procedimientos disponibles sin saturar la pantalla.
+- La interfaz debe ser una herramienta profesional de ingeniería, no un formulario de cinco pantallas independientes.
+
+#### Composición de escritorio
+
+- Barra superior: proyecto, guardar/estado, deshacer/rehacer, búsqueda/comandos, navegación contextual.
+- Navegador izquierdo: jerarquía de instalación, tableros, alimentadores, circuitos y documentos.
+- Área central: vista de trabajo activa (cuadro de cargas, tablero, unifilar, procedimiento o memoria).
+- Inspector derecho: Datos, Resultados y Normativa del elemento seleccionado.
+- Panel inferior plegable: Revisar, trazabilidad, mensajes y observaciones.
+- Paneles acoplables pueden seguir usando egui_dock donde aporte valor; no duplicar pantallas ni estado de proyecto.
+
+#### Tablet
+
+- Navegador plegable.
+- Inspector como panel lateral/deslizante.
+- Canvas central prioritario.
+- Acciones táctiles con tamaños adecuados; conservar tabla donde quepa y adaptar a tarjetas cuando no.
+
+#### Teléfono
+
+- Una columna, sin escritorio encogido.
+- Navegación contextual compacta, no una segunda aplicación guiada.
+- Listas/tarjetas para circuitos; ficha de elemento a pantalla completa o panel modal; acciones primarias visibles.
+- Unifilar con zoom/pan táctil y selección de elementos.
+- Cálculo rápido con datos arriba y resultado abajo.
+- Campos numéricos con teclado numérico; controles táctiles objetivo de 44 px; ninguna acción depende de hover.
+- El teclado virtual no tapa el campo activo.
+- Archivos .iees, PDF y exportaciones usan las capacidades del navegador y muestran límites reales.
+- PWA/offline mantiene datos del proyecto localmente y no los elimina al actualizar.
+
+#### Pantallas y estados a diseñar
+
+1. Inicio/proyecto y datos de obra.
+2. Vista general de instalación y fuente.
+3. Navegador de tableros y topología.
+4. Tablero y alimentador.
+5. Cuadro de cargas/circuitos.
+6. Inspector de circuito.
+7. Revisión de incidencias y dictamen.
+8. Unifilar en modo Revisión y modo Plano.
+9. Procedimiento y trazabilidad («Cómo se obtuvo»).
+10. Memoria, vista previa y exportación.
+
+Estados que deben aparecer en los diseños: vacío, incompleto, Válido, No concluyente, Sin evaluar, Dato inválido, Cumple, No cumple, fuera de alcance, aprobación profesional pendiente. No confundir estado de evaluación matemática con cumplimiento normativo.
+
+#### Entregables antes de programar
+
+- mapa de navegación y flujos;
+- wireframes y mockups de escritorio/tablet/teléfono;
+- sistema de diseño: tipografía, color, espaciado, tamaños, densidad, iconos, estados, accesibilidad;
+- matriz de componentes egui reutilizables y correspondencia con módulos existentes;
+- estados vacíos, errores y casos de contenido largo;
+- criterios de aceptación y capturas de referencia en 1440×900, 1024×768, 768×1024 y 390×844;
+- plan de migración desde `guided.rs` y `workspace.rs` evitando dos implementaciones.
+
+**Antonio debe aprobar los mockups y la estructura antes de iniciar la implementación.**
+
+### Etapa 8 — Implementación del rediseño adaptativo
+
+1. Crear la base de tokens y componentes compartidos.
+2. Crear un único shell adaptable y un solo modelo de selección.
+3. Migrar el navegador, inspector y panel de revisión.
+4. Integrar cuadro de cargas, tablero y formularios.
+5. Integrar el unifilar actualizado, procedimientos y memoria.
+6. Implementar tablet/teléfono con la misma fuente de datos.
+7. Migrar las funciones exclusivas que sigan siendo necesarias (procedimiento completo, selección de columnas, exportaciones).
+8. Retirar la antigua separación Guiado/Avanzado solo cuando todas las funciones estén disponibles y verificadas.
+9. Actualizar la guía, capturas y video de sitio.
+10. Pruebas de regresión en Windows, Linux y navegador.
+
+**Listo cuando:** el mismo proyecto se puede crear, editar, revisar y exportar en escritorio, tablet y teléfono; no existen dos experiencias paralelas ni funciones esenciales accesibles solo desde una vista antigua.
+
+### Etapa 9 — Uso diario, documentos y unifilar fase 3
+
+Se conserva el alcance funcional original, pero cada función nueva nace ya integrada en la interfaz unificada y en teléfono/tablet.
+
+#### Uso diario
+- Revisar avisos agrupados sin duplicados.
+- Tabla de circuitos cómoda a 1280 px y adaptable; elegir columnas; edición directa de nombre, carga, longitud y fases; navegación con Tab/Enter.
+- Duplicar circuito y plantillas de cargas editables.
+- Guardar en el proyecto las decisiones «Es otra carga» para que no regresen avisos resueltos.
+- Proyectos recientes en escritorio y almacenamiento local en navegador.
+- Un solo flujo claro para generar PDF; evitar botones duplicados.
+- Importación/exportación Excel de ida y vuelta, conservando tipo de carga, datos de motor/placa, catálogo y posiciones. Prueba de ida/vuelta idéntica.
+
+#### Cuadro de cargas
+Usar `CUADRO_DE_CARGAS_CMAPAS.xlsx` como referencia visual:
+- una hoja por tablero, horizontal;
+- encabezado con nombre, ubicación, tipo de carga, tensión, marca/modelo;
+- circuitos por renglón;
+- columnas de tipos de carga con símbolo, watts/unidad y cantidad;
+- resultados eléctricos, fases, ITM, conductores, longitud, caída y tubería;
+- pie con carga instalada, datos del alimentador y desbalanceo;
+- fórmulas vivas solo para los cálculos que el usuario pueda verificar; resultados normativos de IEEStudio identificados como resultados del programa;
+- personalización de columnas, orden, unidades y textos.
+
+Antes de implementar, Antonio debe decidir convivencia del catálogo con captura directa por watts, unidad predeterminada de conductores y regla de 180 VA por salida. No sustituir el método de caída de IEEStudio por fórmulas de Excel sin aprobación.
+
+#### Membrete y plantilla
+- Archivo independiente `.ieesplantilla`, importable/exportable.
+- Empresa, contacto, responsable/cédula, logotipos, colores y tipografía.
+- Portada, membrete, encabezado/pie, numeración, secciones y textos configurables.
+- Vista previa de portada y página interior.
+- Reutilizar la plantilla Typst; no duplicar el motor de reportes.
+- La leyenda «No constituye aprobación profesional» no se puede quitar.
+- El proyecto recuerda plantilla; si falta, usa genérica y avisa.
+- Reducir y limitar imágenes para no inflar proyectos ni PDF.
+
+#### Unifilar fase 3
+- DXF con bloques nombrados y atributos editables (identificador, amperes, calibre, etc.).
+- Capas con nombres claros.
+- Hojas carta, doble carta, 60×90 y 90×120 cm horizontal, con marco, escala, simbología y cajetín.
+- Diagramas grandes en varias hojas con referencias de continuidad.
+- PDF del plano independiente.
+- Pruebas abriendo el DXF en AutoCAD, LibreCAD u ODA; declarar qué programa se usó.
+- Probar varios niveles, nombres largos y textos encimados.
+
+### Etapa 10 — Cierre de 1.0
+
+- Revisión profesional de los fixtures y sus referencias; nunca inventar `reviewed_by`.
+- Cotejo de tablas y símbolos con los documentos normativos originales.
+- Prueba con un proyecto real de Antonio contra su memoria original.
+- Pruebas completas de escritorio, navegador y teléfono.
+- Auditoría final independiente de cálculo y de interfaz.
+- Actualizar `README.md`, `docs/roadmap.md`, guía, política de versiones y notas de Release.
+- Publicar solo cuando Antonio autorice.
+
+## 5. Preguntas que Claude debe presentar a Antonio (no todas de golpe)
+
+Presentar únicamente la decisión que sea necesaria para continuar la etapa activa.
+
+1. **D-1:** aprobar la metodología provisional/conservadora de falla fase-neutro o mantener No concluyente hasta validar la fuente.
+2. **D-2:** cómo captura CFE la falla (tensión primaria/secundaria y datos disponibles).
+3. **D-3:** texto y persistencia de confirmación «Es otra carga».
+4. **D-4:** conservar bus infinito en transformadores intermedios o adoptar propagación aguas arriba, después de cotejo numérico.
+5. **D-5:** distinguir equipo de CFE/propio y criterio de capacidad del transformador de acometida.
+6. **D-7:** aceptar migración de formato .iees a versión 4.
+7. **D-8:** facilitar/revisar fuente normativa de NMX-J-116.
+8. Cuadro de cargas: watts directos + catálogo, mm²/AWG y regla de contactos de 180 VA.
+9. Plantilla: portada/membrete de ejemplo.
+10. DXF: programa CAD de referencia para prueba.
+
+## 6. Cómo reportar cada etapa
+
+Claude debe entregar un resumen con:
+- qué cambió para el usuario final;
+- qué hallazgos cerró (IDs H-xx y 17–20);
+- qué decisiones fueron aprobadas y dónde están documentadas;
+- pruebas ejecutadas y resultado real (no solo «todo pasa»);
+- capturas de escritorio/tablet/teléfono cuando aplique;
+- comparación de resultados numéricos y trazabilidad;
+- compatibilidad de archivos y pruebas de migración;
+- estado de CI y enlaces de Actions/PR;
+- pendientes y riesgos conocidos.
+
+**No usar «corregido» si solo se añadió una etiqueta o se ocultó un aviso.** La causa técnica debe estar resuelta o el resultado debe quedar explícitamente no concluyente.
+
+## 7. Referencias del repositorio
+
+- `docs/auditoria-modelo-y-falla.md`
+- `docs/auditoria-fable-pr11.md`
+- `docs/architecture.md`
+- `docs/engineering-methodology.md`
+- `docs/roadmap.md`
+- `docs/decisions/0017-version-web.md`
+- `docs/decisions/0020-flujo-guiado.md`
+- `docs/decisions/0022-unifilar-como-plano.md`
+- `docs/decisions/0023-falla-por-bus-infinito.md`
+- `docs/decisions/0024-sistema-y-conexion.md`
+- `docs/decisions/0025-estado-propio-y-capacidad-interruptiva-por-tablero.md`
+- `docs/decisions/0026-fuente-unica-y-topologia.md`
+- `docs/decisions/0027-estados-y-trazabilidad.md`
+- `docs/decisions/0028-motores-y-propagacion-de-la-falla.md`
+- `.github/workflows/ci.yml`
+- `tools/sitio-web.sh`
+- `website/README.md`
