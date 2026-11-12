@@ -131,42 +131,163 @@ fn los_archivos_anteriores_al_pr11_se_leen() {
 }
 
 // ------------------------------------------------- H-01 fase a neutro 1F-3H
+//
+// Corregido en la etapa 1A con la decisión 0029: en un secundario 1F-3H por
+// bus infinito manda la falla de fase a neutro, 1.67 veces la de fase a fase.
 
-/// Lo que ya está bien: la falla entre líneas de 25 kVA, 3 % (reducida al
-/// 2.7 %) a 240 V es `S / V / Z = 104.17 A / 0.027 = 3.858 kA`.
+/// Factor de fase a neutro del perfil (decisión 0029).
+const LN: f64 = 1.67;
+/// 25 kVA, 3 % reducido al 2.7 %, 240 V: `104.17 A / 0.027 = 3.858 kA`.
+const LL_25: f64 = 25_000.0 / 240.0 / 0.027 / 1000.0;
+
+/// Matemática: la de fase a fase no cambia y la de fase a neutro es
+/// `1.67 · 3.858 = 6.443 kA` (6.4429); la de fase a neutro es la que se compara.
 #[test]
-fn h01_la_falla_entre_lineas_se_calcula_bien() {
+fn h01_la_falla_de_fase_a_neutro_es_el_factor_por_la_de_fase_a_fase() {
     let result = calc(&casos::h01_acometida_240_120());
     let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
-    close(bus.base_ka, 25_000.0 / 240.0 / 0.027 / 1000.0, 1e-6);
+    let ln = bus.line_to_neutral.as_ref().expect("secundario 1F-3H");
+    close(ln.line_to_line_ka, LL_25, 1e-9);
+    assert_eq!(ln.factor, LN);
+    close(bus.base_ka, LN * LL_25, 1e-9);
+    close(bus.total_ka, 6.4429, 1e-4);
+    assert_eq!(bus.basis(), "por bus infinito, de fase a neutro");
+    let step = bus.steps.last().unwrap();
+    assert_eq!(step.title, "Falla de fase a neutro (1F-3H)");
+    assert_eq!(step.substitution, "Icc F-N = 1.67 · 3.86 kA = 6.44 kA");
 }
 
-/// H-01 (crítico). En un secundario 240/120 V la falla de fase a neutro puede
-/// ser mayor que la de fase a fase. Con 5 kA no se puede afirmar «Cumple» ni
-/// «Conforme» con una falla entre líneas de 3.86 kA (plan 1.0, 1A). Con el
-/// factor de la decisión 0029 (1.67) la fase a neutro es de 6.44 kA:
-/// «No concluyente».
+/// H-01 (crítico). Acometida 1F-3H de 25 kVA con interruptores de 5 kA: ya
+/// no «Cumple» con 3.86 kA; queda «No concluyente» con 6.44 kA de fase a
+/// neutro y el dictamen ya no es «Conforme».
 #[test]
-#[ignore = "H-01 abierto (D-1)"]
 fn h01_acometida_240_120_no_cumple_con_la_falla_entre_lineas() {
     let result = calc(&casos::h01_acometida_240_120());
     let g = group(&result, Some("TG"));
-    assert_ne!(g.label(), "Cumple", "H-01: hoy {}", state(g));
+    assert_eq!(g.label(), "No concluyente", "H-01: hoy {}", state(g));
+    close(g.fault_ka.unwrap(), LN * LL_25, 1e-9);
+    assert!(g.line_to_neutral);
+    assert!(g.summary().contains("de fase a neutro"), "{}", g.summary());
     assert_ne!(
         result.verdict.compliance,
         Compliance::Conforms,
         "H-01: hoy «{}»",
         compliance_text(&result)
     );
+    // Cada interruptor dice contra qué falla se comparó.
+    let detail = &result.panels[0].circuits[0]
+        .interrupting
+        .as_ref()
+        .unwrap()
+        .detail;
+    assert_eq!(
+        detail,
+        "no concluyente: 5 kA es menor que los 6.44 kA estimados en las barras de TG por bus infinito, de fase a neutro, que es una cota superior; requiere estudio de cortocircuito"
+    );
 }
 
-/// H-01 en un transformador intermedio seco 480 → 240/120 V.
+/// Con interruptores de 10 kA el mismo caso cumple: 6.44 kA ≤ 10 kA. El
+/// factor no deja todo 1F-3H sin concluir.
 #[test]
-#[ignore = "H-01 abierto (D-1)"]
+fn h01_acometida_240_120_cumple_si_alcanza_la_fase_a_neutro() {
+    let mut project = casos::h01_acometida_240_120();
+    casos::breakers(&mut project, 0, 10.0);
+    let result = calc(&project);
+    assert_eq!(group(&result, Some("TG")).label(), "Cumple");
+}
+
+/// H-01 en un transformador intermedio seco 480 → 240/120 V: el secundario
+/// de TF-1 lleva el factor; las barras de 480Y/277 V de TG no.
+#[test]
 fn h01_intermedio_240_120_no_cumple_con_la_falla_entre_lineas() {
     let result = calc(&casos::h01_intermedio_240_120());
     let g = group(&result, Some("TF-1"));
-    assert_ne!(g.label(), "Cumple", "H-01: hoy {}", state(g));
+    assert_eq!(g.label(), "No concluyente", "H-01: hoy {}", state(g));
+    close(g.fault_ka.unwrap(), LN * LL_25, 1e-9);
+    let tg = group(&result, Some("TG"));
+    assert!(!tg.line_to_neutral);
+    assert_eq!(tg.fault_ka, Some(25.0));
+}
+
+/// Ejemplo de la decisión 0029: 50 kVA, 3 %, 240 V dan 7.72 kA de fase a
+/// fase y 12.89 kA de fase a neutro; con 10 kA, «No concluyente».
+#[test]
+fn h01_ejemplo_de_la_decision_50_kva() {
+    let mut project = casos::h01_acometida_240_120();
+    project.source.substation.as_mut().unwrap().kva = Some(50.0);
+    casos::breakers(&mut project, 0, 10.0);
+    let result = calc(&project);
+    let g = group(&result, Some("TG"));
+    close(g.fault_ka.unwrap(), 12.8858, 1e-4);
+    assert_eq!(g.label(), "No concluyente");
+}
+
+/// El dato de la suministradora en un servicio 1F-3H no se multiplica: ya
+/// es la corriente máxima disponible en el punto de conexión. La
+/// trazabilidad lo dice.
+#[test]
+fn h01_el_dato_de_la_suministradora_no_se_multiplica() {
+    let mut project = casos::h01_acometida_240_120();
+    project.source.fault.available_ka = Some(5.0);
+    let result = calc(&project);
+    let study = result.fault.as_ref().unwrap();
+    let bus = study.source.as_ref().unwrap();
+    assert_eq!(bus.total_ka, 5.0);
+    assert!(bus.line_to_neutral.is_none());
+    assert!(study
+        .source_trace
+        .assumptions
+        .iter()
+        .any(|a| a.contains("no se multiplica")));
+    assert_eq!(group(&result, Some("TG")).label(), "Cumple");
+}
+
+/// Solo un secundario 1F-3H lleva el factor: ni un trifásico 220Y/127 V ni
+/// uno de una fase y dos hilos (127 V).
+#[test]
+fn h01_el_factor_solo_aplica_a_1f_3h() {
+    let result = calc(&casos::h07_todo_cumple(false));
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    assert!(bus.line_to_neutral.is_none());
+
+    let mut project = casos::single_board(
+        ieestudio_core::System::SINGLE_127,
+        ieestudio_core::CircuitKind::LineToNeutral,
+    );
+    project.source.substation = Some(casos::substation(
+        10.0,
+        Some(3.0),
+        ieestudio_project::Connection::SinglePhase,
+    ));
+    let result = calc(&project);
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    assert!(bus.line_to_neutral.is_none());
+    close(bus.total_ka, 10_000.0 / 127.0 / 0.027 / 1000.0, 1e-9);
+}
+
+/// Normativa: la regla cita la fuente del factor y dice que es un criterio
+/// de ingeniería; las verificaciones la llevan junto con 110-9 y 110-10.
+#[test]
+fn h01_la_regla_cita_su_fuente() {
+    use ieestudio_rules::{Profile, Rule};
+    let profile = Profile::nom_001_sede_2012();
+    let clause = profile.clause(Rule::LineToNeutralFault);
+    assert!(clause.contains("Bussmann"), "{clause}");
+    assert!(profile
+        .rule_description(Rule::LineToNeutralFault)
+        .unwrap()
+        .contains("criterio de ingeniería"));
+    assert_eq!(profile.parameters.fault_line_to_neutral_factor, LN);
+    let result = calc(&casos::h01_acometida_240_120());
+    let g = group(&result, Some("TG"));
+    let clauses: Vec<&str> = g
+        .references
+        .iter()
+        .filter_map(|r| r.clause.as_deref())
+        .collect();
+    assert!(clauses.contains(&clause.as_str()), "{clauses:?}");
+    assert!(clauses.contains(&"110-9, 110-10"), "{clauses:?}");
+    assert!(g.trace.assumptions.iter().any(|a| a.contains("1.67 veces")));
 }
 
 // --------------------------------------------- H-02 tensión del dato de CFE

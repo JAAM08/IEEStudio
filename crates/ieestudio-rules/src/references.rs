@@ -117,10 +117,13 @@ pub enum Rule {
     MotorFaultContribution,
     /// Impedancia mínima de un transformador sin dato de placa.
     TransformerImpedanceLimits,
+    /// Falla de fase a neutro en el secundario de un transformador
+    /// monofásico con derivación central (decisión 0029).
+    LineToNeutralFault,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 51] = [
+    pub const ALL: [Rule; 52] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -172,6 +175,7 @@ impl Rule {
         Rule::AvailableFault,
         Rule::MotorFaultContribution,
         Rule::TransformerImpedanceLimits,
+        Rule::LineToNeutralFault,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -228,6 +232,7 @@ impl Rule {
             Rule::AvailableFault => "available_fault",
             Rule::MotorFaultContribution => "motor_fault_contribution",
             Rule::TransformerImpedanceLimits => "transformer_impedance_limits",
+            Rule::LineToNeutralFault => "line_to_neutral_fault",
         }
     }
 }
@@ -285,6 +290,11 @@ pub struct Parameters {
     /// calcula con la impedancia reducida en esta fracción. Criterio de
     /// ingeniería, no de la norma.
     pub fault_impedance_tolerance: f64,
+    /// En el secundario de un transformador monofásico con derivación
+    /// central (1F-3H), la falla de fase a neutro como múltiplo de la de
+    /// fase a fase en sus terminales (decisión 0029). Criterio de
+    /// ingeniería del método punto a punto de Eaton Bussmann, no de la norma.
+    pub fault_line_to_neutral_factor: f64,
 }
 
 /// Datos de la norma de un perfil.

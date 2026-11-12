@@ -16,8 +16,8 @@ normativo nuevo ni un caso de referencia firmado (`reviewed_by`).
 
 | Archivo | Hallazgo | Qué muestra hoy |
 |---|---|---|
-| `h01-acometida-240-120.iees` | H-01 | 25 kVA, 3 %, 240/120 V e interruptores de 5 kA: «Cumple» con 3.86 kA (falla entre líneas) y «Conforme» |
-| `h01-intermedio-240-120.iees` | H-01 | Lo mismo en un transformador seco 480 → 240/120 V |
+| `h01-acometida-240-120.iees` | H-01 | 25 kVA, 3 %, 240/120 V e interruptores de 5 kA. Antes «Cumple» con 3.86 kA y «Conforme»; desde la etapa 1A, 6.44 kA de fase a neutro y «No concluyente» |
+| `h01-intermedio-240-120.iees` | H-01 | Lo mismo en un transformador seco 480 → 240/120 V (corregido en la etapa 1A) |
 | `h02-dato-media-tension-5ka.iees` | H-02 | 5 kA sin tensión con subestación de 1000 kVA: se usan en 480 V, «Cumple» con 10 kA |
 | `h02-dato-mayor-que-bus-infinito.iees` | H-02 | 50 kA con un bus infinito de 23.24 kA, sin aviso |
 | `h03-bombas-como-otra-carga.iees` | H-03 | Dos «Bomba 50 hp» como otra carga: aviso de tipo y aun así «Cumple» con 9.8 kA |

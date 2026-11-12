@@ -619,7 +619,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
 
     if let Some(study) = &result.fault {
         out.push_str("\n= Corriente de falla y capacidad interruptiva\n");
-        out.push_str("#text(fill: gris)[Método conservador. Con el dato de la suministradora se usa tal cual; con un transformador, por bus infinito: la red aguas arriba se toma sin impedancia. No se descuenta la impedancia de los alimentadores, así que cada valor es una cota superior. Los motores de cada tensión aportan completos y los de otra tensión llegan a través de la impedancia de su transformador (decisión 0028). Un interruptor que alcanza la falla cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n");
+        out.push_str(&format!("#text(fill: gris)[Método conservador. Con el dato de la suministradora se usa tal cual; con un transformador, por bus infinito: la red aguas arriba se toma sin impedancia. No se descuenta la impedancia de los alimentadores, así que cada valor es una cota superior. Los motores de cada tensión aportan completos y los de otra tensión llegan a través de la impedancia de su transformador (decisión 0028). En el secundario de un transformador monofásico con derivación central (1F-3H) manda la falla de fase a neutro, estimada como {ln} veces la de fase a fase (máximo teórico del método punto a punto de Eaton Bussmann, decisión 0029); el dato de la suministradora no se multiplica. Un interruptor que alcanza la falla cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n", ln = study.line_to_neutral_factor));
         out.push_str("\n== Punto de conexión\n");
         match (&study.source, &study.source_issue) {
             (Some(bus), _) => {
@@ -950,7 +950,7 @@ fn interrupting_basis(profile: &Profile, study: &ieestudio_project::fault::Fault
     let mut text = match &study.source {
         Some(bus) => format!(
             "Verificada con la corriente de falla estimada {} ({}): {:.2} kA en el punto de conexión",
-            bus.origin.basis(),
+            bus.basis(),
             profile.clause(Rule::AvailableFault),
             bus.total_ka
         ),

@@ -16,6 +16,12 @@
 //!   aguas arriba no aportan a un secundario calculado por bus infinito: la
 //!   red infinita ya fija el primario.
 //!
+//! - **Fase a neutro.** En el secundario de un transformador monofásico con
+//!   derivación central (1F-3H) la falla de fase a neutro supera a la de fase
+//!   a fase: por bus infinito se multiplica por el factor del perfil
+//!   (decisión 0029). El dato de la suministradora no se multiplica: ya es la
+//!   corriente máxima disponible en el punto de conexión.
+//!
 //! Cada valor es una cota superior: un interruptor que lo alcanza cumple; uno
 //! que no, deja el resultado no concluyente. Un dato que falta nunca se
 //! reemplaza: la zona queda sin evaluar con su causa o, si es la fuente sin
@@ -80,9 +86,30 @@ pub struct BusFault {
     /// Motores que aportarían aquí pero no tienen datos: la falla está
     /// incompleta y nada que se compare con ella puede cumplir.
     pub incomplete: Vec<String>,
+    /// En un secundario 1F-3H por bus infinito, `base_ka` es la falla de
+    /// fase a neutro; aquí queda la de fase a fase y el factor.
+    pub line_to_neutral: Option<LineToNeutral>,
+}
+
+/// Falla de fase a neutro en el secundario de un transformador monofásico
+/// con derivación central (decisión 0029).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct LineToNeutral {
+    /// Veces la falla de fase a fase (perfil).
+    pub factor: f64,
+    /// Falla de fase a fase en las terminales, en kA.
+    pub line_to_line_ka: f64,
 }
 
 impl BusFault {
+    /// `por bus infinito, de fase a neutro`: la hipótesis con que se obtuvo.
+    pub fn basis(&self) -> String {
+        match self.line_to_neutral {
+            Some(_) => format!("{}, de fase a neutro", self.origin.basis()),
+            None => self.origin.basis().to_string(),
+        }
+    }
+
     /// Válida, o no concluyente si le faltan motores.
     pub fn evaluation(&self) -> Evaluation {
         if self.incomplete.is_empty() {
@@ -200,6 +227,9 @@ pub struct FaultStudy {
     pub impedance_tolerance: f64,
     /// Veces la corriente a plena carga con que aporta un motor (perfil).
     pub multiplier: f64,
+    /// Veces la falla de fase a fase con que se estima la de fase a neutro en
+    /// un secundario 1F-3H (perfil, decisión 0029).
+    pub line_to_neutral_factor: f64,
     /// Motores sin datos de todo el proyecto.
     pub incomplete_motors: Vec<IncompleteMotor>,
     /// Lugares cuya falla depende de una fuente sin datos: su capacidad
@@ -242,6 +272,8 @@ pub struct InterruptingGroup {
     /// Se estimó por bus infinito (cota superior) y no con el dato de la
     /// suministradora.
     pub infinite_bus: bool,
+    /// Es la falla de fase a neutro de un secundario 1F-3H (decisión 0029).
+    pub line_to_neutral: bool,
     /// Por qué no hay falla estimada, si no la hay.
     pub issue: Option<String>,
     /// Motores sin datos que aportarían aquí.
@@ -309,28 +341,35 @@ impl InterruptingGroup {
             }
         };
         let fault = format!("{fault_ka:.2} kA");
-        let basis = if self.infinite_bus {
+        let basis = if self.infinite_bus && self.line_to_neutral {
+            "estimados por bus infinito, de fase a neutro, que es una cota superior"
+        } else if self.infinite_bus {
             "estimados por bus infinito, que es una cota superior"
         } else {
             "estimados con el dato de la suministradora, sin descontar los alimentadores"
         };
-        let method = if self.infinite_bus {
+        let method = if self.infinite_bus && self.line_to_neutral {
+            "un método conservador (bus infinito, de fase a neutro)"
+        } else if self.infinite_bus {
             "un método conservador (bus infinito)"
         } else {
             "un método conservador (dato de la suministradora)"
         };
+        // «del punto de conexión», no «de el punto de conexión».
+        let of_place = match self.place.strip_prefix("el ") {
+            Some(rest) => format!("del {rest}"),
+            None => format!("de {}", self.place),
+        };
         match (missing, short) {
             (0, 0) if self.incomplete_motors > 0 => format!(
-                "no concluyente: {} de {} {} los {fault}, pero la falla no incluye {} sin datos",
+                "no concluyente: {} {of_place} {} los {fault}, pero la falla no incluye {} sin datos",
                 count(n),
-                self.place,
                 if n == 1 { "alcanza" } else { "alcanzan" },
                 motors_phrase(self.incomplete_motors)
             ),
             (0, 0) => format!(
-                "{} de {} {} los {fault} de falla estimada; cumple con {method}",
+                "{} {of_place} {} los {fault} de falla estimada; cumple con {method}",
                 capitalize(&count(n)),
-                self.place,
                 if n == 1 { "alcanza" } else { "alcanzan" }
             ),
             (_, 0) => format!(
@@ -339,9 +378,8 @@ impl InterruptingGroup {
                 self.place
             ),
             (0, _) => format!(
-                "no concluyente: {} de {} no {} los {fault} {basis}; requiere estudio de cortocircuito",
+                "no concluyente: {} {of_place} no {} los {fault} {basis}; requiere estudio de cortocircuito",
                 count(short),
-                self.place,
                 if short == 1 { "alcanza" } else { "alcanzan" }
             ),
             _ => format!(
@@ -389,6 +427,32 @@ fn transformer_voltage(system: &System) -> Option<(f64, bool)> {
         (Some(ll), _) => Some((ll, true)),
         (None, Some(ln)) => Some((ln, false)),
         (None, None) => None,
+    }
+}
+
+/// Secundario de un transformador monofásico con derivación central: tres
+/// hilos, con tensión entre fases y al neutro, y una sola fase. Usa el mismo
+/// criterio que la corriente del transformador.
+fn center_tapped(system: &System) -> bool {
+    system.line_to_line_v.is_some()
+        && system.line_to_neutral_v.is_some()
+        && transformer_voltage(system).is_some_and(|(_, three_phase)| !three_phase)
+}
+
+/// Paso de la falla de fase a neutro de un secundario 1F-3H.
+fn line_to_neutral_step(profile: &Profile, line_to_line_ka: f64, factor: f64) -> Step {
+    Step {
+        title: "Falla de fase a neutro (1F-3H)".into(),
+        formula: Some("Icc F-N = k · Icc F-F".into()),
+        substitution: format!(
+            "Icc F-N = {factor} · {line_to_line_ka:.2} kA = {:.2} kA",
+            factor * line_to_line_ka
+        ),
+        note: Some(
+            "En un transformador monofásico con derivación central la falla de fase a neutro solo recorre media bobina y supera a la de fase a fase: en las terminales es de 1.33 a 1.67 veces. Se toma el máximo y se usa en toda la zona, porque los conductores solo la reducen."
+                .into(),
+        ),
+        references: vec![profile.reference(Rule::LineToNeutralFault)],
     }
 }
 
@@ -828,8 +892,29 @@ impl<'a> Topology<'a> {
         Ok((ka, FaultOrigin::Transformer { panel: id.clone() }, steps))
     }
 
+    /// Sistema de las barras de una zona.
+    fn system(&self, zone: Zone) -> System {
+        match zone {
+            None => self.project.source.system,
+            Some(t) => crate::connection::bus_system(self.project, t),
+        }
+    }
+
     fn bus(&self, zone: Zone) -> Result<BusFault, FaultIssue> {
-        let (base_ka, origin, mut steps) = self.base(zone)?;
+        let (mut base_ka, origin, mut steps) = self.base(zone)?;
+        // Por bus infinito en un secundario 1F-3H manda la falla de fase a
+        // neutro. El dato de la suministradora ya es la máxima disponible.
+        let line_to_neutral =
+            (origin.infinite_bus() && center_tapped(&self.system(zone))).then(|| {
+                let factor = self.profile.parameters.fault_line_to_neutral_factor;
+                steps.push(line_to_neutral_step(self.profile, base_ka, factor));
+                let line_to_line_ka = base_ka;
+                base_ka *= factor;
+                LineToNeutral {
+                    factor,
+                    line_to_line_ka,
+                }
+            });
         let (motors, incomplete) = self.motors_at(zone, 0);
         let motor_ka = motors.as_ref().map_or(0.0, |m| m.total_a / 1000.0);
         if let Some(m) = &motors {
@@ -843,6 +928,7 @@ impl<'a> Topology<'a> {
             steps,
             motors,
             incomplete,
+            line_to_neutral,
         })
     }
 
@@ -909,26 +995,38 @@ impl<'a> Topology<'a> {
         let mut problems = Vec::new();
         let evaluation = match result {
             Ok(bus) => {
+                let base = match &bus.line_to_neutral {
+                    Some(ln) => format!(
+                        "{:.2} kA de fase a fase, {:.2} kA de fase a neutro",
+                        ln.line_to_line_ka, bus.base_ka
+                    ),
+                    None => format!("{:.2} kA", bus.base_ka),
+                };
                 match &bus.origin {
                     FaultOrigin::Supplier => {
                         assumptions
                             .push("Dato de la suministradora en el punto de conexión.".into());
-                        contributors.push(format!("Suministradora: {:.2} kA", bus.base_ka));
+                        if center_tapped(&self.system(zone)) {
+                            assumptions.push("Servicio 1F-3H: el dato de la suministradora se toma como la corriente máxima disponible en el punto de conexión y no se multiplica por el factor de fase a neutro.".into());
+                        }
+                        contributors.push(format!("Suministradora: {base}"));
                     }
                     FaultOrigin::Substation => {
                         assumptions.push(
                             "Bus infinito: la red de media tensión se toma sin impedancia.".into(),
                         );
-                        contributors.push(format!(
-                            "Transformador de la acometida: {:.2} kA",
-                            bus.base_ka
-                        ));
+                        contributors.push(format!("Transformador de la acometida: {base}"));
                     }
                     FaultOrigin::Transformer { panel } => {
                         assumptions.push(format!("Bus infinito: la red aguas arriba del transformador de {panel} se toma sin impedancia; ya incluye la aportación de los motores de arriba."));
-                        contributors
-                            .push(format!("Transformador de {panel}: {:.2} kA", bus.base_ka));
+                        contributors.push(format!("Transformador de {panel}: {base}"));
                     }
+                }
+                if let Some(ln) = &bus.line_to_neutral {
+                    assumptions.push(format!(
+                        "Secundario monofásico con derivación central (1F-3H): la falla de fase a neutro se toma como {} veces la de fase a fase, el máximo teórico del método punto a punto de Eaton Bussmann (decisión 0029). Es la de las terminales y se usa en toda la zona.",
+                        ln.factor
+                    ));
                 }
                 if bus.origin.infinite_bus() {
                     let from_table = zone.is_none()
@@ -1123,14 +1221,15 @@ fn check_breaker(
             Status::Complies,
             format!(
                 "{ka} kA ≥ {icc:.2} kA de falla en {bus_name}, estimada {}; cumple con un método conservador",
-                bus.origin.basis()
+                bus.basis()
             ),
         ),
         Some(ka) => (
             Status::NotEvaluated,
             if bus.origin.infinite_bus() {
                 format!(
-                    "no concluyente: {ka} kA es menor que los {icc:.2} kA estimados en {bus_name} por bus infinito, que es una cota superior; requiere estudio de cortocircuito"
+                    "no concluyente: {ka} kA es menor que los {icc:.2} kA estimados en {bus_name} {}, que es una cota superior; requiere estudio de cortocircuito",
+                    bus.basis()
                 )
             } else {
                 format!(
@@ -1162,6 +1261,9 @@ fn group_rules(bus: &BusFault) -> Vec<Rule> {
     let mut rules = vec![Rule::InterruptingRating];
     if bus.origin.infinite_bus() {
         rules.push(Rule::AvailableFault);
+    }
+    if bus.line_to_neutral.is_some() {
+        rules.push(Rule::LineToNeutralFault);
     }
     if bus.motor_ka > 0.0 {
         rules.push(Rule::MotorFaultContribution);
@@ -1301,22 +1403,25 @@ pub(crate) fn study(
         let status = breakers
             .iter()
             .fold(Status::Complies, |all, b| worse(all, b.status));
-        let (fault_ka, infinite_bus, issue, incomplete_motors, references) = match &zones[&zone] {
-            Ok(bus) => (
-                Some(bus.total_ka),
-                bus.origin.infinite_bus(),
-                None,
-                bus.incomplete.len(),
-                group_rules(bus),
-            ),
-            Err(issue) => (
-                None,
-                false,
-                Some(issue.reason.clone()),
-                0,
-                vec![Rule::InterruptingRating],
-            ),
-        };
+        let (fault_ka, infinite_bus, line_to_neutral, issue, incomplete_motors, references) =
+            match &zones[&zone] {
+                Ok(bus) => (
+                    Some(bus.total_ka),
+                    bus.origin.infinite_bus(),
+                    bus.line_to_neutral.is_some(),
+                    None,
+                    bus.incomplete.len(),
+                    group_rules(bus),
+                ),
+                Err(issue) => (
+                    None,
+                    false,
+                    false,
+                    Some(issue.reason.clone()),
+                    0,
+                    vec![Rule::InterruptingRating],
+                ),
+            };
         let mut trace = topology.trace(zone, &zones[&zone], &place);
         trace.what = "Capacidad interruptiva frente a la falla estimada".into();
         let missing_ka = breakers.iter().filter(|b| b.ka.is_none()).count();
@@ -1357,6 +1462,7 @@ pub(crate) fn study(
             place,
             fault_ka,
             infinite_bus,
+            line_to_neutral,
             issue,
             incomplete_motors,
             board_ka,
@@ -1401,6 +1507,7 @@ pub(crate) fn study(
         source_trace,
         impedance_tolerance: profile.parameters.fault_impedance_tolerance,
         multiplier: profile.parameters.fault_motor_multiplier,
+        line_to_neutral_factor: profile.parameters.fault_line_to_neutral_factor,
         incomplete_motors,
         out_of_scope,
         groups,
