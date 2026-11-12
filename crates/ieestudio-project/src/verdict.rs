@@ -131,6 +131,24 @@ impl Verdict {
         self
     }
 
+    /// La capacidad interruptiva queda fuera de alcance solo en los lugares
+    /// cuya falla depende de una fuente sin datos.
+    pub fn with_out_of_scope_at(mut self, profile: &Profile, places: &[String]) -> Self {
+        let places = match places {
+            [] => return self,
+            [one] => one.clone(),
+            [rest @ .., last] => format!("{} y {last}", rest.join(", ")),
+        };
+        self.out_of_scope = vec![OutOfScope {
+            name: format!("Capacidad interruptiva en {places}"),
+            resolve_with:
+                "falta la corriente de falla de la suministradora o los datos del transformador de la acometida"
+                    .into(),
+            references: vec![profile.reference(Rule::InterruptingRating)],
+        }];
+        self
+    }
+
     /// Agrega las verificaciones fuera del alcance del programa.
     pub fn with_out_of_scope(mut self, profile: &Profile) -> Self {
         self.out_of_scope = out_of_scope(profile);
@@ -178,7 +196,7 @@ impl Verdict {
                         "Conforme en lo evaluado con {profile_code}: lo que el programa verifica cumple y nada quedó sin evaluar. {note}"
                     ),
                     None if self.conservative_fault => format!(
-                        "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar. La capacidad interruptiva se verificó con un método conservador (bus infinito)."
+                        "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar. La capacidad interruptiva se verificó con un método conservador: la falla estimada es una cota superior."
                     ),
                     None => format!(
                         "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar."

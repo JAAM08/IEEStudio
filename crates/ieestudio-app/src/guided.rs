@@ -626,14 +626,20 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                             summary.push(source.supplier.trim().to_string());
                         }
                         if let Some(sub) = &source.substation {
-                            summary.push(format!("subestación de {} kVA, Z = {} %", sub.kva, sub.impedance_percent));
+                            summary.push(match sub.kva {
+                                Some(kva) => format!("transformador de la acometida de {kva} kVA"),
+                                None => "transformador de la acometida sin potencia".to_string(),
+                            });
                         }
-                        match &study {
-                            Some(f) => summary.push(format!("falla de {:.2} kA en el punto de conexión", f.source.total_ka)),
-                            None => summary.push("sin datos de falla: la capacidad interruptiva queda fuera de alcance".into()),
+                        match study.as_ref().map(|f| (&f.source, &f.source_issue)) {
+                            Some((Some(bus), _)) => summary.push(format!("falla de {:.2} kA en el punto de conexión", bus.total_ka)),
+                            Some((None, Some(issue))) if issue.kind == ieestudio_project::fault::IssueKind::Incomplete => {
+                                summary.push(format!("falla sin estimar: {}", issue.reason))
+                            }
+                            _ => summary.push("sin datos de falla: la capacidad interruptiva de lo que depende de la acometida queda fuera de alcance".into()),
                         }
                         ui.label(muted(p, crate::widgets::capitalize(&summary.join(" · "))).size(12.5));
-                        egui::CollapsingHeader::new("Datos de la acometida, la subestación y la falla")
+                        egui::CollapsingHeader::new("Datos de la acometida, su transformador y la falla")
                             .id_salt("acometida-guiado")
                             .show(ui, |ui| {
                                 changed |= properties::source_inputs(ui, p, &mut project.source, study.as_ref());
@@ -765,7 +771,7 @@ fn panels_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Step> {
                     ui.label(
                         muted(
                             p,
-                            "Un tablero alimentado por un transformador se marca en su ficha; el programa calcula primario y secundario con la tensión de cada lado.",
+                            "Un transformador intermedio, dentro de la instalación, se marca en la ficha del tablero que alimenta; el programa calcula primario y secundario con la tensión de cada lado. El transformador de CFE o la subestación que alimenta toda la instalación va una sola vez en la acometida, en el paso Proyecto.",
                         )
                         .size(12.5),
                     );
@@ -856,7 +862,10 @@ fn tree(
         sub.push_str(&format!(" · {area} m²"));
     }
     if let Some(t) = &panel.transformer {
-        sub.push_str(&format!(" · transformador de {} kVA", t.kva));
+        sub.push_str(&match t.kva {
+            Some(kva) => format!(" · transformador intermedio de {kva} kVA"),
+            None => " · transformador intermedio sin potencia".to_string(),
+        });
     }
     // Lo que el tablero pide y lo que aguanta, sin abrir su ficha.
     if let Some(r) = doc.panel_result(i) {
@@ -1742,11 +1751,7 @@ fn interrupting_words(p: &Palette, check: &Check) -> (&'static str, egui::Color3
 /// «No concluyente» si hay interruptores con dato que no alcanzan la falla
 /// estimada; «Sin evaluar» si solo faltan datos.
 fn interrupting_label(group: &ieestudio_project::fault::InterruptingGroup) -> &'static str {
-    match group.status {
-        Status::Complies => "Cumple",
-        _ if group.short() > 0 => "No concluyente",
-        _ => "Sin evaluar",
-    }
+    group.label()
 }
 
 /// Franja en el paso Circuitos cuando la capacidad interruptiva del tablero
@@ -1773,19 +1778,24 @@ fn interrupting_strip(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, panel_index
             ui.set_width(ui.available_width() - 2.0);
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::CIRCLE_DASHED).color(p.warn));
-                let text = match (group.short(), group.board_ka) {
-                    (0, _) => format!(
-                        "Falta la capacidad interruptiva de {} (falla estimada de {:.2} kA).",
+                let text = match (group.fault_ka, group.short(), group.board_ka) {
+                    (None, _, _) => format!(
+                        "Capacidad interruptiva sin evaluar: no se pudo estimar la falla porque {}.",
+                        group.issue.as_deref().unwrap_or("faltan datos")
+                    ),
+                    (Some(fault), 0, _) if group.missing() == 0 => format!(
+                        "Capacidad interruptiva no concluyente: la falla de {fault:.2} kA no incluye {}.",
+                        if group.incomplete_motors == 1 { "1 motor sin datos".to_string() } else { format!("{} motores sin datos", group.incomplete_motors) }
+                    ),
+                    (Some(fault), 0, _) => format!(
+                        "Falta la capacidad interruptiva de {} (falla estimada de {fault:.2} kA).",
                         if group.missing() == 1 { "1 interruptor".to_string() } else { format!("{} interruptores", group.missing()) },
-                        group.fault_ka
                     ),
-                    (_, Some(ka)) => format!(
-                        "Capacidad interruptiva no concluyente: {ka} kA del tablero frente a {:.2} kA estimados.",
-                        group.fault_ka
+                    (Some(fault), _, Some(ka)) => format!(
+                        "Capacidad interruptiva no concluyente: {ka} kA del tablero frente a {fault:.2} kA estimados."
                     ),
-                    _ => format!(
-                        "Capacidad interruptiva no concluyente frente a {:.2} kA estimados.",
-                        group.fault_ka
+                    (Some(fault), _, _) => format!(
+                        "Capacidad interruptiva no concluyente frente a {fault:.2} kA estimados."
                     ),
                 };
                 // El texto ocupa lo que sobra; el dato que lo resuelve queda
@@ -2064,13 +2074,20 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                     ui.label(RichText::new(format!("{max:.2} %")).monospace());
                                     ui.end_row();
                                     if let Some(f) = &panel.fault {
-                                        ui.label(muted(p, "Falla (bus infinito)"));
+                                        ui.label(muted(
+                                            p,
+                                            if f.origin.infinite_bus() { "Falla (bus infinito)" } else { "Falla (suministradora)" },
+                                        ));
+                                        let mut hover = if f.motor_ka > 0.0 {
+                                            format!("{:.2} kA {} más {:.3} kA de aportación de motores", f.base_ka, f.origin.basis(), f.motor_ka)
+                                        } else {
+                                            format!("{:.2} kA {}; ningún motor aporta a estas barras", f.base_ka, f.origin.basis())
+                                        };
+                                        if !f.incomplete.is_empty() {
+                                            hover.push_str(&format!("\nNo incluye: {}", f.incomplete.join("; ")));
+                                        }
                                         ui.label(RichText::new(format!("{:.2} kA", f.total_ka)).monospace())
-                                            .on_hover_text(if f.motor_ka > 0.0 {
-                                                format!("{:.2} kA más {:.3} kA de aportación de motores", f.base_ka, f.motor_ka)
-                                            } else {
-                                                "Sin motores en el proyecto".to_string()
-                                            });
+                                            .on_hover_text(hover);
                                         ui.end_row();
                                     }
                                 });
@@ -2265,81 +2282,13 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
     go
 }
 
-/// Palabras que delatan un motor o un equipo de aire acondicionado en el
-/// nombre de un circuito, sin acentos y en minúsculas.
-const MOTOR_WORDS: [&str; 13] = [
-    "motor",
-    "bomba",
-    "compresor de aire",
-    "ventilador",
-    "extractor",
-    "elevador",
-    "montacargas",
-    "malacate",
-    "polipasto",
-    "transportador",
-    "banda transportadora",
-    "molino",
-    "hidroneumatico",
-];
-const AIR_WORDS: [&str; 12] = [
-    "aire acondicionado",
-    "minisplit",
-    "mini split",
-    "mini-split",
-    "clima",
-    "a/a",
-    "refrigera",
-    "camara fria",
-    "chiller",
-    "condensadora",
-    "enfriador",
-    "manejadora",
-];
-
-fn fold(text: &str) -> String {
-    text.to_lowercase()
-        .chars()
-        .map(|ch| match ch {
-            'á' | 'à' | 'ä' => 'a',
-            'é' | 'è' | 'ë' => 'e',
-            'í' | 'ì' | 'ï' => 'i',
-            'ó' | 'ò' | 'ö' => 'o',
-            'ú' | 'ù' | 'ü' => 'u',
-            other => other,
-        })
-        .collect()
-}
-
-/// Tipo de carga que sugiere el nombre de un circuito capturado como «Otra
-/// carga». Un compresor de refrigeración es aire acondicionado; uno de aire,
-/// motor.
-fn kind_from_name(name: &str) -> Option<LoadKind> {
-    let name = fold(name);
-    if AIR_WORDS.iter().any(|w| name.contains(w)) {
-        Some(LoadKind::AirConditioning)
-    } else if MOTOR_WORDS.iter().any(|w| name.contains(w)) {
-        Some(LoadKind::Motor)
-    } else {
-        None
-    }
-}
-
 /// Circuitos de «Otra carga» cuyo nombre parece de un motor o de un aire
-/// acondicionado, con el tipo que sugiere.
+/// acondicionado, con el tipo que sugiere (lo detecta el modelo).
 fn suspicious_kinds(doc: &Doc) -> Vec<(usize, usize, LoadKind)> {
-    let mut out = Vec::new();
-    for (i, panel) in doc.project.panels.iter().enumerate() {
-        for (c, circuit) in panel.circuits.iter().enumerate() {
-            if circuit.load.kind != LoadKind::General {
-                continue;
-            }
-            if let Some(kind) = kind_from_name(&circuit.name) {
-                out.push((i, c, kind));
-            }
-        }
-    }
-    out
+    ieestudio_project::review::kind_hints(&doc.project)
+        .into_iter()
+        .map(|h| (h.panel, h.circuit, h.suggested))
+        .collect()
 }
 
 /// Aviso en Revisar: tramos con una conexión que su sistema o su tablero no
@@ -2709,8 +2658,8 @@ mod tests {
         let mut project = house.clone();
         project.source.substation = Some(ieestudio_project::Substation {
             impedance_from_table: Default::default(),
-            kva: 112.5,
-            impedance_percent: 3.0,
+            kva: Some(112.5),
+            impedance_percent: Some(3.0),
             primary_kv: Some(13.2),
             connection: None,
             mounting: None,
@@ -2733,29 +2682,6 @@ mod tests {
         assert_eq!(thousands(1800.0), "1,800");
         assert_eq!(thousands(7704.4), "7,704");
         assert_eq!(thousands(1_234_567.0), "1,234,567");
-    }
-
-    #[test]
-    fn names_that_look_like_equipment() {
-        assert_eq!(kind_from_name("Bomba de agua"), Some(LoadKind::Motor));
-        assert_eq!(kind_from_name("EXTRACTOR baño"), Some(LoadKind::Motor));
-        assert_eq!(kind_from_name("Hidroneumático"), Some(LoadKind::Motor));
-        assert_eq!(
-            kind_from_name("Minisplit recámara"),
-            Some(LoadKind::AirConditioning)
-        );
-        assert_eq!(
-            kind_from_name("Cámara fría"),
-            Some(LoadKind::AirConditioning)
-        );
-        // Un compresor de refrigeración es aire acondicionado, no motor.
-        assert_eq!(
-            kind_from_name("Compresor de refrigeración"),
-            Some(LoadKind::AirConditioning)
-        );
-        assert_eq!(kind_from_name("Compresor de aire"), Some(LoadKind::Motor));
-        assert_eq!(kind_from_name("Contactos sala"), None);
-        assert_eq!(kind_from_name("Alumbrado exterior"), None);
     }
 
     #[test]

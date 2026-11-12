@@ -167,7 +167,21 @@ fn print_report(result: &ProjectResult) {
             g.service
         );
     }
-    // La capacidad interruptiva, una vez por lugar.
+    // La falla y la capacidad interruptiva, una vez por lugar.
+    if let Some(study) = &result.fault {
+        if let Some(issue) = &study.source_issue {
+            println!(
+                "Falla en el punto de conexión sin estimar: {}",
+                issue.reason
+            );
+        }
+        for motor in &study.incomplete_motors {
+            println!(
+                "Motor sin datos, fuera de la aportación a la falla: {} ({})",
+                motor.label, motor.missing
+            );
+        }
+    }
     for group in result.fault.iter().flat_map(|f| &f.groups) {
         if group.status != ieestudio_project::Status::Complies {
             println!("Capacidad interruptiva: {}", group.summary());
@@ -175,6 +189,9 @@ fn print_report(result: &ProjectResult) {
     }
     for warning in &result.warnings {
         println!("Aviso: {warning}");
+    }
+    for hint in &result.kind_hints {
+        println!("Aviso: {}", hint.text());
     }
     println!();
     for (level, _, detail) in result.verdict.lines("la norma") {

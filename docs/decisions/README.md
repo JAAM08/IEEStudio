@@ -28,8 +28,9 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0020 | [Vista guiada en cinco pasos](0020-flujo-guiado.md) | Aceptada |
 | 0021 | [Agregar un circuito eligiendo primero qué se conecta](0021-agregar-por-tipo-de-carga.md) | Aceptada |
 | 0022 | [El unifilar con el formato de un plano eléctrico](0022-unifilar-como-plano.md) | Aceptada |
-| 0023 | [Capacidad interruptiva con la falla estimada por bus infinito](0023-falla-por-bus-infinito.md) | Aceptada |
+| 0023 | [Capacidad interruptiva con la falla estimada por bus infinito](0023-falla-por-bus-infinito.md) | Aceptada; motores y datos incompletos corregidos por 0026 |
 | 0024 | [El sistema decide qué conexiones existen](0024-sistema-y-conexion.md) | Aceptada |
 | 0025 | [El estado de un circuito es el de su cálculo; la capacidad interruptiva se revisa por tablero](0025-estado-propio-y-capacidad-interruptiva-por-tablero.md) | Aceptada |
+| 0026 | [Un dato en su nivel, falla por zonas de tensión y motores según su ubicación](0026-falla-por-zonas-de-tension.md) | Propuesta |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`.

@@ -518,7 +518,10 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         rows.push(Row {
             selection: Selection::Secondary(panel_index),
             id: "SEC".to_string(),
-            name: format!("Secundario, transformador de {} kVA", t.kva),
+            name: match t.kva {
+                Some(kva) => format!("Secundario, transformador de {kva} kVA"),
+                None => "Secundario del transformador".to_string(),
+            },
             kind: "Transformador",
             connection: label_of(&KINDS, panel.kind),
             phases: "—".to_string(),

@@ -127,6 +127,11 @@ pub(crate) fn motor_parts(
     data: &MotorLoad,
     forced_breaker: Option<f64>,
 ) -> Result<MotorCircuit, Error> {
+    if data.hp.trim().is_empty() {
+        return Err(Error::InvalidInput(
+            "falta la potencia del motor en hp".into(),
+        ));
+    }
     let volts = kind.reference_voltage(system)?;
     let three_phase = kind == CircuitKind::ThreePhase;
     let current = full_load_current(profile, &data.hp, three_phase, volts)?;

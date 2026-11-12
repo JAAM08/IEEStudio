@@ -170,9 +170,12 @@ impl SourceFault {
 /// (requisito I.2 del unifilar).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Substation {
-    pub kva: f64,
-    /// Impedancia de placa, en porciento.
-    pub impedance_percent: f64,
+    /// Potencia, en kVA. `None` mientras no se capture: nunca se supone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kva: Option<f64>,
+    /// Impedancia de placa, en porciento. `None` mientras no se capture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impedance_percent: Option<f64>,
     /// Sin dato de placa: la falla se calcula con la impedancia mínima de la
     /// norma de fabricación para su tipo, potencia y tensión.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -338,9 +341,12 @@ pub struct Panel {
 /// Transformador de 600 V o menos que alimenta un tablero (artículo 450).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Transformer {
-    pub kva: f64,
-    /// Impedancia de placa, en porciento.
-    pub impedance_percent: f64,
+    /// Potencia, en kVA. `None` mientras no se capture: nunca se supone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kva: Option<f64>,
+    /// Impedancia de placa, en porciento. `None` mientras no se capture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impedance_percent: Option<f64>,
     /// Sistema del secundario.
     pub secondary: System,
     /// Lleva protección en el secundario (el interruptor principal del
@@ -348,9 +354,9 @@ pub struct Transformer {
     #[serde(default = "yes")]
     pub secondary_protection: bool,
     /// Longitud de los conductores del secundario, del transformador al
-    /// tablero, en metros.
-    #[serde(default)]
-    pub secondary_length_m: f64,
+    /// tablero, en metros. `None` mientras no se capture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_length_m: Option<f64>,
     #[serde(default = "yes")]
     pub secondary_has_neutral: bool,
     #[serde(default)]

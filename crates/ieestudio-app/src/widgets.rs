@@ -219,6 +219,56 @@ pub fn optional_number(
     changed
 }
 
+/// Dato de placa que empieza vacío: nunca se propone un valor. Mientras no
+/// se escriba queda `None` y el cálculo dice que falta. Acepta coma decimal.
+pub fn blank_number(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: &mut Option<f64>,
+    suffix: &str,
+) -> bool {
+    let id = egui::Id::new(("dato-de-placa", id));
+    let shown = |v: &Option<f64>| v.map_or(String::new(), |x| format!("{x}"));
+    let mut text = ui
+        .data_mut(|d| d.get_temp::<String>(id))
+        .unwrap_or_else(|| shown(value));
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        let response = ui.add(
+            egui::TextEdit::singleline(&mut text)
+                .desired_width(80.0)
+                .hint_text("Sin dato"),
+        );
+        ui.label(suffix.trim());
+        if response.changed() {
+            let trimmed = text.trim().replace(',', ".");
+            let parsed = if trimmed.is_empty() {
+                Some(None)
+            } else {
+                trimmed
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|x| x.is_finite() && *x > 0.0)
+                    .map(Some)
+            };
+            if let Some(new) = parsed {
+                if new != *value {
+                    *value = new;
+                    changed = true;
+                }
+            }
+        }
+        if response.has_focus() {
+            ui.data_mut(|d| d.insert_temp(id, text.clone()));
+        } else {
+            // Fuera de edición se muestra el dato guardado, también tras
+            // deshacer o abrir otro proyecto.
+            ui.data_mut(|d| d.remove::<String>(id));
+        }
+    });
+    changed
+}
+
 /// Potencia de un motor, de las que trae su tabla (430-248 o 430-250).
 pub fn motor_hp_combo(
     ui: &mut egui::Ui,
@@ -233,7 +283,9 @@ pub fn motor_hp_combo(
         &profile.single_phase_motors
     };
     let mut changed = false;
-    let text = if rows.iter().any(|r| &r.hp == hp) {
+    let text = if hp.trim().is_empty() {
+        "Elige la potencia".to_string()
+    } else if rows.iter().any(|r| &r.hp == hp) {
         format!("{} hp", hp_label(hp))
     } else {
         format!("{} hp · fuera de tabla", hp_label(hp))

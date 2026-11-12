@@ -58,9 +58,11 @@ pub fn empty_project() -> Project {
 pub fn set_load_kind(load: &mut Load, kind: LoadKind) {
     load.kind = kind;
     match kind {
+        // La potencia empieza sin elegir: un motor sin ella queda sin
+        // calcular y se avisa que su aportación a la falla falta.
         LoadKind::Motor if load.motor.is_none() => {
             load.motor = Some(MotorLoad {
-                hp: "1".to_string(),
+                hp: String::new(),
                 motor_type: Default::default(),
                 nameplate_a: None,
                 service_factor_marked: false,
@@ -454,7 +456,16 @@ impl Doc {
             .unwrap_or_default();
         let name = format!("Tablero {id}");
         self.project.panels.push(new_panel(&id, &name, parent));
-        self.selection = Selection::Feeder(self.project.panels.len() - 1);
+        // La conexión sale del sistema y del tablero de donde se alimenta:
+        // la de más fases que existe ahí (decisión 0024).
+        let index = self.project.panels.len() - 1;
+        if let Some(kind) = ieestudio_project::connection::feeder_kinds(&self.project, index)
+            .into_iter()
+            .max_by_key(|k| k.poles())
+        {
+            self.project.panels[index].kind = kind;
+        }
+        self.selection = Selection::Feeder(index);
         self.edited();
     }
 
@@ -653,7 +664,8 @@ mod tests {
         assert_eq!(circuits.len(), n + 3);
         let motor = &circuits[n];
         assert_eq!(motor.load.kind, LoadKind::Motor);
-        assert!(motor.load.motor.is_some());
+        // Sin potencia supuesta: queda por elegir.
+        assert_eq!(motor.load.motor.as_ref().unwrap().hp, "");
         assert_eq!(motor.name, "Motor");
         // El tablero del ejemplo es de tres fases: el aire va entre dos.
         let ac = &circuits[n + 1];
@@ -710,6 +722,19 @@ mod tests {
         assert_eq!(a.panel_id_problem(1), None);
         assert_eq!(a.panel_id_problem(2), None);
         assert_eq!(a.subpanels(0).len(), 2);
+    }
+
+    /// Un tablero nuevo toma la conexión de más fases que existe donde se
+    /// alimenta, no siempre tres fases.
+    #[test]
+    fn a_new_panel_takes_a_connection_its_system_has() {
+        let mut project = ieestudio_project::example::house();
+        project.source.system = ieestudio_core::System::SPLIT_240_120;
+        let mut doc = Doc::new(project, None);
+        doc.selection = Selection::Project;
+        doc.add_panel();
+        let panel = doc.project.panels.last().unwrap();
+        assert_eq!(panel.kind, CircuitKind::LineToLine);
     }
 
     #[test]

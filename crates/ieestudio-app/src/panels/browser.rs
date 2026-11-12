@@ -180,7 +180,10 @@ fn panel_tree(
             p,
             depth + 1,
             icon::SWAP,
-            &format!("Transformador {} kVA", t.kva),
+            &match t.kva {
+                Some(kva) => format!("Transformador {kva} kVA"),
+                None => "Transformador sin potencia".to_string(),
+            },
             "secundario",
             doc.selection == Selection::Secondary(index),
             st,

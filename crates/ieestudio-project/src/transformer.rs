@@ -19,27 +19,50 @@ use crate::procedure::{current_step, plain, Step};
 pub(crate) struct Rating {
     pub rated_a: f64,
     pub volts: f64,
+    pub kva: f64,
+    /// Corriente con `√3`: el transformador alimenta tres fases.
+    pub three_phase: bool,
 }
 
-pub(crate) fn rating(kva: f64, kind: CircuitKind, system: &System) -> Result<Rating, Error> {
-    if kva.is_nan() || kva <= 0.0 {
-        return Err(Error::InvalidInput(
-            "falta la potencia del transformador".into(),
-        ));
-    }
+pub(crate) fn rating(
+    kva: Option<f64>,
+    kind: CircuitKind,
+    system: &System,
+) -> Result<Rating, Error> {
+    let kva = match kva {
+        Some(kva) if kva.is_finite() && kva > 0.0 => kva,
+        Some(_) => {
+            return Err(Error::InvalidInput(
+                "la potencia del transformador debe ser mayor que cero".into(),
+            ))
+        }
+        None => {
+            return Err(Error::InvalidInput(
+                "falta la potencia del transformador".into(),
+            ))
+        }
+    };
     let volts = kind.reference_voltage(system)?;
     Ok(Rating {
         rated_a: kva * 1000.0 / (phase_multiplier(kind) * volts),
         volts,
+        kva,
+        three_phase: phase_multiplier(kind) > 1.0,
     })
 }
 
 /// Porciento de diseño de los conductores: el de la Tabla 450-3(b) para
-/// corrientes de 9 A o más con protección solo en el primario (125 %).
-fn design_percent(profile: &Profile) -> f64 {
+/// corrientes de 9 A o más con protección solo en el primario (125 %). Sin
+/// ese renglón en la tabla el lado no se puede dimensionar.
+fn design_percent(profile: &Profile) -> Result<f64, Error> {
     profile
         .transformer_protection_row(true, false, f64::INFINITY)
-        .map_or(125.0, |r| r.percent)
+        .map(|r| r.percent)
+        .ok_or_else(|| {
+            Error::InvalidInput(
+                "la tabla de protección de transformadores no tiene el renglón para dimensionar sus conductores".into(),
+            )
+        })
 }
 
 /// Corriente de un lado del transformador: la de la carga, y la de diseño, que
@@ -56,8 +79,8 @@ pub(crate) fn side_given(
     motors: Option<Given>,
     rating: Rating,
     side: &str,
-    kva: f64,
 ) -> Result<Given, Error> {
+    let kva = rating.kva;
     let nominal_a = nominal_current(demanded_w, power_factor, kind, system)?;
     let (load_design_a, mut steps) = match motors {
         Some(g) => (g.design_a, g.steps),
@@ -75,7 +98,7 @@ pub(crate) fn side_given(
             )
         }
     };
-    let percent = design_percent(profile);
+    let percent = design_percent(profile)?;
     let by_rating = rating.rated_a * percent / 100.0;
     let design_a = load_design_a.max(by_rating);
     let k = if phase_multiplier(kind) > 1.0 {

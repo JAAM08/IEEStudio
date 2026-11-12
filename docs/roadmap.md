@@ -82,6 +82,13 @@
 - Unifilar a pantalla completa en la vista guiada, desde Revisar y Memoria,
   con Revisión / Plano y exportar; el dibujo se guarda entre cuadros y solo
   se rehace cuando el proyecto cambia.
+- Falla por zonas de tensión (decisión 0026, propuesta): cada dato en su
+  nivel y sin valores supuestos en transformadores, acometida y motores;
+  motores según su ubicación, a través de la impedancia de su transformador;
+  estudio por partes cuando la fuente no tiene datos; un transformador sin
+  datos nunca hereda la falla de su primario; motores sin datos y cargas que
+  parecen motor avisados en el resultado del proyecto. Diagnóstico en
+  `auditoria-modelo-y-falla.md`.
 
 ## Pendiente, en orden
 
