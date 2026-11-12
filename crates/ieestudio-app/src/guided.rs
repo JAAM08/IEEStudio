@@ -2245,13 +2245,20 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                     }
 
                     // Primero el tipo de carga: cambia todo lo demás del circuito.
-                    if let Some((selection, kind)) = kind_review(ui, p, doc) {
-                        if let Selection::Circuit(i, c) = selection {
+                    match kind_review(ui, p, doc) {
+                        Some(KindAction::Change(i, c, kind)) => {
                             set_load_kind(&mut doc.project.panels[i].circuits[c].load, kind);
-                            doc.selection = selection;
+                            doc.selection = Selection::Circuit(i, c);
                             doc.edited();
                             go = Some(Step::Circuits);
                         }
+                        // Se guarda en el proyecto: deja de avisar en Revisar,
+                        // la memoria y la línea de comandos (decisión 0029, D-3).
+                        Some(KindAction::Confirm(i, c)) => {
+                            doc.project.panels[i].circuits[c].load.confirmed_general = true;
+                            doc.edited();
+                        }
+                        None => {}
                     }
 
                     // Transformadores que pueden ser el de la acometida otra vez.
@@ -2487,21 +2494,15 @@ fn connection_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> bool {
 }
 
 /// Aviso en Revisar: un circuito que parece motor o aire acondicionado pero
-/// se capturó como «Otra carga». Devuelve el circuito y el tipo al que se
-/// pidió cambiarlo. «Es otra carga» lo oculta mientras la app esté abierta.
-fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<(Selection, LoadKind)> {
-    let hidden_id = egui::Id::new("tipo-de-carga-revisado");
-    let mut hidden: Vec<(String, String, String)> =
-        ui.ctx().data(|d| d.get_temp(hidden_id)).unwrap_or_default();
-    let key = |i: usize, c: usize| {
-        let panel = &doc.project.panels[i];
-        let circuit = &panel.circuits[c];
-        (panel.id.clone(), circuit.id.clone(), circuit.name.clone())
-    };
-    let items: Vec<_> = suspicious_kinds(doc)
-        .into_iter()
-        .filter(|(i, c, _)| !hidden.contains(&key(*i, *c)))
-        .collect();
+/// se capturó como «Otra carga». Devuelve lo que se pidió: cambiarlo de tipo
+/// o confirmar que es otra carga, que se guarda en el proyecto.
+enum KindAction {
+    Change(usize, usize, LoadKind),
+    Confirm(usize, usize),
+}
+
+fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> {
+    let items = suspicious_kinds(doc);
     if items.is_empty() {
         return None;
     }
@@ -2565,7 +2566,7 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<(Selection, 
                         muted(
                             p,
                             format!(
-                                "Su nombre parece de {}. Como carga general no se le aplican {missing}. NOM-001-SEDE-2012, {cite}.",
+                                "Su nombre parece de {}. Como carga general no se le aplican {missing}, y mientras no se confirme, la capacidad interruptiva de su zona queda no concluyente porque faltaría su aportación a la falla. NOM-001-SEDE-2012, {cite}.",
                                 if kind == LoadKind::Motor { "un motor" } else { "un equipo de aire acondicionado" },
                             ),
                         )
@@ -2585,16 +2586,19 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<(Selection, 
                         .on_hover_text("Cambia el tipo y te lleva a su ficha para capturar los datos del equipo. Se puede deshacer con Ctrl+Z.")
                         .clicked()
                     {
-                        action = Some((Selection::Circuit(i, c), kind));
+                        action = Some(KindAction::Change(i, c, kind));
                     }
-                    if ui.button("Es otra carga").clicked() {
-                        hidden.push(key(i, c));
+                    if ui
+                        .button("Es otra carga")
+                        .on_hover_text("Se guarda en el proyecto: no aporta a la falla y deja de avisar. Se puede deshacer con Ctrl+Z o en la ficha del circuito.")
+                        .clicked()
+                    {
+                        action = Some(KindAction::Confirm(i, c));
                     }
                 });
             });
         ui.add_space(6.0);
     }
-    ui.ctx().data_mut(|d| d.insert_temp(hidden_id, hidden));
     action
 }
 
@@ -2802,6 +2806,9 @@ mod tests {
             .unwrap();
         doc.project.panels[0].circuits[c].load.kind = LoadKind::General;
         assert_eq!(suspicious_kinds(&doc), vec![(0, c, LoadKind::Motor)]);
+        // «Es otra carga» se guarda en el proyecto y deja de preguntar.
+        doc.project.panels[0].circuits[c].load.confirmed_general = true;
+        assert!(suspicious_kinds(&doc).is_empty());
     }
 
     #[test]

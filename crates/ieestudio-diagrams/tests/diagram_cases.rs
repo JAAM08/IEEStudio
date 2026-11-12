@@ -60,6 +60,7 @@ fn industrial() -> Project {
                     outlets: None,
                     motor: None,
                     compressor: None,
+                    confirmed_general: false,
                 },
                 length_m: 25.0,
                 has_neutral: false,

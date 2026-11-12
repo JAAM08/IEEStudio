@@ -267,6 +267,9 @@ pub struct ProjectResult {
     /// Circuitos de «Otra carga» cuyo nombre parece de un motor o de un aire
     /// acondicionado.
     pub kind_hints: Vec<crate::review::KindHint>,
+    /// Circuitos con nombre de motor que el usuario confirmó como otra
+    /// carga: no aportan a la falla.
+    pub confirmed_general: Vec<String>,
     /// Transformadores intermedios que pueden ser el de la acometida
     /// capturado otra vez.
     pub duplicate_flags: Vec<crate::review::DuplicateFlag>,
@@ -1607,6 +1610,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         verdict,
         fault,
         kind_hints: crate::review::kind_hints(project),
+        confirmed_general: crate::review::confirmed_general(project),
         duplicate_flags: crate::review::duplicate_flags(project),
     })
 }

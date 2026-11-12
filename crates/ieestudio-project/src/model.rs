@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 /// 0029, D-2 y D-7). Se leen los formatos 1 a 4 sin suponer datos: un dato
 /// de falla de un archivo anterior queda sin ubicación hasta que se indique.
 /// Un programa anterior no abre un archivo de la 4 y dice que es más nuevo.
+/// La confirmación de «Es otra carga» (`Load::confirmed_general`, D-3) se
+/// agregó a la 4 antes de publicar ninguna versión con ella.
 pub const FORMAT_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -483,6 +485,11 @@ pub struct Load {
     /// Datos de placa del equipo, si `kind` es `AirConditioning`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compressor: Option<CompressorLoad>,
+    /// El usuario confirmó que esta «Otra carga» no es un motor ni un aire
+    /// acondicionado aunque su nombre lo parezca: no aporta a la falla y no
+    /// deja la capacidad interruptiva sin concluir (decisión 0029, D-3).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub confirmed_general: bool,
 }
 
 /// Motor de un circuito. Su corriente sale de las tablas por potencia y

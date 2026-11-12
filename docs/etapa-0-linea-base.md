@@ -34,7 +34,7 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 |---|---|---|---|---|
 | H-01 | Crítico | **Corregido** (etapa 1A, decisión 0029) | `h01_*` (7) y `h01_*` de salidas (2) | Antes: «Cumple» con 3.858 kA y «Conforme». Ahora: 6.44 kA de fase a neutro, «No concluyente» |
 | H-02 | Alto | **Corregido** (etapa 1B, decisión 0029) | `h02_*` (7) y `h02_*` de salidas (2) | Antes: 5 kA sin tensión «Cumple» con 10 kA y 50 kA sin aviso. Ahora: sin ubicación «Sin evaluar»; en 13.2 kV, 22.92 kA; 50 kA en baja tensión, «Dato inválido» |
-| H-03 | Alto | Decisión D-3 | `h03_*` (2) | Aviso «parece motor» y aun así «Cumple», «Por resolver · 0» (captura) |
+| H-03 | Alto | **Corregido** (etapa 1C, decisión 0029) | `h03_*` (5) y `h03_*` de salidas (2) | Antes: aviso «parece motor» y aun así «Cumple». Ahora: «No concluyente» hasta confirmar; «Es otra carga» se guarda en el archivo |
 | H-04 | Medio | Pendiente | `h04_un_solo_criterio_de_trifasico` | 226/120 V: 2.365 kA en vez de 4.097 kA |
 | H-05 | Medio | Pendiente | `h05_*` (2) | «Monofásico» en 220Y/127 V: 13.12 kA sin aviso; Z = 30 %: 1.09 kA sin aviso |
 | H-06 | Medio | Decisión D-5 | `h06_*` | 300 kW en 75 kVA: «Conforme» |

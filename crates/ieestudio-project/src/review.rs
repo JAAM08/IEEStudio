@@ -83,7 +83,7 @@ pub struct KindHint {
 impl KindHint {
     pub fn text(&self) -> String {
         format!(
-            "{} se capturó como «Otra carga» pero su nombre parece de {}: si lo es, cámbialo de tipo para calcular su protección y su aportación a la falla",
+            "{} se capturó como «Otra carga» pero su nombre parece de {}: si lo es, cámbialo de tipo para calcular su protección y su aportación a la falla; si no, confirma que es otra carga. Mientras no se resuelva, la capacidad interruptiva de su zona queda no concluyente",
             self.label,
             match self.suggested {
                 LoadKind::AirConditioning => "un equipo de aire acondicionado",
@@ -93,11 +93,13 @@ impl KindHint {
     }
 }
 
+/// «Otras cargas» con nombre de motor o de aire acondicionado que no se han
+/// confirmado (decisión 0029, D-3).
 pub fn kind_hints(project: &Project) -> Vec<KindHint> {
     let mut out = Vec::new();
     for (i, panel) in project.panels.iter().enumerate() {
         for (c, circuit) in panel.circuits.iter().enumerate() {
-            if circuit.load.kind != LoadKind::General {
+            if circuit.load.kind != LoadKind::General || circuit.load.confirmed_general {
                 continue;
             }
             if let Some(suggested) = kind_from_name(&circuit.name) {
@@ -107,6 +109,24 @@ pub fn kind_hints(project: &Project) -> Vec<KindHint> {
                     label: format!("{} · {} {}", panel.id, circuit.id, circuit.name),
                     suggested,
                 });
+            }
+        }
+    }
+    out
+}
+
+/// «Otras cargas» con nombre de motor o de aire acondicionado que el usuario
+/// confirmó que no lo son, para la trazabilidad de la memoria y la línea de
+/// comandos: `TG-1 · C-06 Bomba de agua`.
+pub fn confirmed_general(project: &Project) -> Vec<String> {
+    let mut out = Vec::new();
+    for panel in &project.panels {
+        for circuit in &panel.circuits {
+            if circuit.load.kind == LoadKind::General
+                && circuit.load.confirmed_general
+                && kind_from_name(&circuit.name).is_some()
+            {
+                out.push(format!("{} · {} {}", panel.id, circuit.id, circuit.name));
             }
         }
     }

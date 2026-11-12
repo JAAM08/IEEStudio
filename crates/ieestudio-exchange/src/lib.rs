@@ -641,6 +641,7 @@ fn import_circuits(
                     outlets: None,
                     motor: None,
                     compressor: None,
+                    confirmed_general: false,
                 },
                 length_m: 10.0,
                 has_neutral: false,

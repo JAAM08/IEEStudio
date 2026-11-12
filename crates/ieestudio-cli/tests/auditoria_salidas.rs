@@ -235,3 +235,36 @@ fn h02_sin_ubicacion_las_salidas_piden_indicarla() {
     assert!(!out.contains("kA estimados"), "línea de comandos: {out}");
     assert!(!plan_svg(case).contains("Icc = 5"));
 }
+
+// -------------------------------------------------------------- H-03
+
+/// H-03 (etapa 1C). Sin confirmar: el aviso y la capacidad interruptiva no
+/// concluyente en la línea de comandos y en la memoria.
+#[test]
+fn h03_sin_confirmar_las_salidas_no_concluyen() {
+    let case = "h03-bombas-como-otra-carga.iees";
+    let out = cli(case);
+    assert!(
+        out.contains("2 cargas que parecen motor o aire acondicionado están sin confirmar"),
+        "línea de comandos: {out}"
+    );
+    assert!(out.contains(
+        "Mientras no se resuelva, la capacidad interruptiva de su zona queda no concluyente"
+    ));
+    let source = report(case);
+    assert!(source.contains("parece motor o aire acondicionado y está como «Otra carga»"));
+}
+
+/// Confirmadas: sin aviso, cumple, y las salidas dicen que se confirmaron.
+#[test]
+fn h03_confirmadas_las_salidas_lo_dicen() {
+    let case = "h03-bombas-confirmadas-otra-carga.iees";
+    let out = cli(case);
+    assert!(!out.contains("Aviso: TG · M-1"), "línea de comandos: {out}");
+    assert!(out.contains("Nota: TG · M-1 Bomba 50 hp se confirmó como otra carga"));
+    // Ya no queda nada de capacidad interruptiva por resolver.
+    assert!(!out.contains("Capacidad interruptiva ("), "{out}");
+    assert!(out.contains("Verificación normativa: Conforme"), "{out}");
+    let source = report(case);
+    assert!(source.contains("se confirmó como otra carga aunque su nombre parece de un motor"));
+}

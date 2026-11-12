@@ -477,16 +477,99 @@ fn h03_capturadas_como_motor_no_concluyente() {
     assert_eq!(g.label(), "No concluyente");
 }
 
-/// H-03 (alto). Capturadas como «Otra carga», el programa avisa que parecen
-/// motor y aun así afirma «Cumple» con 9.8 kA. Con la decisión 0029 (D-3)
-/// queda «No concluyente» mientras el aviso no se resuelva.
+/// H-03 (alto). Capturadas como «Otra carga», el programa avisaba que
+/// parecen motor y aun así afirmaba «Cumple» con 9.8 kA. Corregido en la
+/// etapa 1C (decisión 0029, D-3): «No concluyente» mientras no se resuelva.
 #[test]
-#[ignore = "H-03 abierto (D-3)"]
 fn h03_una_carga_que_parece_motor_no_da_cumple() {
     let result = calc(&casos::h03_bombas(false));
     assert_eq!(result.kind_hints.len(), 2, "el aviso ya existe");
     let g = group(&result, Some("TG"));
-    assert_ne!(g.label(), "Cumple", "H-03: hoy {}", state(g));
+    assert_eq!(g.label(), "No concluyente", "H-03: hoy {}", state(g));
+    assert_eq!(g.suspected_loads, 2);
+    // La falla no cambia: no se inventa la aportación.
+    assert_eq!(g.fault_ka, Some(9.8));
+    assert!(
+        g.summary()
+            .contains("pero 2 cargas que parecen motor o aire acondicionado están sin confirmar"),
+        "{}",
+        g.summary()
+    );
+    assert!(g
+        .trace
+        .missing
+        .iter()
+        .any(|m| m.contains("M-1 Bomba 50 hp: parece motor")));
+    assert_ne!(result.verdict.compliance, Compliance::Conforms);
+    let detail = &result.panels[0]
+        .circuits
+        .iter()
+        .find(|c| c.id == "A-1")
+        .unwrap()
+        .interrupting
+        .as_ref()
+        .unwrap()
+        .detail;
+    assert_eq!(
+        detail,
+        "no concluyente: 10 kA ≥ 9.80 kA en las barras de TG, pero 2 cargas que parecen motor o aire acondicionado están sin confirmar"
+    );
+}
+
+/// «Es otra carga» en las dos: cumple con 9.8 kA, el aviso desaparece y la
+/// trazabilidad dice que se confirmaron. Con una sola, sigue sin concluir.
+#[test]
+fn h03_confirmar_otra_carga_la_resuelve() {
+    let mut project = casos::h03_bombas(false);
+    project.panels[0].circuits[3].load.confirmed_general = true;
+    let result = calc(&project);
+    assert_eq!(result.kind_hints.len(), 1);
+    assert_eq!(group(&result, Some("TG")).label(), "No concluyente");
+
+    project.panels[0].circuits[4].load.confirmed_general = true;
+    let result = calc(&project);
+    assert!(result.kind_hints.is_empty());
+    assert_eq!(result.confirmed_general.len(), 2);
+    let g = group(&result, Some("TG"));
+    assert_eq!(g.label(), "Cumple", "{}", state(g));
+    assert!(g
+        .trace
+        .contributors
+        .iter()
+        .any(|m| m.contains("M-1 Bomba 50 hp: confirmada como otra carga")));
+}
+
+/// La confirmación se guarda en el archivo y se vuelve a leer igual.
+#[test]
+fn h03_la_confirmacion_se_guarda() {
+    let mut project = casos::h03_bombas(false);
+    for c in &mut project.panels[0].circuits[3..] {
+        c.load.confirmed_general = true;
+    }
+    let json = project.to_json();
+    assert_eq!(json.matches("\"confirmed_general\": true").count(), 2);
+    let read = Project::from_json(&json).unwrap();
+    assert_eq!(read, project);
+    assert!(calc(&read).kind_hints.is_empty());
+    // Sin confirmar no se escribe nada: los archivos no cambian.
+    assert!(!casos::h03_bombas(false)
+        .to_json()
+        .contains("confirmed_general"));
+}
+
+/// Una carga sin confirmar detrás de un transformador también deja sin
+/// concluir las barras de arriba: si es motor, su aportación llegaría a
+/// través del transformador.
+#[test]
+fn h03_una_sospecha_aguas_abajo_alcanza_las_barras_de_arriba() {
+    let mut project = casos::h12_motor_detras_de_transformador_sin_datos();
+    project.panels[1].transformer.as_mut().unwrap().kva = Some(15.0);
+    let general = casos::h03_bombas(false).panels[0].circuits[3].load.clone();
+    project.panels[1].circuits[0].load = general;
+    let result = calc(&project);
+    assert_eq!(group(&result, Some("TF-1")).suspected_loads, 1);
+    assert_eq!(group(&result, Some("TG")).suspected_loads, 1);
+    assert_eq!(group(&result, Some("TG")).label(), "No concluyente");
 }
 
 // ----------------------------------------------------- H-04 criterio trifásico
