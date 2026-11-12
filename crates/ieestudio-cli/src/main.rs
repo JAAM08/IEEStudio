@@ -204,6 +204,9 @@ fn print_report(result: &ProjectResult) {
     for hint in &result.kind_hints {
         println!("Aviso: {}", hint.text());
     }
+    for label in &result.confirmed_general {
+        println!("Nota: {label} se confirmó como otra carga; no aporta a la corriente de falla");
+    }
     for flag in &result.duplicate_flags {
         println!("Aviso: {}", flag.text());
     }

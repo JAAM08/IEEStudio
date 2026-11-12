@@ -25,6 +25,7 @@ fn circuit(id: String, kind: LoadKind, va: f64) -> Circuit {
             outlets: None,
             motor: None,
             compressor: None,
+            confirmed_general: false,
         },
         length_m: 10.0,
         has_neutral: false,

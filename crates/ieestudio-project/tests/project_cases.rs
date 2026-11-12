@@ -206,6 +206,7 @@ fn industrial() -> Project {
                     outlets: None,
                     motor: None,
                     compressor: None,
+                    confirmed_general: false,
                 },
                 length_m: 25.0,
                 has_neutral: false,
@@ -387,6 +388,7 @@ fn motor_circuit(id: &str, hp: &str, length_m: f64) -> Circuit {
                 service_factor_marked: true,
             }),
             compressor: None,
+            confirmed_general: false,
         },
         length_m,
         has_neutral: false,
@@ -413,6 +415,7 @@ fn motor_panel() -> Project {
             outlets: None,
             motor: None,
             compressor: None,
+            confirmed_general: false,
         },
         length_m: 10.0,
         has_neutral: false,
@@ -1600,6 +1603,7 @@ fn voltage_and_fault_propagate_through_several_panels() {
         outlets: None,
         motor: None,
         compressor: None,
+        confirmed_general: false,
     };
     t3.circuits = vec![motor, lamp];
     project.panels.push(t2);

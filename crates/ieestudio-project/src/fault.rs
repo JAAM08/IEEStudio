@@ -100,6 +100,10 @@ pub struct BusFault {
     /// Motores que aportarían aquí pero no tienen datos: la falla está
     /// incompleta y nada que se compare con ella puede cumplir.
     pub incomplete: Vec<String>,
+    /// «Otras cargas» que parecen motor o aire acondicionado y aportarían
+    /// aquí si lo son: mientras no se confirmen, nada que se compare con esta
+    /// falla puede cumplir (decisión 0029, D-3).
+    pub suspected: Vec<String>,
     /// En un secundario 1F-3H por bus infinito, `base_ka` es la falla de
     /// fase a neutro; aquí queda la de fase a fase y el factor.
     pub line_to_neutral: Option<LineToNeutral>,
@@ -126,11 +130,37 @@ impl BusFault {
 
     /// Válida, o no concluyente si le faltan motores.
     pub fn evaluation(&self) -> Evaluation {
-        if self.incomplete.is_empty() {
+        if self.incomplete.is_empty() && self.suspected.is_empty() {
             Evaluation::Valid
         } else {
             Evaluation::Inconclusive
         }
+    }
+
+    /// Por qué no puede cumplir aunque un interruptor la alcance: `la falla
+    /// no incluye 1 motor sin datos`, `1 carga que parece motor sin
+    /// confirmar`. `None` si la falla está completa.
+    pub fn open_items(&self) -> Option<String> {
+        let mut parts = Vec::new();
+        if !self.incomplete.is_empty() {
+            parts.push(format!(
+                "la falla no incluye {} sin datos",
+                motors_phrase(self.incomplete.len())
+            ));
+        }
+        if !self.suspected.is_empty() {
+            parts.push(suspected_phrase(self.suspected.len()));
+        }
+        (!parts.is_empty()).then(|| parts.join(" y "))
+    }
+}
+
+/// `1 carga que parece motor sin confirmar`, `2 cargas que parecen…`.
+fn suspected_phrase(n: usize) -> String {
+    if n == 1 {
+        "1 carga que parece motor o aire acondicionado está sin confirmar".to_string()
+    } else {
+        format!("{n} cargas que parecen motor o aire acondicionado están sin confirmar")
     }
 }
 
@@ -294,6 +324,8 @@ pub struct InterruptingGroup {
     pub issue: Option<String>,
     /// Motores sin datos que aportarían aquí.
     pub incomplete_motors: usize,
+    /// Cargas sin confirmar que parecen motor y aportarían aquí.
+    pub suspected_loads: usize,
     /// Capacidad interruptiva capturada para el tablero, en kA.
     pub board_ka: Option<f64>,
     pub status: Status,
@@ -381,12 +413,24 @@ impl InterruptingGroup {
             None => format!("de {}", self.place),
         };
         match (missing, short) {
-            (0, 0) if self.incomplete_motors > 0 => format!(
-                "no concluyente: {} {of_place} {} los {fault}, pero la falla no incluye {} sin datos",
-                count(n),
-                if n == 1 { "alcanza" } else { "alcanzan" },
-                motors_phrase(self.incomplete_motors)
-            ),
+            (0, 0) if self.incomplete_motors > 0 || self.suspected_loads > 0 => {
+                let mut open = Vec::new();
+                if self.incomplete_motors > 0 {
+                    open.push(format!(
+                        "la falla no incluye {} sin datos",
+                        motors_phrase(self.incomplete_motors)
+                    ));
+                }
+                if self.suspected_loads > 0 {
+                    open.push(suspected_phrase(self.suspected_loads));
+                }
+                format!(
+                    "no concluyente: {} {of_place} {} los {fault}, pero {}",
+                    count(n),
+                    if n == 1 { "alcanza" } else { "alcanzan" },
+                    open.join(" y ")
+                )
+            }
             (0, 0) => format!(
                 "{} {of_place} {} los {fault} de falla estimada; cumple con {method}",
                 capitalize(&count(n)),
@@ -865,6 +909,8 @@ struct Topology<'a> {
     /// Transformador de cada tablero con transformador.
     transformers: HashMap<usize, Result<TransformerData, String>>,
     motors: &'a MotorData,
+    /// «Otras cargas» sin confirmar que parecen motor: tablero, circuito.
+    suspects: Vec<(usize, usize)>,
 }
 
 impl<'a> Topology<'a> {
@@ -925,6 +971,10 @@ impl<'a> Topology<'a> {
                 Some((i, data))
             })
             .collect();
+        let suspects = crate::review::kind_hints(project)
+            .into_iter()
+            .map(|h| (h.panel, h.circuit))
+            .collect();
         Topology {
             project,
             profile,
@@ -932,7 +982,45 @@ impl<'a> Topology<'a> {
             zone,
             transformers,
             motors,
+            suspects,
         }
+    }
+
+    /// Cargas sin confirmar que parecen motor y aportarían a una zona: las
+    /// suyas y las de las zonas que cuelgan de ella por un transformador.
+    fn suspects_at(&self, zone: Zone, depth: usize) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .suspects
+            .iter()
+            .filter(|(i, _)| self.zone[*i] == zone)
+            .map(|&(i, c)| self.label(i, c))
+            .collect();
+        if depth <= self.project.panels.len() {
+            for t in self.children(zone) {
+                out.extend(self.suspects_at(Some(t), depth + 1));
+            }
+        }
+        out
+    }
+
+    /// «Otras cargas» de una zona que el usuario confirmó que no son motor
+    /// aunque su nombre lo parezca, para la trazabilidad.
+    fn confirmed_at(&self, zone: Zone) -> Vec<String> {
+        let mut out = Vec::new();
+        for (i, panel) in self.project.panels.iter().enumerate() {
+            if self.zone[i] != zone {
+                continue;
+            }
+            for (c, circuit) in panel.circuits.iter().enumerate() {
+                if circuit.load.kind == crate::model::LoadKind::General
+                    && circuit.load.confirmed_general
+                    && crate::review::kind_from_name(&circuit.name).is_some()
+                {
+                    out.push(self.label(i, c));
+                }
+            }
+        }
+        out
     }
 
     /// Zona de la que sale el alimentador de un tablero.
@@ -1108,6 +1196,7 @@ impl<'a> Topology<'a> {
             steps,
             motors,
             incomplete,
+            suspected: self.suspects_at(zone, 0),
             line_to_neutral,
         })
     }
@@ -1274,6 +1363,14 @@ impl<'a> Topology<'a> {
                         .iter()
                         .map(|m| format!("{m}: sin datos, su aportación no está incluida")),
                 );
+                missing.extend(bus.suspected.iter().map(|m| {
+                    format!("{m}: parece motor o aire acondicionado y está como «Otra carga»; confirma que es otra carga o cámbiala de tipo")
+                }));
+                contributors.extend(
+                    self.confirmed_at(zone)
+                        .into_iter()
+                        .map(|m| format!("{m}: confirmada como otra carga, no aporta")),
+                );
                 bus.evaluation()
             }
             Err(issue) => {
@@ -1415,11 +1512,11 @@ fn check_breaker(
     };
     let icc = bus.total_ka;
     let (status, detail) = match breaker_ka {
-        Some(ka) if ka >= icc && !bus.incomplete.is_empty() => (
+        Some(ka) if ka >= icc && bus.open_items().is_some() => (
             Status::NotEvaluated,
             format!(
-                "no concluyente: {ka} kA ≥ {icc:.2} kA en {bus_name}, pero la falla no incluye {} sin datos",
-                motors_phrase(bus.incomplete.len())
+                "no concluyente: {ka} kA ≥ {icc:.2} kA en {bus_name}, pero {}",
+                bus.open_items().unwrap_or_default()
             ),
         ),
         Some(ka) if ka >= icc => (
@@ -1632,6 +1729,7 @@ pub(crate) fn study(
                     vec![Rule::InterruptingRating],
                 ),
             };
+        let suspected_loads = zones[&zone].as_ref().map_or(0, |b| b.suspected.len());
         let mut trace = topology.trace(zone, &zones[&zone], &place);
         trace.what = "Capacidad interruptiva frente a la falla estimada".into();
         let missing_ka = breakers.iter().filter(|b| b.ka.is_none()).count();
@@ -1676,6 +1774,7 @@ pub(crate) fn study(
             origin,
             issue,
             incomplete_motors,
+            suspected_loads,
             board_ka,
             status,
             evaluation,

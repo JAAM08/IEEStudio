@@ -31,6 +31,7 @@ fn circuit(
             outlets: None,
             motor: None,
             compressor: None,
+            confirmed_general: false,
         },
         length_m,
         has_neutral: false,

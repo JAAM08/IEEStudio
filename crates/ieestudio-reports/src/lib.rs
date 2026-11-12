@@ -609,6 +609,14 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             q(&hint.text())
         ));
     }
+    for label in &result.confirmed_general {
+        notes.push(format!(
+            "- Nota · #{};",
+            q(&format!(
+                "{label}: se confirmó como otra carga aunque su nombre parece de un motor; no aporta a la corriente de falla"
+            ))
+        ));
+    }
     out.push_str("\n= Observaciones\n");
     if notes.is_empty() {
         out.push_str("Todos los tramos cumplen y no hay avisos.\n");

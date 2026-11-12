@@ -608,6 +608,7 @@ impl QuickInput {
                 outlets: None,
                 motor,
                 compressor: None,
+                confirmed_general: false,
             },
             length_m: self.length_m,
             has_neutral: self.has_neutral,

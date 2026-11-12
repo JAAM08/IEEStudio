@@ -738,6 +738,19 @@ pub(crate) fn circuit_form(
         }
     })
     .on_hover_text(load_kind_hint(circuit.load.kind));
+    // Una «Otra carga» con nombre de motor: la confirmación de Revisar se ve
+    // y se cambia aquí (decisión 0029, D-3).
+    if circuit.load.kind == LoadKind::General
+        && ieestudio_project::review::kind_from_name(&circuit.name).is_some()
+    {
+        changed |= ui
+            .checkbox(
+                &mut circuit.load.confirmed_general,
+                "Confirmado: no es motor ni aire acondicionado",
+            )
+            .on_hover_text("Su nombre parece de un motor o de un aire acondicionado. Sin confirmar, la capacidad interruptiva de su zona queda no concluyente porque faltaría su aportación a la falla.")
+            .changed();
+    }
     // Primero los datos del equipo, que es lo que el tipo pide.
     let three_phase = circuit.kind == CircuitKind::ThreePhase;
     if let (LoadKind::Motor, Some(motor)) = (circuit.load.kind, circuit.load.motor.as_mut()) {

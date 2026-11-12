@@ -339,6 +339,7 @@ impl Doc {
             outlets: None,
             motor: None,
             compressor: None,
+            confirmed_general: false,
         };
         set_load_kind(&mut load, kind);
         let circuits = &mut self.project.panels[panel].circuits;

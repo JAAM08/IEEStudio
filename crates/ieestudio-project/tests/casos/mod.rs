@@ -34,6 +34,7 @@ pub fn lighting(id: &str, kind: CircuitKind, phases: &[Phase], watts: f64) -> Ci
             outlets: None,
             motor: None,
             compressor: None,
+            confirmed_general: false,
         },
         length_m: 10.0,
         has_neutral: kind == CircuitKind::LineToNeutral,
@@ -61,6 +62,7 @@ pub fn motor(id: &str, name: &str, hp: &str) -> Circuit {
                 service_factor_marked: true,
             }),
             compressor: None,
+            confirmed_general: false,
         },
         length_m: 15.0,
         has_neutral: false,
@@ -230,11 +232,23 @@ pub fn h03_bombas(as_motor: bool) -> Project {
                 outlets: None,
                 motor: None,
                 compressor: None,
+                confirmed_general: false,
             };
         }
         p.panels[0].circuits.push(c);
     }
     breakers(&mut p, 0, 10.0);
+    p
+}
+
+/// H-03: las mismas «Otras cargas» con «Es otra carga» confirmado.
+pub fn h03_bombas_confirmadas() -> Project {
+    let mut p = h03_bombas(false);
+    for c in &mut p.panels[0].circuits {
+        if c.id.starts_with("M-") {
+            c.load.confirmed_general = true;
+        }
+    }
     p
 }
 
@@ -393,6 +407,10 @@ pub fn all() -> Vec<(&'static str, Project)> {
         ),
         ("h03-bombas-como-otra-carga.iees", h03_bombas(false)),
         ("h03-bombas-como-motor.iees", h03_bombas(true)),
+        (
+            "h03-bombas-confirmadas-otra-carga.iees",
+            h03_bombas_confirmadas(),
+        ),
         ("h04-relacion-1-88.iees", h04_relacion_1_88()),
         (
             "h05-conexion-contradictoria.iees",
