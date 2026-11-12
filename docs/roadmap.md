@@ -82,13 +82,15 @@
 - Unifilar a pantalla completa en la vista guiada, desde Revisar y Memoria,
   con Revisión / Plano y exportar; el dibujo se guarda entre cuadros y solo
   se rehace cuando el proyecto cambia.
-- Falla por zonas de tensión (decisión 0026, propuesta): cada dato en su
-  nivel y sin valores supuestos en transformadores, acometida y motores;
-  motores según su ubicación, a través de la impedancia de su transformador;
-  estudio por partes cuando la fuente no tiene datos; un transformador sin
-  datos nunca hereda la falla de su primario; motores sin datos y cargas que
-  parecen motor avisados en el resultado del proyecto. Diagnóstico en
+- Auditoría del motor de falla (decisiones 0026, 0027 y 0028): cada dato en su
+  nivel y sin valores supuestos; estados Válido, No concluyente, Sin evaluar
+  y Dato inválido con «Cómo se obtuvo»; motores según su ubicación, a través
+  de la impedancia de su transformador; estudio por partes; avisos de
+  transformador capturado dos veces con confirmación. Informe en
   `auditoria-modelo-y-falla.md`.
+- Pendiente de esa auditoría: llevar los cuatro estados a los demás tramos
+  (conductor, protección, caída, tierra), conexión propia del secundario de
+  un transformador, longitudes de 0 m y valores iniciales de circuitos nuevos.
 
 ## Pendiente, en orden
 

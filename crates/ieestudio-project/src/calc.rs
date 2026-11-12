@@ -204,11 +204,14 @@ pub struct PanelResult {
     /// Conductores del secundario del transformador al tablero.
     pub secondary: Option<RunResult>,
     pub circuits: Vec<RunResult>,
-    /// Corriente de falla estimada en sus barras (decisiones 0023 y 0026).
+    /// Corriente de falla estimada en sus barras (decisiones 0023, 0026 y 0028).
     /// `None` si no se pudo estimar: la causa está en `fault_issue`.
     pub fault: Option<crate::fault::BusFault>,
     /// Por qué no hay corriente de falla en sus barras.
     pub fault_issue: Option<crate::fault::FaultIssue>,
+    /// Cómo se obtuvo la falla de sus barras, o qué falta. `None` si está
+    /// fuera de alcance.
+    pub fault_trace: Option<crate::evaluation::Trace>,
 }
 
 impl PanelResult {
@@ -264,6 +267,9 @@ pub struct ProjectResult {
     /// Circuitos de «Otra carga» cuyo nombre parece de un motor o de un aire
     /// acondicionado.
     pub kind_hints: Vec<crate::review::KindHint>,
+    /// Transformadores intermedios que pueden ser el de la acometida
+    /// capturado otra vez.
+    pub duplicate_flags: Vec<crate::review::DuplicateFlag>,
 }
 
 /// Corriente de un tramo que ya resolvió quien llama: circuitos de motor o de
@@ -1336,7 +1342,13 @@ impl<'a> Context<'a> {
                     Some(Err(e)) => vec![Check {
                         name: "Datos del equipo".to_string(),
                         status: Status::NotEvaluated,
-                        detail: format!("{e}; se calculó como carga general"),
+                        // Un dato que falta no es un dato inválido (0027).
+                        detail: match &e {
+                            Error::InvalidInput(msg) if msg.starts_with("falta") => {
+                                format!("{msg}; se calculó como carga general")
+                            }
+                            other => format!("{other}; se calculó como carga general"),
+                        },
                         references: vec![],
                     }],
                     None => vec![],
@@ -1388,6 +1400,7 @@ impl<'a> Context<'a> {
             circuits,
             fault: None,
             fault_issue: None,
+            fault_trace: None,
         });
         for child in self
             .children
@@ -1589,14 +1602,11 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         fails: tally(Status::Fails),
         not_evaluated: tally(Status::NotEvaluated),
         panels,
-        warnings: ctx
-            .warnings
-            .into_iter()
-            .chain(crate::review::transformer_warnings(project))
-            .collect(),
+        warnings: ctx.warnings,
         grounding_electrode,
         verdict,
         fault,
         kind_hints: crate::review::kind_hints(project),
+        duplicate_flags: crate::review::duplicate_flags(project),
     })
 }

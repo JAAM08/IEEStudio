@@ -361,6 +361,10 @@ pub struct Transformer {
     pub secondary_has_neutral: bool,
     #[serde(default)]
     pub secondary_overrides: Overrides,
+    /// El usuario confirmó que es un equipo distinto del transformador de la
+    /// acometida: no se vuelve a avisar de una posible captura doble.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub confirmed_distinct: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection: Option<Connection>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

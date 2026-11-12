@@ -1,5 +1,5 @@
 //! Capacidad interruptiva con la corriente de falla estimada (decisiones 0023
-//! y 0026).
+//! y 0028).
 //!
 //! La instalación se divide en **zonas de tensión**: la de la fuente y la del
 //! secundario de cada transformador intermedio. Todas las barras de una zona
@@ -31,6 +31,7 @@ use ieestudio_rules::{Profile, Rule};
 use serde::Serialize;
 
 use crate::calc::{Check, PanelResult, RunResult, Status};
+use crate::evaluation::{Datum, Evaluation, Trace};
 use crate::model::Project;
 use crate::procedure::Step;
 use crate::transformer::Rating;
@@ -79,6 +80,17 @@ pub struct BusFault {
     /// Motores que aportarían aquí pero no tienen datos: la falla está
     /// incompleta y nada que se compare con ella puede cumplir.
     pub incomplete: Vec<String>,
+}
+
+impl BusFault {
+    /// Válida, o no concluyente si le faltan motores.
+    pub fn evaluation(&self) -> Evaluation {
+        if self.incomplete.is_empty() {
+            Evaluation::Valid
+        } else {
+            Evaluation::Inconclusive
+        }
+    }
 }
 
 /// Un motor o compresor de la misma zona de tensión.
@@ -150,9 +162,21 @@ pub enum IssueKind {
     /// La fuente no tiene ningún dato: la capacidad interruptiva de lo que
     /// depende de ella queda fuera de alcance (decisión 0018).
     OutOfScope,
-    /// Se capturó un transformador o la acometida, pero un dato falta o no
-    /// sirve: queda sin evaluar.
+    /// Se capturó un transformador o la acometida, pero falta un dato:
+    /// queda sin evaluar.
     Incomplete,
+    /// Un dato capturado es inconsistente (potencia o impedancia que no es
+    /// mayor que cero, conexión que el sistema no tiene).
+    Invalid,
+}
+
+impl IssueKind {
+    pub fn evaluation(self) -> Evaluation {
+        match self {
+            IssueKind::Invalid => Evaluation::Invalid,
+            _ => Evaluation::NotEvaluated,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -169,6 +193,8 @@ pub struct FaultStudy {
     /// si la fuente no tiene datos o están incompletos: ver `source_issue`.
     pub source: Option<BusFault>,
     pub source_issue: Option<FaultIssue>,
+    /// Cómo se obtuvo la falla del punto de conexión, o por qué no.
+    pub source_trace: Trace,
     /// Fracción en que se redujo la impedancia de placa de los
     /// transformadores.
     pub impedance_tolerance: f64,
@@ -223,6 +249,11 @@ pub struct InterruptingGroup {
     /// Capacidad interruptiva capturada para el tablero, en kA.
     pub board_ka: Option<f64>,
     pub status: Status,
+    /// Qué tan completa es la verificación: la de la falla y la de la
+    /// comparación con los interruptores.
+    pub evaluation: Evaluation,
+    /// Cómo se obtuvo la falla del lugar y qué falta.
+    pub trace: Trace,
     pub breakers: Vec<BreakerVerdict>,
     pub references: Vec<ieestudio_rules::RuleReference>,
 }
@@ -232,14 +263,11 @@ impl InterruptingGroup {
     /// alcanza o la falla no incluye motores sin datos; «Sin evaluar» si
     /// falta un dato para comparar.
     pub fn label(&self) -> &'static str {
-        match self.status {
-            Status::Complies => "Cumple",
-            Status::Fails => "No cumple",
-            _ if self.short() > 0 => "No concluyente",
-            _ if self.fault_ka.is_some() && self.missing() == 0 && self.incomplete_motors > 0 => {
-                "No concluyente"
-            }
-            _ => "Sin evaluar",
+        match (self.evaluation, self.status) {
+            (Evaluation::Valid, Status::Complies) => "Cumple",
+            (Evaluation::Valid, Status::Fails) => "No cumple",
+            (Evaluation::Valid, _) => "Sin evaluar",
+            (other, _) => other.label(),
         }
     }
 
@@ -454,9 +482,10 @@ fn source_base(
     };
     if let Some(ka) = source.fault.available_ka {
         if !(ka.is_finite() && ka > 0.0) {
-            return Err(incomplete(
-                "la corriente de falla de la suministradora debe ser mayor que cero".into(),
-            ));
+            return Err(FaultIssue {
+                kind: IssueKind::Invalid,
+                reason: "la corriente de falla de la suministradora debe ser mayor que cero".into(),
+            });
         }
         let step = Step {
             title: "Corriente de falla de la suministradora".into(),
@@ -474,6 +503,20 @@ fn source_base(
         });
     };
     let what = |r: String| incomplete(format!("en el transformador de la acometida {r}"));
+    let invalid = |r: &str| FaultIssue {
+        kind: IssueKind::Invalid,
+        reason: format!("en el transformador de la acometida {r}"),
+    };
+    if substation.kva.is_some_and(|k| !(k.is_finite() && k > 0.0)) {
+        return Err(invalid("la potencia debe ser mayor que cero"));
+    }
+    if !substation.impedance_from_table
+        && substation
+            .impedance_percent
+            .is_some_and(|z| !(z.is_finite() && z > 0.0))
+    {
+        return Err(invalid("la impedancia debe ser mayor que cero"));
+    }
     let kva = substation
         .kva
         .ok_or_else(|| what("falta la potencia".into()))?;
@@ -739,11 +782,31 @@ impl<'a> Topology<'a> {
             kind: IssueKind::Incomplete,
             reason: format!("en el transformador de {id} {why}"),
         };
+        let invalid = |why: String| FaultIssue {
+            kind: IssueKind::Invalid,
+            reason: format!("en el transformador de {id} {why}"),
+        };
         let panel = &self.project.panels[t];
         let transformer = panel
             .transformer
             .as_ref()
             .expect("zona de un transformador");
+        let positive = |v: f64| v.is_finite() && v > 0.0;
+        if transformer.kva.is_some_and(|k| !positive(k)) {
+            return Err(invalid("la potencia debe ser mayor que cero".into()));
+        }
+        if transformer.impedance_percent.is_some_and(|z| !positive(z)) {
+            return Err(invalid("la impedancia debe ser mayor que cero".into()));
+        }
+        // Una conexión que el secundario no tiene es inconsistente, no un
+        // dato que falta.
+        let secondary_system = crate::connection::bus_system(self.project, t);
+        if transformer.kva.is_some() && panel.kind.reference_voltage(&secondary_system).is_err() {
+            return Err(invalid(format!(
+                "el secundario no admite la conexión del tablero ({})",
+                crate::connection::kind_phrase(panel.kind)
+            )));
+        }
         // El secundario no depende del primario: basta su corriente nominal.
         let secondary = crate::transformer::rating(
             transformer.kva,
@@ -781,6 +844,153 @@ impl<'a> Topology<'a> {
             motors,
             incomplete,
         })
+    }
+
+    /// Trazabilidad de la falla de una zona vista desde `place`.
+    fn trace(&self, zone: Zone, result: &Result<BusFault, FaultIssue>, place: &str) -> Trace {
+        let profile = self.profile;
+        let source = &self.project.source;
+        let shown = |v: Option<f64>, unit: &str| {
+            v.map_or("sin dato".to_string(), |x| format!("{x} {unit}"))
+        };
+        let system = |s: &System| match (s.line_to_line_v, s.line_to_neutral_v) {
+            (Some(ll), Some(ln)) => format!("{ll}/{ln} V"),
+            (Some(ll), None) => format!("{ll} V"),
+            (None, Some(ln)) => format!("{ln} V"),
+            (None, None) => "sin tensión".to_string(),
+        };
+        let mut inputs = Vec::new();
+        let mut assumptions = Vec::new();
+        let mut contributors = Vec::new();
+        match zone {
+            None => {
+                inputs.push(Datum::new("Sistema de suministro", system(&source.system)));
+                if let Some(ka) = source.fault.available_ka {
+                    inputs.push(Datum::new("Falla de la suministradora", format!("{ka} kA")));
+                } else if let Some(sub) = &source.substation {
+                    inputs.push(Datum::new(
+                        "Transformador de la acometida",
+                        shown(sub.kva, "kVA"),
+                    ));
+                    inputs.push(Datum::new(
+                        "Impedancia",
+                        if sub.impedance_from_table {
+                            "mínima de la tabla de la norma de fabricación".to_string()
+                        } else {
+                            shown(sub.impedance_percent, "%")
+                        },
+                    ));
+                    inputs.push(Datum::new("Primario", shown(sub.primary_kv, "kV")));
+                }
+            }
+            Some(t) => {
+                let panel = &self.project.panels[t];
+                let tr = panel
+                    .transformer
+                    .as_ref()
+                    .expect("zona de un transformador");
+                inputs.push(Datum::new(
+                    format!("Transformador intermedio de {}", panel.id),
+                    shown(tr.kva, "kVA"),
+                ));
+                inputs.push(Datum::new("Impedancia", shown(tr.impedance_percent, "%")));
+                inputs.push(Datum::new(
+                    "Primario",
+                    system(&crate::connection::feeder_system(self.project, t)),
+                ));
+                inputs.push(Datum::new("Secundario", system(&tr.secondary)));
+                inputs.push(Datum::new(
+                    "Conexión del tablero",
+                    crate::connection::kind_phrase(panel.kind),
+                ));
+            }
+        }
+        let mut missing = Vec::new();
+        let mut problems = Vec::new();
+        let evaluation = match result {
+            Ok(bus) => {
+                match &bus.origin {
+                    FaultOrigin::Supplier => {
+                        assumptions
+                            .push("Dato de la suministradora en el punto de conexión.".into());
+                        contributors.push(format!("Suministradora: {:.2} kA", bus.base_ka));
+                    }
+                    FaultOrigin::Substation => {
+                        assumptions.push(
+                            "Bus infinito: la red de media tensión se toma sin impedancia.".into(),
+                        );
+                        contributors.push(format!(
+                            "Transformador de la acometida: {:.2} kA",
+                            bus.base_ka
+                        ));
+                    }
+                    FaultOrigin::Transformer { panel } => {
+                        assumptions.push(format!("Bus infinito: la red aguas arriba del transformador de {panel} se toma sin impedancia; ya incluye la aportación de los motores de arriba."));
+                        contributors
+                            .push(format!("Transformador de {panel}: {:.2} kA", bus.base_ka));
+                    }
+                }
+                if bus.origin.infinite_bus() {
+                    let from_table = zone.is_none()
+                        && source
+                            .substation
+                            .as_ref()
+                            .is_some_and(|s| s.impedance_from_table);
+                    assumptions.push(if from_table {
+                        "Impedancia mínima de la tabla de la norma de fabricación, que ya incluye la tolerancia.".into()
+                    } else {
+                        format!(
+                            "Impedancia de placa reducida {:.0} % por la tolerancia de fabricación.",
+                            profile.parameters.fault_impedance_tolerance * 100.0
+                        )
+                    });
+                }
+                assumptions.push(
+                    "Sin descontar la impedancia de los alimentadores: es una cota superior."
+                        .into(),
+                );
+                if let Some(m) = &bus.motors {
+                    assumptions.push(format!(
+                        "Motores de esta tensión: {} veces su corriente a plena carga; los de otra tensión, a través de la impedancia de su transformador (decisión 0028).",
+                        m.multiplier
+                    ));
+                    contributors.extend(
+                        m.motors
+                            .iter()
+                            .map(|s| format!("{}: {:.2} A a plena carga", s.label, s.full_load_a)),
+                    );
+                    contributors.extend(m.through.iter().map(|t| {
+                        format!(
+                            "Motores detrás del transformador de {}: {:.1} A en estas barras",
+                            t.panel, t.contribution_a
+                        )
+                    }));
+                }
+                missing.extend(
+                    bus.incomplete
+                        .iter()
+                        .map(|m| format!("{m}: sin datos, su aportación no está incluida")),
+                );
+                bus.evaluation()
+            }
+            Err(issue) => {
+                match issue.kind {
+                    IssueKind::Invalid => problems.push(capitalize(&issue.reason)),
+                    _ => missing.push(capitalize(&issue.reason)),
+                }
+                issue.kind.evaluation()
+            }
+        };
+        Trace {
+            evaluation,
+            what: "Corriente de falla estimada".into(),
+            place: place.to_string(),
+            inputs,
+            assumptions,
+            contributors,
+            missing,
+            problems,
+        }
     }
 
     fn motor_steps(&self, m: &MotorContribution, base_ka: f64, motor_ka: f64) -> Vec<Step> {
@@ -887,7 +1097,12 @@ fn check_breaker(
                 name: INTERRUPTING.into(),
                 status: Status::NotEvaluated,
                 detail: format!(
-                    "sin evaluar: no se pudo estimar la falla en {bus_name} porque {}",
+                    "{}: no se pudo estimar la falla en {bus_name} porque {}",
+                    if issue.kind == IssueKind::Invalid {
+                        "dato inválido"
+                    } else {
+                        "sin evaluar"
+                    },
                     issue.reason
                 ),
                 references: vec![profile.reference(Rule::InterruptingRating)],
@@ -1059,6 +1274,10 @@ pub(crate) fn study(
             Ok(bus) => result.fault = Some(bus.clone()),
             Err(issue) => result.fault_issue = Some(issue.clone()),
         }
+        let own_out_of_scope = matches!(own, Err(i) if i.kind == IssueKind::OutOfScope);
+        if !own_out_of_scope {
+            result.fault_trace = Some(topology.trace(topology.zone[i], own, &own_name));
+        }
     }
 
     let mut groups = Vec::new();
@@ -1098,6 +1317,41 @@ pub(crate) fn study(
                 vec![Rule::InterruptingRating],
             ),
         };
+        let mut trace = topology.trace(zone, &zones[&zone], &place);
+        trace.what = "Capacidad interruptiva frente a la falla estimada".into();
+        let missing_ka = breakers.iter().filter(|b| b.ka.is_none()).count();
+        if missing_ka > 0 {
+            trace.missing.push(if missing_ka == 1 {
+                "Capacidad interruptiva de 1 interruptor o la del tablero".to_string()
+            } else {
+                format!("Capacidad interruptiva de {missing_ka} interruptores o la del tablero")
+            });
+        }
+        let comparison = match fault_ka {
+            Some(fault) => {
+                let short = breakers
+                    .iter()
+                    .filter(|b| b.ka.is_some_and(|ka| ka < fault))
+                    .count();
+                if short > 0 {
+                    trace.problems.push(if short == 1 {
+                        "1 interruptor no alcanza la cota superior: requiere estudio de cortocircuito".to_string()
+                    } else {
+                        format!("{short} interruptores no alcanzan la cota superior: requiere estudio de cortocircuito")
+                    });
+                }
+                if missing_ka > 0 {
+                    Evaluation::NotEvaluated
+                } else if short > 0 {
+                    Evaluation::Inconclusive
+                } else {
+                    Evaluation::Valid
+                }
+            }
+            None => Evaluation::NotEvaluated,
+        };
+        let evaluation = trace.evaluation.worst(comparison);
+        trace.evaluation = evaluation;
         groups.push(InterruptingGroup {
             panel,
             place,
@@ -1107,6 +1361,8 @@ pub(crate) fn study(
             incomplete_motors,
             board_ka,
             status,
+            evaluation,
+            trace,
             breakers,
             references: references.iter().map(|r| profile.reference(*r)).collect(),
         });
@@ -1138,9 +1394,11 @@ pub(crate) fn study(
             }
         }
     }
+    let source_trace = topology.trace(None, source, "el punto de conexión");
     Some(FaultStudy {
         source: source_bus,
         source_issue,
+        source_trace,
         impedance_tolerance: profile.parameters.fault_impedance_tolerance,
         multiplier: profile.parameters.fault_motor_multiplier,
         incomplete_motors,

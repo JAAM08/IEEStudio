@@ -2,7 +2,7 @@
 
 **Estado:** aceptada (noviembre de 2026). Amplía la 0018: el estudio de
 cortocircuito completo sigue en la suite; dentro de IEEStudio entra una
-estimación conservadora. La 0026 corrige la aportación de motores (por zona
+estimación conservadora. La 0028 corrige la aportación de motores (por zona
 de tensión, no todos en todas las barras), el estudio sin datos de la fuente
 (por partes) y los transformadores con datos incompletos (sin evaluar, nunca
 la falla del primario).

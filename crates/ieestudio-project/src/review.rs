@@ -113,43 +113,70 @@ pub fn kind_hints(project: &Project) -> Vec<KindHint> {
     out
 }
 
-/// Transformadores intermedios que parecen una segunda captura del
-/// transformador de la acometida: el secundario con la misma tensión que el
-/// primario, o el primero de la instalación con la misma potencia que el de
-/// la acometida. No se rechazan (un transformador de aislamiento existe),
-/// pero se avisa.
-pub fn transformer_warnings(project: &Project) -> Vec<String> {
+/// Un transformador intermedio que puede ser el de la acometida capturado
+/// otra vez. Es una advertencia: no se bloquea nada y el usuario puede
+/// confirmar que son equipos distintos (`Transformer::confirmed_distinct`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DuplicateFlag {
+    /// Índice del tablero en el proyecto.
+    pub panel: usize,
+    pub panel_id: String,
+    /// Por qué parece el mismo equipo, y qué hacer.
+    pub reason: String,
+}
+
+/// Transformadores intermedios que parecen una segunda captura del de la
+/// acometida, según su lugar en la instalación y sus datos:
+///
+/// - **Relación 1:1**: el secundario tiene la tensión de su primario. Puede
+///   ser legítimo (aislamiento), así que solo se avisa.
+/// - **Junto a la acometida y con su misma potencia**: sale directo del
+///   punto de conexión, la acometida tiene transformador y los dos tienen la
+///   misma potencia. Dos transformadores de igual potencia en otros lugares
+///   de la instalación no se marcan.
+pub fn duplicate_flags(project: &Project) -> Vec<DuplicateFlag> {
     let mut out = Vec::new();
     for (i, panel) in project.panels.iter().enumerate() {
         let Some(t) = &panel.transformer else {
             continue;
         };
-        let primary = crate::connection::feeder_system(project, i);
-        let same_voltage = primary.line_to_line_v == t.secondary.line_to_line_v
-            && primary.line_to_neutral_v == t.secondary.line_to_neutral_v;
-        if same_voltage {
-            out.push(format!(
-                "El transformador intermedio de {} tiene la misma tensión en el primario y en el secundario. Elige la tensión de su secundario; si es el transformador de CFE o la subestación que alimenta toda la instalación, quítalo del tablero y captúralo una sola vez en la acometida del proyecto",
-                panel.id
-            ));
+        if t.confirmed_distinct {
             continue;
         }
-        let from_source = panel.parent.is_none();
-        let same_rating = project
-            .source
-            .substation
-            .as_ref()
+        let primary = crate::connection::feeder_system(project, i);
+        let one_to_one = primary.line_to_line_v == t.secondary.line_to_line_v
+            && primary.line_to_neutral_v == t.secondary.line_to_neutral_v;
+        let service = project.source.substation.as_ref();
+        let beside_service = panel.parent.is_none() && service.is_some();
+        let same_rating = service
             .and_then(|s| s.kva)
             .zip(t.kva)
             .is_some_and(|(a, b)| a == b);
-        if from_source && same_rating {
-            out.push(format!(
-                "El transformador intermedio de {} tiene la misma potencia que el de la acometida y sale del punto de conexión. Si es el mismo equipo, quítalo del tablero: ya está capturado en la acometida",
-                panel.id
-            ));
-        }
+        let reason = if one_to_one && beside_service {
+            "tiene relación 1:1 y sale directo de la acometida, que ya tiene transformador: parece el mismo equipo capturado dos veces. Si lo es, quítalo del tablero; si es un transformador de aislamiento, confirma que es otro equipo".to_string()
+        } else if one_to_one {
+            "tiene la misma tensión en el primario y en el secundario (relación 1:1). Si es un transformador de aislamiento, confirma que es otro equipo; si no, elige la tensión de su secundario".to_string()
+        } else if beside_service && same_rating {
+            "sale directo de la acometida y tiene la misma potencia que su transformador: puede ser el mismo equipo capturado dos veces. Si lo es, quítalo del tablero; si no, confirma que es otro equipo".to_string()
+        } else {
+            continue;
+        };
+        out.push(DuplicateFlag {
+            panel: i,
+            panel_id: panel.id.clone(),
+            reason,
+        });
     }
     out
+}
+
+impl DuplicateFlag {
+    pub fn text(&self) -> String {
+        format!(
+            "El transformador intermedio de {} {}",
+            self.panel_id, self.reason
+        )
+    }
 }
 
 #[cfg(test)]

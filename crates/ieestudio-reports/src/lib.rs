@@ -597,6 +597,12 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             q(warning)
         ));
     }
+    for flag in &result.duplicate_flags {
+        notes.push(format!(
+            "- #text(fill: duda, font: \"IBM Plex Sans SmBld\")[Aviso] · #{};",
+            q(&flag.text())
+        ));
+    }
     for hint in &result.kind_hints {
         notes.push(format!(
             "- #text(fill: duda, font: \"IBM Plex Sans SmBld\")[Aviso] · #{};",
@@ -613,7 +619,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
 
     if let Some(study) = &result.fault {
         out.push_str("\n= Corriente de falla y capacidad interruptiva\n");
-        out.push_str("#text(fill: gris)[Método conservador. Con el dato de la suministradora se usa tal cual; con un transformador, por bus infinito: la red aguas arriba se toma sin impedancia. No se descuenta la impedancia de los alimentadores, así que cada valor es una cota superior. Los motores de cada tensión aportan completos y los de otra tensión llegan a través de la impedancia de su transformador (decisión 0026). Un interruptor que alcanza la falla cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n");
+        out.push_str("#text(fill: gris)[Método conservador. Con el dato de la suministradora se usa tal cual; con un transformador, por bus infinito: la red aguas arriba se toma sin impedancia. No se descuenta la impedancia de los alimentadores, así que cada valor es una cota superior. Los motores de cada tensión aportan completos y los de otra tensión llegan a través de la impedancia de su transformador (decisión 0028). Un interruptor que alcanza la falla cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n");
         out.push_str("\n== Punto de conexión\n");
         match (&study.source, &study.source_issue) {
             (Some(bus), _) => {
@@ -685,6 +691,17 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                     capitalize(interrupting_detail(&group.summary()))
                 ))
             );
+            // Cómo se obtuvo: datos, hipótesis, lo que aporta y lo que falta.
+            for (title, items) in group.trace.sections() {
+                let _ = writeln!(
+                    out,
+                    "#text(size: 8.5pt, fill: gris, font: \"IBM Plex Sans SmBld\")[#{};]",
+                    q(title)
+                );
+                for item in items {
+                    let _ = writeln!(out, "#text(size: 8.5pt)[- #{};]", q(&item));
+                }
+            }
             let rows: Vec<(&str, String)> = group
                 .breakers
                 .iter()

@@ -181,42 +181,16 @@ pub fn number(
     .changed()
 }
 
-/// Dato opcional: un número o nada. Sin dato muestra un botón para capturarlo.
+/// Dato opcional que empieza vacío y se escribe directo; nunca se propone un
+/// valor (antes «Capturar» ponía uno). `_example` queda por compatibilidad.
 pub fn optional_number(
     ui: &mut egui::Ui,
     value: &mut Option<f64>,
-    default: f64,
+    _example: f64,
     suffix: &str,
 ) -> bool {
-    let mut changed = false;
-    ui.horizontal(|ui| match value {
-        Some(v) => {
-            changed |= ui
-                .add(
-                    egui::DragValue::new(v)
-                        .speed(0.1)
-                        .range(0.1..=10_000.0)
-                        .max_decimals(2)
-                        .suffix(suffix),
-                )
-                .changed();
-            if ui
-                .small_button(icon::X)
-                .on_hover_text("Quitar el dato")
-                .clicked()
-            {
-                *value = None;
-                changed = true;
-            }
-        }
-        None => {
-            if ui.button("Capturar").clicked() {
-                *value = Some(default);
-                changed = true;
-            }
-        }
-    });
-    changed
+    let id = ui.next_auto_id();
+    blank_number_at(ui, id, value, suffix)
 }
 
 /// Dato de placa que empieza vacío: nunca se propone un valor. Mientras no
@@ -227,7 +201,10 @@ pub fn blank_number(
     value: &mut Option<f64>,
     suffix: &str,
 ) -> bool {
-    let id = egui::Id::new(("dato-de-placa", id));
+    blank_number_at(ui, egui::Id::new(("dato-de-placa", id)), value, suffix)
+}
+
+fn blank_number_at(ui: &mut egui::Ui, id: egui::Id, value: &mut Option<f64>, suffix: &str) -> bool {
     let shown = |v: &Option<f64>| v.map_or(String::new(), |x| format!("{x}"));
     let mut text = ui
         .data_mut(|d| d.get_temp::<String>(id))
@@ -722,4 +699,35 @@ pub fn phase_picker(
             changed
         }
     }
+}
+
+/// Cómo se obtuvo un resultado: datos, hipótesis, lo que contribuye, lo que
+/// falta y los problemas, plegado. El mismo formato en todas las pantallas.
+pub fn trace_ui(
+    ui: &mut egui::Ui,
+    p: &crate::theme::Palette,
+    salt: impl std::hash::Hash + std::fmt::Debug,
+    trace: &ieestudio_project::evaluation::Trace,
+) {
+    use egui::RichText;
+    egui::CollapsingHeader::new(
+        RichText::new(format!("Cómo se obtuvo · {}", trace.evaluation.label()))
+            .size(12.0)
+            .color(p.ink2),
+    )
+    .id_salt(("traza", salt))
+    .show(ui, |ui| {
+        for (title, items) in trace.sections() {
+            let color = match title {
+                "Falta" => p.warn,
+                "Problemas" => p.bad,
+                _ => p.ink2,
+            };
+            ui.label(RichText::new(title).size(11.5).strong().color(color));
+            for item in items {
+                ui.add(egui::Label::new(RichText::new(format!("• {item}")).size(11.5)).wrap());
+            }
+            ui.add_space(2.0);
+        }
+    });
 }

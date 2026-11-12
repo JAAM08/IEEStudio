@@ -704,7 +704,15 @@ fn panel_header(project: &Project, panel: usize, result: &PanelResult) -> Vec<(S
     .chain(board_line(&p.board))
     .chain(result.fault.as_ref().map(|f| {
         (
-            format!("Icc = {:.2} kA ({})", f.total_ka, origin_text(&f.origin)),
+            if f.incomplete.is_empty() {
+                format!("Icc = {:.2} kA ({})", f.total_ka, origin_text(&f.origin))
+            } else {
+                format!(
+                    "Icc = {:.2} kA ({}, INCOMPLETA: FALTAN MOTORES)",
+                    f.total_ka,
+                    origin_text(&f.origin)
+                )
+            },
             Font::Regular,
             Ink::Text,
         )

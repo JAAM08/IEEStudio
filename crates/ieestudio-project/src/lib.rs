@@ -7,6 +7,7 @@ pub mod balance;
 mod calc;
 pub mod connection;
 mod demand;
+pub mod evaluation;
 pub mod example;
 pub mod fault;
 mod model;

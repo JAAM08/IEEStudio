@@ -1830,6 +1830,55 @@ enum CardAction {
     Go(usize),
 }
 
+/// Aviso en Revisar: un transformador intermedio que puede ser el de la
+/// acometida capturado dos veces. No bloquea nada: «Son equipos distintos» lo
+/// confirma y el aviso ya no sale.
+fn duplicate_review(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<CardAction> {
+    let flags = doc
+        .result
+        .as_ref()
+        .map(|r| r.duplicate_flags.clone())
+        .unwrap_or_default();
+    if flags.is_empty() {
+        return None;
+    }
+    let mut action = None;
+    ui.add_space(20.0);
+    label_caps(
+        ui,
+        p,
+        &format!("¿Transformador capturado dos veces? · {}", flags.len()),
+    );
+    for flag in &flags {
+        egui::Frame::new()
+            .fill(p.warn.gamma_multiply(0.06))
+            .stroke(egui::Stroke::new(1.0, p.warn.gamma_multiply(0.6)))
+            .corner_radius(8)
+            .inner_margin(egui::Margin::symmetric(14, 10))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width() - 2.0);
+                ui.add(egui::Label::new(RichText::new(format!("{} {}.", icon::WARNING, flag.text())).size(12.5)).wrap());
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("Son equipos distintos")
+                        .on_hover_text("El aviso deja de salir; se guarda con el proyecto y se puede quitar en la ficha del tablero.")
+                        .clicked()
+                    {
+                        if let Some(t) = doc.project.panels[flag.panel].transformer.as_mut() {
+                            t.confirmed_distinct = true;
+                            action = Some(CardAction::Changed);
+                        }
+                    }
+                    if ui.button("Ir al tablero").clicked() {
+                        action = Some(CardAction::Go(flag.panel));
+                    }
+                });
+            });
+        ui.add_space(6.0);
+    }
+    action
+}
+
 /// Tarjeta de Revisar para la capacidad interruptiva de un lugar: qué pasa,
 /// el dato que la resuelve y los interruptores que abarca.
 fn interrupting_card(
@@ -1913,6 +1962,7 @@ fn interrupting_card(
                     }
                 }
             }
+            crate::widgets::trace_ui(ui, p, &group.place, &group.trace);
             if group.breakers.len() > 1 {
                 egui::CollapsingHeader::new(
                     muted(p, format!("Los {} interruptores", group.breakers.len())).size(12.5),
@@ -2086,8 +2136,17 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                         if !f.incomplete.is_empty() {
                                             hover.push_str(&format!("\nNo incluye: {}", f.incomplete.join("; ")));
                                         }
-                                        ui.label(RichText::new(format!("{:.2} kA", f.total_ka)).monospace())
-                                            .on_hover_text(hover);
+                                        let incomplete = !f.incomplete.is_empty();
+                                        ui.label(
+                                            RichText::new(if incomplete {
+                                                format!("{:.2} kA · incompleta", f.total_ka)
+                                            } else {
+                                                format!("{:.2} kA", f.total_ka)
+                                            })
+                                            .monospace()
+                                            .color(if incomplete { p.warn } else { p.ink }),
+                                        )
+                                        .on_hover_text(hover);
                                         ui.end_row();
                                     }
                                 });
@@ -2156,6 +2215,17 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             doc.selection = selection;
                             doc.edited();
                             go = Some(Step::Circuits);
+                        }
+                    }
+
+                    // Transformadores que pueden ser el de la acometida otra vez.
+                    if let Some(action) = duplicate_review(ui, p, doc) {
+                        match action {
+                            CardAction::Changed => doc.edited(),
+                            CardAction::Go(i) => {
+                                doc.selection = Selection::Feeder(i);
+                                go = Some(Step::Panels);
+                            }
                         }
                     }
 

@@ -255,6 +255,12 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
     let mut changed = false;
     let fault = doc.panel_result(i).and_then(|r| r.fault.clone());
     let fault_issue = doc.panel_result(i).and_then(|r| r.fault_issue.clone());
+    let fault_trace = doc.panel_result(i).and_then(|r| r.fault_trace.clone());
+    let duplicate = doc
+        .result
+        .as_ref()
+        .ok()
+        .and_then(|r| r.duplicate_flags.iter().find(|f| f.panel == i).cloned());
     // El interruptor del alimentador está en el tablero de donde sale.
     let upstream_ka = doc.project.panels[i]
         .parent
@@ -380,6 +386,9 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
             &format!("Corriente de falla en las barras de {}", panel.id),
             bus,
         );
+    }
+    if let Some(trace) = &fault_trace {
+        crate::widgets::trace_ui(ui, p, ("barras", i), trace);
         // La verificación del tablero: sus interruptores contra esa falla.
         if let Some(group) = &group {
             ui.add_space(4.0);
@@ -423,11 +432,31 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
             secondary_length_m: None,
             secondary_has_neutral: true,
             secondary_overrides: Overrides::default(),
+            confirmed_distinct: false,
         });
         changed = true;
     }
     let mut show_secondary = false;
+    if let Some(flag) = &duplicate {
+        ui.add(
+            egui::Label::new(
+                RichText::new(format!("{} {}.", icon::WARNING, flag.text()))
+                    .color(p.warn)
+                    .size(11.5),
+            )
+            .wrap(),
+        );
+    }
     if let Some(t) = panel.transformer.as_mut() {
+        if duplicate.is_some() || t.confirmed_distinct {
+            changed |= ui
+                .checkbox(
+                    &mut t.confirmed_distinct,
+                    "Es un equipo distinto del transformador de la acometida",
+                )
+                .on_hover_text("Con esto ya no se avisa de una posible captura doble.")
+                .changed();
+        }
         property(ui, p, "Potencia", |ui| {
             changed |= blank_number(ui, ("kva-transformador", i), &mut t.kva, "kVA");
         });
