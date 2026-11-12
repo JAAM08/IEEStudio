@@ -91,13 +91,27 @@
 - Pendiente de esa auditoría: llevar los cuatro estados a los demás tramos
   (conductor, protección, caída, tierra), conexión propia del secundario de
   un transformador, longitudes de 0 m y valores iniciales de circuitos nuevos.
+- Auditoría independiente de Fable (`auditoria-fable-pr11.md`): aprobado con
+  observaciones H-01 a H-18. Plan de trabajo hacia la 1.0 en `plan-1.0.md`.
+- Etapa 0 del plan: cada hallazgo de las dos auditorías tiene un caso
+  reproducible (`tools/auditoria.sh`, `etapa-0-linea-base.md`) y las
+  decisiones D-1 a D-8 están planteadas en `decisiones-pendientes-d1-d8.md`.
 
 ## Pendiente, en orden
 
 
-- Rediseño, fases 2 y 3: tablet y teléfono, llevando la vista guiada a una
-  vista por paso. Antes, una prueba en un teléfono real de egui en el
-  navegador (teclado virtual, desplazamiento).
+El orden y el detalle están en `plan-1.0.md`. En resumen:
+
+- Etapa 1: cerrar los riesgos de cálculo y de dictamen (H-01 a H-07, H-10 y
+  H-11), después de que Antonio apruebe D-1 a D-3, D-5 y D-6.
+- Etapa 2: pendientes 17 a 20 de Opus y hallazgos menores H-12 a H-18.
+- Etapa 4: unifilar en el navegador y cadena de publicación (versión
+  visible, actualización del service worker, imágenes del sitio).
+- Etapa 5: rendimiento, incluido el tamaño del `.wasm` (50.7 MB).
+- Etapas 7 y 8: una sola interfaz adaptativa para escritorio, tablet y
+  teléfono (sustituye la idea de llevar la vista guiada a una vista por
+  paso). Antes, una prueba en un teléfono real de egui en el navegador
+  (teclado virtual, desplazamiento).
 - Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
   plantillas de circuito.
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.

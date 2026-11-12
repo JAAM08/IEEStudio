@@ -1,0 +1,247 @@
+{
+  "format_version": 3,
+  "name": "Caso de auditoría",
+  "profile": "nom-001-sede-2012",
+  "info": {
+    "client": "",
+    "location": "",
+    "prepared_by": "",
+    "responsible": "",
+    "license": "",
+    "revision": "",
+    "date": ""
+  },
+  "occupancy": "dwellings",
+  "settings": {
+    "branch_drop_limit_percent": 3.0,
+    "feeder_drop_limit_percent": 2.0,
+    "total_drop_limit_percent": 5.0,
+    "ambient_c": 30.0,
+    "material": "Copper",
+    "insulation": "Thw",
+    "wet_location": false,
+    "conduit": "Emt",
+    "bare_grounding": true,
+    "resistance_temperature_c": null,
+    "include_iec_ratings": false,
+    "imbalance_warning_percent": 5.0,
+    "largest_single_size": "500"
+  },
+  "source": {
+    "name": "Acometida",
+    "system": {
+      "line_to_line_v": 480.0,
+      "line_to_neutral_v": 277.0
+    },
+    "supplier": "CFE",
+    "meter": true,
+    "fault": {
+      "available_ka": 25.0
+    }
+  },
+  "panels": [
+    {
+      "id": "TG",
+      "name": "Tablero TG",
+      "parent": null,
+      "kind": "ThreePhase",
+      "feeder": {
+        "length_m": 15.0,
+        "demand": "Full",
+        "has_neutral": true,
+        "overrides": {
+          "size": null,
+          "conductors_per_phase": null,
+          "material": null,
+          "insulation": null,
+          "conduit": null,
+          "nipple": false,
+          "nonlinear": false,
+          "other_current_carrying_conductors": 0,
+          "breaker": {
+            "interrupting_ka": 35.0
+          }
+        }
+      },
+      "areas": [
+        {
+          "description": "Área de prueba",
+          "occupancy": null,
+          "m2": 10.0
+        }
+      ],
+      "board": {
+        "interrupting_ka": 35.0
+      },
+      "circuits": [
+        {
+          "id": "A-1",
+          "name": "Alumbrado A-1",
+          "kind": "LineToNeutral",
+          "phases": [
+            "A"
+          ],
+          "load": {
+            "power_w": 800.0,
+            "power_factor": 1.0,
+            "continuous": false,
+            "kind": "Lighting"
+          },
+          "length_m": 10.0,
+          "has_neutral": true,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        },
+        {
+          "id": "A-2",
+          "name": "Alumbrado A-2",
+          "kind": "LineToNeutral",
+          "phases": [
+            "B"
+          ],
+          "load": {
+            "power_w": 800.0,
+            "power_factor": 1.0,
+            "continuous": false,
+            "kind": "Lighting"
+          },
+          "length_m": 10.0,
+          "has_neutral": true,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        },
+        {
+          "id": "A-3",
+          "name": "Alumbrado A-3",
+          "kind": "LineToNeutral",
+          "phases": [
+            "C"
+          ],
+          "load": {
+            "power_w": 800.0,
+            "power_factor": 1.0,
+            "continuous": false,
+            "kind": "Lighting"
+          },
+          "length_m": 10.0,
+          "has_neutral": true,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "TF-1",
+      "name": "Tablero TF-1",
+      "parent": "TG",
+      "kind": "ThreePhase",
+      "feeder": {
+        "length_m": 15.0,
+        "demand": "Full",
+        "has_neutral": true,
+        "overrides": {
+          "size": null,
+          "conductors_per_phase": null,
+          "material": null,
+          "insulation": null,
+          "conduit": null,
+          "nipple": false,
+          "nonlinear": false,
+          "other_current_carrying_conductors": 0,
+          "breaker": {
+            "interrupting_ka": 35.0
+          }
+        }
+      },
+      "areas": [
+        {
+          "description": "Área de prueba",
+          "occupancy": null,
+          "m2": 10.0
+        }
+      ],
+      "transformer": {
+        "impedance_percent": 3.0,
+        "secondary": {
+          "line_to_line_v": 220.0,
+          "line_to_neutral_v": 127.0
+        },
+        "secondary_protection": true,
+        "secondary_length_m": 3.0,
+        "secondary_has_neutral": true,
+        "secondary_overrides": {
+          "size": null,
+          "conductors_per_phase": null,
+          "material": null,
+          "insulation": null,
+          "conduit": null,
+          "nipple": false,
+          "nonlinear": false,
+          "other_current_carrying_conductors": 0,
+          "breaker": {
+            "interrupting_ka": 10.0
+          }
+        }
+      },
+      "board": {
+        "interrupting_ka": 10.0
+      },
+      "circuits": [
+        {
+          "id": "M-1",
+          "name": "Motor 10 hp",
+          "kind": "ThreePhase",
+          "phases": [],
+          "load": {
+            "power_w": 0.0,
+            "power_factor": 0.85,
+            "continuous": false,
+            "kind": "Motor",
+            "motor": {
+              "hp": "10",
+              "motor_type": "SquirrelCage",
+              "nameplate_a": null,
+              "service_factor_marked": true
+            }
+          },
+          "length_m": 15.0,
+          "has_neutral": false,
+          "overrides": {
+            "size": null,
+            "conductors_per_phase": null,
+            "material": null,
+            "insulation": null,
+            "conduit": null,
+            "nipple": false,
+            "nonlinear": false,
+            "other_current_carrying_conductors": 0
+          }
+        }
+      ]
+    }
+  ]
+}

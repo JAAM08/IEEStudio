@@ -35,4 +35,7 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0027 | [Estados de evaluación, resultados parciales y trazabilidad](0027-estados-y-trazabilidad.md) | Aceptada; por ahora en el estudio de falla |
 | 0028 | [Contribución de motores y propagación de la corriente de falla](0028-motores-y-propagacion-de-la-falla.md) | Aceptada |
 
-El estado del proyecto y lo pendiente están en `../roadmap.md`.
+El estado del proyecto y lo pendiente están en `../roadmap.md`. Las auditorías del
+PR #11 están en `../auditoria-modelo-y-falla.md` (Opus) y
+`../auditoria-fable-pr11.md` (Fable); las decisiones que esperan aprobación,
+en `../decisiones-pendientes-d1-d8.md`.
