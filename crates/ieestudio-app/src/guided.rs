@@ -2126,12 +2126,16 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                     if let Some(f) = &panel.fault {
                                         ui.label(muted(
                                             p,
-                                            if f.origin.infinite_bus() { "Falla (bus infinito)" } else { "Falla (suministradora)" },
+                                            match (f.origin.infinite_bus(), f.line_to_neutral.is_some()) {
+                                                (true, true) => "Falla (bus infinito, F-N)",
+                                                (true, false) => "Falla (bus infinito)",
+                                                _ => "Falla (suministradora)",
+                                            },
                                         ));
                                         let mut hover = if f.motor_ka > 0.0 {
-                                            format!("{:.2} kA {} más {:.3} kA de aportación de motores", f.base_ka, f.origin.basis(), f.motor_ka)
+                                            format!("{:.2} kA {} más {:.3} kA de aportación de motores", f.base_ka, f.basis(), f.motor_ka)
                                         } else {
-                                            format!("{:.2} kA {}; ningún motor aporta a estas barras", f.base_ka, f.origin.basis())
+                                            format!("{:.2} kA {}; ningún motor aporta a estas barras", f.base_ka, f.basis())
                                         };
                                         if !f.incomplete.is_empty() {
                                             hover.push_str(&format!("\nNo incluye: {}", f.incomplete.join("; ")));

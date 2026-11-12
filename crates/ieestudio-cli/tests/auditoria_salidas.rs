@@ -146,3 +146,48 @@ fn las_salidas_abren_todos_los_casos() {
         assert!(cli(&name).contains("Verificación normativa"), "{name}");
     }
 }
+
+// -------------------------------------------------------------- H-01
+
+/// H-01 (etapa 1A). Las cuatro salidas dicen lo mismo del caso de 25 kVA,
+/// 240/120 V e interruptores de 5 kA: 6.44 kA de fase a neutro, no
+/// concluyente, con el factor y su fuente.
+#[test]
+fn h01_las_salidas_dicen_fase_a_neutro() {
+    let case = "h01-acometida-240-120.iees";
+
+    let svg = plan_svg(case);
+    assert!(
+        svg.contains("Icc = 6.44 kA (BUS INFINITO, FASE A NEUTRO)"),
+        "unifilar: {:?}",
+        lines_with(&svg, "Icc")
+    );
+    assert!(
+        svg.contains("FASE A NEUTRO es 1.67 veces la de fase a fase"),
+        "nota del unifilar: {:?}",
+        lines_with(&svg, "Icc:")
+    );
+
+    let source = report(case);
+    assert!(source.contains("Icc F-N = 1.67 · 3.86 kA = 6.44 kA"));
+    assert!(source.contains("estimada como 1.67 veces la de fase a fase"));
+    assert!(source.contains("por bus infinito, de fase a neutro"));
+
+    let out = cli(case);
+    assert!(
+        out.contains(
+            "los 2 interruptores de las barras de TG no alcanzan los 6.44 kA estimados por bus infinito, de fase a neutro"
+        ),
+        "línea de comandos: {out}"
+    );
+    assert!(!out.contains("Conforme con"), "línea de comandos: {out}");
+}
+
+/// Un sistema trifásico no cambia: ni el unifilar ni la memoria hablan de
+/// fase a neutro.
+#[test]
+fn h01_un_trifasico_no_menciona_fase_a_neutro() {
+    let case = "h07-todo-cumple.iees";
+    assert!(!plan_svg(case).contains("FASE A NEUTRO"));
+    assert!(!report(case).contains("Icc F-N"));
+}

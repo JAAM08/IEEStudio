@@ -705,12 +705,12 @@ fn panel_header(project: &Project, panel: usize, result: &PanelResult) -> Vec<(S
     .chain(result.fault.as_ref().map(|f| {
         (
             if f.incomplete.is_empty() {
-                format!("Icc = {:.2} kA ({})", f.total_ka, origin_text(&f.origin))
+                format!("Icc = {:.2} kA ({})", f.total_ka, origin_text(f))
             } else {
                 format!(
                     "Icc = {:.2} kA ({}, INCOMPLETA: FALTAN MOTORES)",
                     f.total_ka,
-                    origin_text(&f.origin)
+                    origin_text(f)
                 )
             },
             Font::Regular,
@@ -737,10 +737,11 @@ fn has_motor_contribution(result: &ProjectResult) -> bool {
         .any(|b| b.motor_ka > 0.0)
 }
 
-fn origin_text(origin: &FaultOrigin) -> &'static str {
-    match origin {
-        FaultOrigin::Supplier => "DATO DE LA SUMINISTRADORA",
-        FaultOrigin::Substation | FaultOrigin::Transformer { .. } => "BUS INFINITO",
+fn origin_text(fault: &ieestudio_project::fault::BusFault) -> &'static str {
+    match (&fault.origin, &fault.line_to_neutral) {
+        (FaultOrigin::Supplier, _) => "DATO DE LA SUMINISTRADORA",
+        (_, Some(_)) => "BUS INFINITO, FASE A NEUTRO",
+        (_, None) => "BUS INFINITO",
     }
 }
 
@@ -1323,7 +1324,7 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
         if let Some(source) = result.fault.as_ref().and_then(|f| f.source.as_ref()) {
             if source.origin == FaultOrigin::Substation {
                 lines.push((
-                    format!("Icc = {:.2} kA (BUS INFINITO)", source.base_ka),
+                    format!("Icc = {:.2} kA ({})", source.base_ka, origin_text(source)),
                     Font::Regular,
                     Ink::Text,
                 ));
@@ -1408,6 +1409,17 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
                     note,
                     "; incluye {} veces la corriente de los motores de cada tensión y la que llega de otra tensión a través de su transformador",
                     study.multiplier
+                );
+            }
+            if study
+                .groups
+                .iter()
+                .any(|g| g.fault_ka.is_some() && g.line_to_neutral)
+            {
+                let _ = write!(
+                    note,
+                    "; en un secundario 1F-3H la de FASE A NEUTRO es {} veces la de fase a fase (método punto a punto de Eaton Bussmann)",
+                    study.line_to_neutral_factor
                 );
             }
             note.push_str("; es una cota superior. kA: capacidad interruptiva de catálogo");

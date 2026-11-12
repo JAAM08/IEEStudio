@@ -391,6 +391,7 @@ impl Profile {
                 appliance_demand_min_count: number("appliance_demand_min_count") as u32,
                 fault_motor_multiplier: number("fault_motor_multiplier"),
                 fault_impedance_tolerance: number("fault_impedance_tolerance"),
+                fault_line_to_neutral_factor: number("fault_line_to_neutral_factor"),
             };
             let motor_row = |columns: &'static [&'static str]| {
                 move |r: &csv::Row| MotorCurrentRow {
@@ -996,6 +997,8 @@ mod tests {
         // Criterios de la estimación de falla por bus infinito (decisión 0023).
         assert_eq!(profile.parameters.fault_motor_multiplier, 4.0);
         assert_eq!(profile.parameters.fault_impedance_tolerance, 0.10);
+        // Máximo teórico del método punto a punto (decisión 0029).
+        assert_eq!(profile.parameters.fault_line_to_neutral_factor, 1.67);
         // Tabla 11 de la NMX-J-116-ANCE.
         assert_eq!(
             profile.impedance_limits("pole_three_phase", 112.5, 13.2),

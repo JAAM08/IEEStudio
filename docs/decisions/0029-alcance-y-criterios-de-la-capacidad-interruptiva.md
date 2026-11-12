@@ -7,6 +7,9 @@ la 0023 y la 0028; no las sustituye. Se implementa en la etapa 1 del plan
 (`../plan-1.0.md`). La NOM-001-SEDE-2012 es la norma vigente que aplica el
 perfil.
 
+**Implementado:** D-1 con el factor del perfil (etapa 1A). La impedancia de
+media bobina queda pendiente: necesita un campo nuevo y va con el formato 4.
+
 ## Alcance: revisión de seguridad, no estudio de cortocircuito
 
 IEEStudio estima **una cota superior de la corriente de falla simétrica
@@ -133,8 +136,9 @@ archivos que ya escribió la versión del PR #11 siguen diciendo 3.
 - Campos nuevos: dónde está el dato de la suministradora, transformador de
   la acometida propio o de la suministradora, «es otra carga» en el
   circuito; después, impedancia de media bobina.
-- Parámetros nuevos en `profile.csv`: factor de fase a neutro (1.67) con su
-  referencia en `references.csv`.
+- Parámetros nuevos en `profile.csv`: factor de fase a neutro
+  (`fault_line_to_neutral_factor`, 1.67) con su regla `line_to_neutral_fault`
+  en `references.csv`.
 - Las pruebas de `crates/ieestudio-project/tests/auditoria_pr11.rs` y
   `crates/ieestudio-cli/tests/auditoria_salidas.rs` se vuelven obligatorias
   conforme se corrige cada hallazgo, con el valor exacto de este documento.

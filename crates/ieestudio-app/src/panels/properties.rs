@@ -1083,7 +1083,7 @@ pub(crate) fn fault_box(
                     .size(16.0)
                     .strong(),
             );
-            let origin = match &bus.origin {
+            let mut origin = match &bus.origin {
                 FaultOrigin::Supplier => "Dato de la suministradora, sin descontar los alimentadores.".to_string(),
                 FaultOrigin::Substation => {
                     "Bus infinito del transformador de la acometida: la red se toma sin impedancia, así que es la corriente mayor posible.".to_string()
@@ -1092,6 +1092,12 @@ pub(crate) fn fault_box(
                     "Bus infinito del transformador intermedio de {panel}: es la corriente mayor posible en su secundario."
                 ),
             };
+            if let Some(ln) = &bus.line_to_neutral {
+                origin.push_str(&format!(
+                    " Secundario 1F-3H: es la falla de fase a neutro, {} × {:.2} kA de fase a fase.",
+                    ln.factor, ln.line_to_line_ka
+                ));
+            }
             ui.add(egui::Label::new(muted(p, origin).size(11.5)).wrap());
             if let Some(m) = bus.motors.as_ref().filter(|_| bus.motor_ka > 0.0) {
                 // La aportación de los motores, a la vista.

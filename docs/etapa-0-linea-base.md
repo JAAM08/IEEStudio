@@ -32,7 +32,7 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 
 | ID | Gravedad | Estado | Prueba o evidencia | Lo que muestra hoy |
 |---|---|---|---|---|
-| H-01 | Crítico | Decisión D-1 | `h01_*` (2) | 25 kVA, 240/120 V, 5 kA: «Cumple» con 3.858 kA y dictamen «Conforme» |
+| H-01 | Crítico | **Corregido** (etapa 1A, decisión 0029) | `h01_*` (7) y `h01_*` de salidas (2) | Antes: «Cumple» con 3.858 kA y «Conforme». Ahora: 6.44 kA de fase a neutro, «No concluyente» |
 | H-02 | Alto | Decisión D-2 | `h02_*` (2) | 5 kA sin tensión con 1000 kVA: «Cumple» con 10 kA; 50 kA sobre un bus infinito de 23.24 kA sin aviso |
 | H-03 | Alto | Decisión D-3 | `h03_*` (2) | Aviso «parece motor» y aun así «Cumple», «Por resolver · 0» (captura) |
 | H-04 | Medio | Pendiente | `h04_un_solo_criterio_de_trifasico` | 226/120 V: 2.365 kA en vez de 4.097 kA |
@@ -56,7 +56,7 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 | # | Estado | Prueba | Lo que muestra hoy |
 |---|---|---|---|
 | 17 | Pendiente | `p17_el_secundario_tiene_su_propia_conexion` | Elevador 127 → 240/120 V: rechaza un circuito de 240 V |
-| 18 | Igual que H-01 | — | Se resuelve con D-1 |
+| 18 | Corregido con H-01 | — | Etapa 1A |
 | 19 | Decisión (plan 2C) | `p19_*` y H-08 | Circuito de 0 m: «Cumple» |
 | 20 | Pendiente | Ver N-1 | Las verificaciones de tramos no distinguen faltante, inválido y no concluyente |
 
