@@ -18,8 +18,9 @@ normativo nuevo ni un caso de referencia firmado (`reviewed_by`).
 |---|---|---|
 | `h01-acometida-240-120.iees` | H-01 | 25 kVA, 3 %, 240/120 V e interruptores de 5 kA. Antes «Cumple» con 3.86 kA y «Conforme»; desde la etapa 1A, 6.44 kA de fase a neutro y «No concluyente» |
 | `h01-intermedio-240-120.iees` | H-01 | Lo mismo en un transformador seco 480 → 240/120 V (corregido en la etapa 1A) |
-| `h02-dato-media-tension-5ka.iees` | H-02 | 5 kA sin tensión con subestación de 1000 kVA: se usan en 480 V, «Cumple» con 10 kA |
-| `h02-dato-mayor-que-bus-infinito.iees` | H-02 | 50 kA con un bus infinito de 23.24 kA, sin aviso |
+| `h02-dato-media-tension-5ka.iees` | H-02 | 5 kA sin decir dónde, subestación de 1000 kVA. Antes se usaban en 480 V y «Cumple» con 10 kA; desde la etapa 1B, «Sin evaluar» hasta indicar dónde |
+| `h02-dato-en-primario-5ka.iees` | H-02 | Los mismos 5 kA en el primario de 13.2 kV: 22.92 kA en 480 V, «No concluyente» con 10 kA (etapa 1B) |
+| `h02-dato-mayor-que-bus-infinito.iees` | H-02 | 50 kA en baja tensión con un bus infinito de 23.24 kA. Antes sin aviso; desde la etapa 1B, «Dato inválido» |
 | `h03-bombas-como-otra-carga.iees` | H-03 | Dos «Bomba 50 hp» como otra carga: aviso de tipo y aun así «Cumple» con 9.8 kA |
 | `h03-bombas-como-motor.iees` | H-03 | Las mismas como motor: 10.84 kA, «No concluyente» (correcto) |
 | `h04-relacion-1-88.iees` | H-04 | 226/120 V: 2.365 kA en vez de 4.097 kA |

@@ -33,14 +33,14 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 | ID | Gravedad | Estado | Prueba o evidencia | Lo que muestra hoy |
 |---|---|---|---|---|
 | H-01 | Crítico | **Corregido** (etapa 1A, decisión 0029) | `h01_*` (7) y `h01_*` de salidas (2) | Antes: «Cumple» con 3.858 kA y «Conforme». Ahora: 6.44 kA de fase a neutro, «No concluyente» |
-| H-02 | Alto | Decisión D-2 | `h02_*` (2) | 5 kA sin tensión con 1000 kVA: «Cumple» con 10 kA; 50 kA sobre un bus infinito de 23.24 kA sin aviso |
+| H-02 | Alto | **Corregido** (etapa 1B, decisión 0029) | `h02_*` (7) y `h02_*` de salidas (2) | Antes: 5 kA sin tensión «Cumple» con 10 kA y 50 kA sin aviso. Ahora: sin ubicación «Sin evaluar»; en 13.2 kV, 22.92 kA; 50 kA en baja tensión, «Dato inválido» |
 | H-03 | Alto | Decisión D-3 | `h03_*` (2) | Aviso «parece motor» y aun así «Cumple», «Por resolver · 0» (captura) |
 | H-04 | Medio | Pendiente | `h04_un_solo_criterio_de_trifasico` | 226/120 V: 2.365 kA en vez de 4.097 kA |
 | H-05 | Medio | Pendiente | `h05_*` (2) | «Monofásico» en 220Y/127 V: 13.12 kA sin aviso; Z = 30 %: 1.09 kA sin aviso |
 | H-06 | Medio | Decisión D-5 | `h06_*` | 300 kW en 75 kVA: «Conforme» |
 | H-07 | Medio | Decisión D-6 | `h07_el_dictamen_dice_en_lo_evaluado` | «Conforme con NOM-001-SEDE-2012: todo cumple y nada quedó sin evaluar» |
 | H-08 | Medio | Pendiente | Lectura de `state.rs` (interfaz) | Circuito nuevo con 1000 W y 10 m; alimentador nuevo con 10 m |
-| H-09 | Medio | Decisión D-7 | `tools/auditoria.sh anterior` | 4 de 18 casos no abren en `ef59295` (ver `fixtures/compatibilidad/`) |
+| H-09 | Medio | **Corregido hacia adelante** (etapa 1B, formato 4) | `tools/auditoria.sh anterior` y pruebas de `model.rs` | Ningún archivo nuevo abre a medias en una versión anterior: dice «formato 4, más nuevo», salvo 4 que fallan antes con «missing field» porque esa versión no revisaba el formato primero; desde esta versión se revisa primero |
 | H-10 | Medio | Pendiente | `h10_*` (3) | Nota «con el dato de la suministradora» sin falla; «reducida 10 %» con impedancia de tabla; sin «Icc SIN ESTIMAR» |
 | H-11 | Medio | Pendiente | `h11_*` (2) | Memoria y línea de comandos: «Dato inválido … sin evaluar en …» |
 | H-12 | Bajo | Pendiente | `h12_*` | El lugar cuenta 1 motor sin datos; el estudio, 0 |

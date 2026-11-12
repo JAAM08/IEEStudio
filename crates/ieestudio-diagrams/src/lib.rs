@@ -740,6 +740,7 @@ fn has_motor_contribution(result: &ProjectResult) -> bool {
 fn origin_text(fault: &ieestudio_project::fault::BusFault) -> &'static str {
     match (&fault.origin, &fault.line_to_neutral) {
         (FaultOrigin::Supplier, _) => "DATO DE LA SUMINISTRADORA",
+        (FaultOrigin::SupplierPrimary, _) => "DATO EN MEDIA TENSIÓN Y TRANSFORMADOR",
         (_, Some(_)) => "BUS INFINITO, FASE A NEUTRO",
         (_, None) => "BUS INFINITO",
     }
@@ -1285,6 +1286,30 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
             ));
         }
     }
+    // El dato de media tensión se anota en la acometida, a su tensión.
+    if let (Some(ka), Some(ieestudio_project::FaultLocation::Primary)) = (
+        project.source.fault.available_ka,
+        project.source.fault.location,
+    ) {
+        if result
+            .fault
+            .as_ref()
+            .and_then(|f| f.source.as_ref())
+            .is_some()
+        {
+            let kv = project
+                .source
+                .substation
+                .as_ref()
+                .and_then(|s| s.primary_kv)
+                .map_or(String::new(), |kv| format!(" EN {kv} kV"));
+            source_lines.push((
+                format!("Icc = {ka} kA{kv} (DATO DE LA SUMINISTRADORA)"),
+                Font::Regular,
+                Ink::Text,
+            ));
+        }
+    }
     pt.lines((first_feed + 26.0, top + 12.0), source_lines);
     let mut y = top + 46.0;
 
@@ -1322,7 +1347,10 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
         ];
         lines.extend(transformer_extra(sub.connection, sub.mounting, &sub.brand));
         if let Some(source) = result.fault.as_ref().and_then(|f| f.source.as_ref()) {
-            if source.origin == FaultOrigin::Substation {
+            if matches!(
+                source.origin,
+                FaultOrigin::Substation | FaultOrigin::SupplierPrimary
+            ) {
                 lines.push((
                     format!("Icc = {:.2} kA ({})", source.base_ka, origin_text(source)),
                     Font::Regular,
@@ -1396,13 +1424,30 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
                 .groups
                 .iter()
                 .any(|g| g.fault_ka.is_some() && g.infinite_bus);
-            let mut note = if any_infinite {
-                format!(
-                    "Icc: corriente de falla estimada; la de BUS INFINITO toma la red sin impedancia, con la impedancia de placa del transformador reducida {:.0} %",
+            let with_origin = |o: FaultOrigin| {
+                study
+                    .groups
+                    .iter()
+                    .any(|g| g.fault_ka.is_some() && g.origin.as_ref() == Some(&o))
+            };
+            let any_primary = with_origin(FaultOrigin::SupplierPrimary);
+            let mut parts = Vec::new();
+            if any_infinite {
+                parts.push(format!(
+                    "la de BUS INFINITO toma la red sin impedancia, con la impedancia de placa del transformador reducida {:.0} %",
                     study.impedance_tolerance * 100.0
-                )
-            } else {
+                ));
+            }
+            if any_primary {
+                parts.push("la de DATO EN MEDIA TENSIÓN Y TRANSFORMADOR combina en cuadratura la impedancia de la red con la del transformador".to_string());
+            }
+            if (any_infinite || any_primary) && with_origin(FaultOrigin::Supplier) {
+                parts.push("la de DATO DE LA SUMINISTRADORA se usa tal cual".to_string());
+            }
+            let mut note = if parts.is_empty() {
                 "Icc: corriente de falla con el dato de la suministradora, sin descontar los alimentadores".to_string()
+            } else {
+                format!("Icc: corriente de falla estimada; {}", parts.join("; "))
             };
             if study.groups.iter().any(|g| g.fault_ka.is_some()) && has_motor_contribution(result) {
                 let _ = write!(

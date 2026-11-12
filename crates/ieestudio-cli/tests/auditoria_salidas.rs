@@ -191,3 +191,47 @@ fn h01_un_trifasico_no_menciona_fase_a_neutro() {
     assert!(!plan_svg(case).contains("FASE A NEUTRO"));
     assert!(!report(case).contains("Icc F-N"));
 }
+
+// -------------------------------------------------------------- H-02
+
+/// H-02 (etapa 1B). Con 5 kA en 13.2 kV y la subestación de 1000 kVA, las
+/// salidas dicen lo mismo: el dato en la acometida a su tensión y 22.92 kA
+/// en el secundario, con el método.
+#[test]
+fn h02_las_salidas_dicen_media_tension() {
+    let case = "h02-dato-en-primario-5ka.iees";
+
+    let svg = plan_svg(case);
+    assert!(
+        svg.contains("Icc = 5 kA EN 13.2 kV (DATO DE LA SUMINISTRADORA)"),
+        "unifilar: {:?}",
+        lines_with(&svg, "Icc")
+    );
+    assert!(
+        svg.contains("Icc = 22.92 kA (DATO EN MEDIA TENSIÓN Y TRANSFORMADOR)"),
+        "unifilar: {:?}",
+        lines_with(&svg, "Icc")
+    );
+    assert!(svg.contains("combina en cuadratura"));
+
+    let source = report(case);
+    assert!(source.contains("Zred = 1000 kVA / (√3 · 13.2 kV · 5 kA) = 0.00875"));
+    assert!(source.contains("en media tensión, la red se representa"));
+
+    let out = cli(case);
+    assert!(
+        out.contains("los 22.92 kA estimados con el dato de la suministradora en media tensión y el transformador"),
+        "línea de comandos: {out}"
+    );
+}
+
+/// Un dato sin decir dónde está no da ningún número: las salidas piden
+/// indicarlo.
+#[test]
+fn h02_sin_ubicacion_las_salidas_piden_indicarla() {
+    let case = "h02-dato-media-tension-5ka.iees";
+    let out = cli(case);
+    assert!(out.contains("falta indicar dónde da la suministradora la corriente de falla"));
+    assert!(!out.contains("kA estimados"), "línea de comandos: {out}");
+    assert!(!plan_svg(case).contains("Icc = 5"));
+}

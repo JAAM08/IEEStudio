@@ -7,8 +7,16 @@ la 0023 y la 0028; no las sustituye. Se implementa en la etapa 1 del plan
 (`../plan-1.0.md`). La NOM-001-SEDE-2012 es la norma vigente que aplica el
 perfil.
 
-**Implementado:** D-1 con el factor del perfil (etapa 1A). La impedancia de
-media bobina queda pendiente: necesita un campo nuevo y va con el formato 4.
+**Implementado:** D-1 con el factor del perfil (etapa 1A). D-2 y D-7 en la
+etapa 1B: el dato de la suministradora dice dónde está y el archivo pasa al
+formato 4. La impedancia de media bobina queda pendiente.
+
+**Precisión de la etapa 1B.** En un secundario 1F-3H con el dato en media
+tensión, la combinación de la red con la media bobina no está definida aquí:
+se usa el bus infinito de fase a neutro, que es la cota superior, y el dato no
+lo reduce. Para los transformadores monofásicos la impedancia de la red se
+calcula con la misma expresión `S / (√3 · V · Icc)`, que da la menor de las
+posibles y por lo tanto la falla mayor.
 
 ## Alcance: revisión de seguridad, no estudio de cortocircuito
 
