@@ -154,8 +154,22 @@ sitio. Ninguna toca el almacenamiento local del proyecto.
 
 ## 5. Mediciones iniciales
 
-Ver la tabla al final del PR (tiempos en esta máquina; la etapa 5 del plan
-trae el proyecto grande y las metas).
+Proyecto de ejemplo (1 tablero, 6 circuitos), línea de comandos en
+*release*, Linux, 2 núcleos Xeon a 2.1 GHz; cada tiempo incluye abrir el
+programa y leer el archivo:
+
+| Medición | Resultado |
+|---|---|
+| `calcular` | 5–7 ms |
+| `memoria` (PDF de 189 kB) | 87–104 ms |
+| `dxf` / `excel` | 5 ms / 6 ms |
+| `cargo test --workspace` (ya compilado) | 7 s, 181 pruebas |
+| `.wasm` publicado | 50.7 MB; 16.6 MB comprimido como lo sirve el sitio |
+| Ejecutable de la línea de comandos | 40.3 MB |
+
+Estos números son con un proyecto chico; el proyecto grande de prueba
+(12 tableros, 400 circuitos) y las metas por cuadro de pantalla son de la
+etapa 5 del plan. No se midió el tiempo por cuadro de la interfaz.
 
 ## 6. Lo que no se hizo en esta etapa
 
