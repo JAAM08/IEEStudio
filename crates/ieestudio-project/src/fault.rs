@@ -482,13 +482,12 @@ fn reason(e: &Error) -> String {
 }
 
 /// Si el sistema es trifásico y la tensión con la que se calcula la
-/// corriente del transformador de la acometida.
+/// corriente del transformador de la acometida. Trifásico es lo que dice
+/// `System::has_three_phases`, el mismo criterio que usa todo el programa
+/// (H-04): un monofásico de tres hilos usa la tensión entre fases.
 fn transformer_voltage(system: &System) -> Option<(f64, bool)> {
     match (system.line_to_line_v, system.line_to_neutral_v) {
-        // Monofásico de tres hilos: el transformador es de una fase a la
-        // tensión entre fases.
-        (Some(ll), Some(ln)) if (ll / ln - 2.0).abs() < 0.1 => Some((ll, false)),
-        (Some(ll), _) => Some((ll, true)),
+        (Some(ll), _) => Some((ll, system.has_three_phases())),
         (None, Some(ln)) => Some((ln, false)),
         (None, None) => None,
     }

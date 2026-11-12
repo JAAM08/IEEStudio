@@ -130,6 +130,8 @@ El informe Fable demuestra que el programa puede mostrar 3.86 kA y «Cumple» pa
 
 #### 1D. H-04 y H-05 — Coherencia de conexiones, sistemas e impedancias
 
+> **Decidido en la 0030** (12 de noviembre de 2026): topología declarada, relación de tensiones con 1 % del perfil, conexión contradictoria como «Dato inválido» y carga no lineal de tres estados entran en 1D. El intervalo de impedancia, la nota 3 y los bancos de monofásicos (N-1 a N-3) esperan la tabla de la NMX-J-116-ANCE-2017.
+
 - Unificar el criterio de trifásico en `System::has_three_phases` o función equivalente; eliminar umbrales contradictorios en `fault.rs`, `system.rs` y `calc.rs`.
 - Detectar una conexión de transformador que contradiga el sistema eléctrico del punto correspondiente.
 - Detectar impedancias fuera del rango válido de la tabla o clase de equipo; no inventar límites: deben venir de fuente aprobada y estar documentados.

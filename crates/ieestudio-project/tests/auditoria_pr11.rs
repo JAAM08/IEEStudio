@@ -24,7 +24,8 @@ mod casos;
 use ieestudio_project::evaluation::Evaluation;
 use ieestudio_project::fault::{FaultOrigin, InterruptingGroup, IssueKind};
 use ieestudio_project::verdict::Compliance;
-use ieestudio_project::FaultLocation;
+use ieestudio_core::{CircuitKind, System};
+use ieestudio_project::{Connection, FaultLocation, Mounting};
 use ieestudio_project::{calculate, Project, ProjectResult, Status};
 
 fn calc(project: &Project) -> ProjectResult {
@@ -574,21 +575,35 @@ fn h03_una_sospecha_aguas_abajo_alcanza_las_barras_de_arriba() {
 
 // ----------------------------------------------------- H-04 criterio trifásico
 
-/// H-04 (medio). 226/120 V: el modelo (`System::has_three_phases`) lo toma
-/// como monofásico de tres hilos, pero la falla lo calcula como trifásico.
-/// Con un solo criterio: `25 000 / 226 / 0.027 = 4.097 kA`; hoy 2.365 kA.
+/// H-04 (medio, etapa 1D). 226/120 V: el modelo (`System::has_three_phases`)
+/// lo toma como monofásico de tres hilos y la falla también:
+/// `25 000 / 226 / 0.027 = 4.097 kA` entre fases (antes 2.365 kA, como
+/// trifásico) y, por ser 1F-3H, `1.67 · 4.097 = 6.842 kA` de fase a neutro.
 #[test]
-#[ignore = "H-04 abierto"]
 fn h04_un_solo_criterio_de_trifasico() {
     let project = casos::h04_relacion_1_88();
     assert!(!project.source.system.has_three_phases());
     let result = calc(&project);
-    let bus = result.fault.as_ref().unwrap().source.as_ref();
-    let ka = bus.map(|b| b.base_ka);
-    assert!(
-        ka.is_some_and(|ka| (ka - 25_000.0 / 226.0 / 0.027 / 1000.0).abs() < 1e-3),
-        "H-04: hoy {ka:?} kA"
-    );
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    let ll = 25_000.0 / 226.0 / 0.027 / 1000.0;
+    let ln = bus.line_to_neutral.as_ref().expect("1F-3H");
+    assert!((ln.line_to_line_ka - ll).abs() < 1e-3, "H-04: {}", ln.line_to_line_ka);
+    assert!((bus.base_ka - 1.67 * ll).abs() < 1e-3, "H-04: {}", bus.base_ka);
+}
+
+/// H-04. Con relación 2.1 el criterio anterior de la falla (a menos de 0.1
+/// de 2) lo tomaba como trifásico; ahora es monofásico de tres hilos, como
+/// en el resto del programa.
+#[test]
+fn h04_relacion_2_1_es_monofasico_de_tres_hilos() {
+    let mut project = casos::h04_relacion_1_88();
+    project.source.system.line_to_line_v = Some(252.0);
+    assert!(!project.source.system.has_three_phases());
+    let result = calc(&project);
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    let ll = 25_000.0 / 252.0 / 0.027 / 1000.0;
+    let ln = bus.line_to_neutral.as_ref().expect("1F-3H");
+    assert!((ln.line_to_line_ka - ll).abs() < 1e-3, "{}", ln.line_to_line_ka);
 }
 
 // -------------------------------------------------- H-05 datos contradictorios
@@ -598,7 +613,7 @@ fn h04_un_solo_criterio_de_trifasico() {
 /// (1.5 %) y calcula la corriente como trifásico (13.12 kA en vez de
 /// 9.84 kA), sin aviso.
 #[test]
-#[ignore = "H-05 abierto"]
+#[ignore = "H-05 abierto (decisión 0030, C-1)"]
 fn h05_conexion_que_contradice_el_sistema_se_avisa() {
     let result = calc(&casos::h05_conexion_contradictoria());
     let g = group(&result, Some("TG"));
@@ -609,19 +624,69 @@ fn h05_conexion_que_contradice_el_sistema_se_avisa() {
     );
 }
 
-/// H-05 (medio). Impedancia de 30 % en un transformador tipo poste de
-/// 112.5 kVA, 13.2 kV: fuera del intervalo de su renglón de la tabla
-/// (2.0 a 3.0 %). Hoy da 1.09 kA y «Cumple» sin aviso.
+// ------------------------- Pendientes de la NMX-J-116-ANCE-2017 (decisión 0030)
+//
+// N-1 a N-3 están decididos pero esperan la tabla y la nota 3 de la edición
+// 2017. Al implementar N-1 faltan además: arriba del máximo con la placa
+// confirmada (cumple con aviso) y la confirmación que se pierde al cambiar
+// la impedancia, la potencia, la tensión del primario o el montaje.
+
+/// N-1 (H-05). Impedancia de 30 % en un transformador tipo poste de
+/// 112.5 kVA, 13.2 kV: arriba del intervalo de su renglón (2.00 a 3.00 %).
+/// Hoy da 1.09 kA y «Cumple» sin aviso; debe quedar «No concluyente» hasta
+/// confirmar la placa.
 #[test]
-#[ignore = "H-05 abierto"]
-fn h05_impedancia_fuera_de_la_tabla_se_avisa() {
+#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-1)"]
+fn n1_impedancia_arriba_del_maximo_no_concluye() {
     let result = calc(&casos::h05_impedancia_30());
     let g = group(&result, Some("TG"));
-    assert!(
-        warned(&result, g, &["impedancia"]),
-        "H-05: sin aviso; hoy {}",
-        state(g)
-    );
+    assert!(warned(&result, g, &["impedancia"]), "N-1: hoy {}", state(g));
+    assert_eq!(g.label(), "No concluyente", "N-1: hoy {}", state(g));
+}
+
+/// N-1. Impedancia de 1 % en el mismo transformador: abajo del mínimo. Se
+/// calcula con ella (la falla sale mayor) y solo se avisa.
+#[test]
+#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-1)"]
+fn n1_impedancia_abajo_del_minimo_solo_avisa() {
+    let mut project = casos::h05_impedancia_30();
+    project.source.substation.as_mut().unwrap().impedance_percent = Some(1.0);
+    let result = calc(&project);
+    let g = group(&result, Some("TG"));
+    assert!(warned(&result, g, &["impedancia"]), "N-1: hoy {}", state(g));
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    // 112.5 kVA en 220 V: 295.24 A; con 1 % reducido 10 %, 32.80 kA.
+    close(bus.base_ka, 112_500.0 / (3f64.sqrt() * 220.0) / 0.009 / 1000.0, 1e-3);
+}
+
+/// N-2. Nota 3: un monofásico tipo subestación de 167 kVA, 13.2 kV, toma el
+/// mínimo del trifásico tipo subestación de su clase (2.50 %), no el del
+/// monofásico tipo poste (1.50 %), aunque sea de menos de 225 kVA.
+#[test]
+#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-2)"]
+fn n2_monofasico_tipo_subestacion_usa_la_columna_de_subestacion() {
+    let mut project = casos::single_board(System::SPLIT_240_120, CircuitKind::LineToLine);
+    let mut sub = casos::substation(167.0, None, Connection::SinglePhase);
+    sub.mounting = Some(Mounting::Substation);
+    project.source.substation = Some(sub);
+    let result = calc(&project);
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    let ln = bus.line_to_neutral.as_ref().expect("1F-3H");
+    close(ln.line_to_line_ka, 167_000.0 / 240.0 / 0.025 / 1000.0, 1e-3);
+}
+
+/// N-3. Banco de tres monofásicos tipo poste de 50 kVA (150 kVA), 13.2 kV,
+/// 220Y/127 V, con impedancia de tabla: renglón monofásico de 50 kVA
+/// (1.50 %), no el trifásico tipo poste de 150 kVA (2.00 %). Hoy da 19.68 kA;
+/// debe dar 26.24 kA. Al implementar N-3 se marca aquí la casilla del banco.
+#[test]
+#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-3)"]
+fn n3_banco_de_monofasicos_usa_el_renglon_de_cada_unidad() {
+    let mut project = casos::single_board(System::WYE_220_127, CircuitKind::ThreePhase);
+    project.source.substation = Some(casos::substation(150.0, None, Connection::DeltaWye));
+    let result = calc(&project);
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    close(bus.base_ka, 150_000.0 / (3f64.sqrt() * 220.0) / 0.015 / 1000.0, 1e-3);
 }
 
 // --------------------------------------- H-06 transformador de la acometida

@@ -315,12 +315,10 @@ pub(crate) fn poles(kind: CircuitKind) -> u32 {
     }
 }
 
-/// Un sistema en estrella tiene la tensión entre fases √3 veces la de fase a neutro.
+/// Un sistema en estrella: trifásico y con neutro. Trifásico es lo que dice
+/// `System::has_three_phases`, el mismo criterio de todo el programa (H-04).
 pub(crate) fn is_wye(system: &System) -> bool {
-    match (system.line_to_line_v, system.line_to_neutral_v) {
-        (Some(ll), Some(ln)) => (ll / ln - 3f64.sqrt()).abs() < 0.05,
-        _ => false,
-    }
+    system.line_to_neutral_v.is_some() && system.has_three_phases()
 }
 
 /// √3 en tres fases; 1 en una o dos fases.
