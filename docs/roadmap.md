@@ -95,7 +95,8 @@
   observaciones H-01 a H-18. Plan de trabajo hacia la 1.0 en `plan-1.0.md`.
 - Etapa 0 del plan: cada hallazgo de las dos auditorías tiene un caso
   reproducible (`tools/auditoria.sh`, `etapa-0-linea-base.md`) y las
-  decisiones D-1 a D-8 están planteadas en `decisiones-pendientes-d1-d8.md`.
+  decisiones D-1 a D-8, analizadas en `decisiones-pendientes-d1-d8.md`, quedaron
+  aprobadas en la decisión 0029.
 
 ## Pendiente, en orden
 
@@ -103,7 +104,7 @@
 El orden y el detalle están en `plan-1.0.md`. En resumen:
 
 - Etapa 1: cerrar los riesgos de cálculo y de dictamen (H-01 a H-07, H-10 y
-  H-11), después de que Antonio apruebe D-1 a D-3, D-5 y D-6.
+  H-11) con los criterios de la decisión 0029.
 - Etapa 2: pendientes 17 a 20 de Opus y hallazgos menores H-12 a H-18.
 - Etapa 4: unifilar en el navegador y cadena de publicación (versión
   visible, actualización del service worker, imágenes del sitio).

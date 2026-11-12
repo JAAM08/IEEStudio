@@ -143,9 +143,9 @@ fn h01_la_falla_entre_lineas_se_calcula_bien() {
 
 /// H-01 (crítico). En un secundario 240/120 V la falla de fase a neutro puede
 /// ser mayor que la de fase a fase. Con 5 kA no se puede afirmar «Cumple» ni
-/// «Conforme» con una falla entre líneas de 3.86 kA (plan 1.0, 1A). Depende
-/// de D-1 solo en el número: con el factor sería «No concluyente» por
-/// 5.79 kA; sin él, «No concluyente» por no evaluar la fase a neutro.
+/// «Conforme» con una falla entre líneas de 3.86 kA (plan 1.0, 1A). Con el
+/// factor de la decisión 0029 (1.67) la fase a neutro es de 6.44 kA:
+/// «No concluyente».
 #[test]
 #[ignore = "H-01 abierto (D-1)"]
 fn h01_acometida_240_120_no_cumple_con_la_falla_entre_lineas() {
@@ -190,8 +190,8 @@ fn h02_un_dato_mayor_que_el_bus_infinito_se_avisa() {
 /// H-02 (alto). 5 kA sin decir si son de 13.2 kV o de 480 V, con una
 /// subestación propia de 1000 kVA. Si fueran de media tensión, el
 /// secundario tendría unos 19.9 kA; hoy se usan 5 kA en 480 V y los
-/// interruptores de 10 kA «cumplen». El plan (1B) pide no suponer que el
-/// dato es de baja tensión. Depende de D-2 en cómo se corrige.
+/// interruptores de 10 kA «cumplen». Con la decisión 0029 (D-2) un dato
+/// sin decir dónde está queda «Sin evaluar»; en 13.2 kV daría 22.92 kA.
 #[test]
 #[ignore = "H-02 abierto (D-2)"]
 fn h02_un_dato_sin_tension_no_da_cumple() {
@@ -214,9 +214,8 @@ fn h03_capturadas_como_motor_no_concluyente() {
 }
 
 /// H-03 (alto). Capturadas como «Otra carga», el programa avisa que parecen
-/// motor y aun así afirma «Cumple» con 9.8 kA. Depende de D-3: con la
-/// alternativa (a) debe quedar «No concluyente» mientras el aviso no se
-/// resuelva.
+/// motor y aun así afirma «Cumple» con 9.8 kA. Con la decisión 0029 (D-3)
+/// queda «No concluyente» mientras el aviso no se resuelva.
 #[test]
 #[ignore = "H-03 abierto (D-3)"]
 fn h03_una_carga_que_parece_motor_no_da_cumple() {
@@ -281,9 +280,10 @@ fn h05_impedancia_fuera_de_la_tabla_se_avisa() {
 // --------------------------------------- H-06 transformador de la acometida
 
 /// H-06 (medio). 300 kW en un transformador de acometida de 75 kVA queda
-/// «Conforme» porque esa capacidad no se compara. Depende de D-5: con (a)
-/// es una verificación si es propio; con (b), un aviso. Con cualquiera de
-/// las dos algo debe decirlo.
+/// «Conforme» porque esa capacidad no se compara. Con la decisión 0029 (D-5)
+/// se verifica si es propio y queda fuera de alcance si es de CFE; al
+/// agregar ese dato, el caso se marca como propio y esta prueba pide «No
+/// cumple».
 #[test]
 #[ignore = "H-06 abierto (D-5)"]
 fn h06_capacidad_del_transformador_de_la_acometida() {

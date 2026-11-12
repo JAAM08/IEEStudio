@@ -5,11 +5,23 @@ en juego, las alternativas, qué cambia para quien usa el programa, un
 ejemplo con números y dónde verificarlo. **Ninguna se ha implementado.** Las
 recomendaciones son técnicas; la decisión es de Antonio.
 
+> **Resueltas el 12 de noviembre de 2026: ver la decisión 0029.** Este
+> documento queda como el análisis que llevó a ella. Antonio eligió que
+> IEEStudio siga siendo una revisión de seguridad y no un estudio de
+> cortocircuito, el factor de fase a neutro de 1.67 (no 1.5) para conservar
+> la cota superior, el transformador de CFE fuera de alcance y un dictamen
+> con cuatro encabezados. Correcciones a este texto: la falla con dato de
+> media tensión se combina en cuadratura (22.92 kA en el ejemplo de D-2, no
+> 19.88 kA); el ejemplo de D-5 son 301.6 kVA calculados, no 300 kW; las
+> secciones citadas de la IEC 60909-0 son de la edición 2016 y falta
+> cotejarlas con la 3.0 de 2026; la nota 1 de la tabla de la NMX-J-116
+> confirma que sus valores ya incluyen la tolerancia (D-8).
+
 Los números se calcularon con el método del programa (impedancia de placa
 reducida 10 % por la tolerancia del perfil) y se pueden repetir con los
 casos de `fixtures/auditoria-pr11/`.
 
-**Sobre las fuentes.** Los textos de la NOM-001-SEDE-2012, la NMX-J-116-ANCE
+**Sobre las fuentes (al 11 de noviembre).** Los textos de la NOM-001-SEDE-2012, la NMX-J-116-ANCE
 y la IEC 60909-0 son de pago o están en el DOF y no los tuve completos; las
 referencias dicen el número de sección para que se cotejen en el texto
 vigente. Existe un anteproyecto de nueva NOM-001-SEDE (2025); conviene

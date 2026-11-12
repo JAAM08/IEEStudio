@@ -84,7 +84,8 @@ Se aplica la 0027:
 - **Qué exige la norma.** La NOM-001-SEDE-2012 pide que la capacidad
   interruptiva alcance la corriente de falla disponible (110-9, 110-10), pero
   no fija el método para calcularla.
-- **IEC 60909-0.** Trata los motores asíncronos como fuentes detrás de
+- **IEC 60909-0** (edición 2016; falta cotejar la 3.0 de 2026, ver la
+  0029). Trata los motores asíncronos como fuentes detrás de
   `ZM = UrM² / (SrM · ILR/IrM)`. Con `ILR/IrM = 4` es la impedancia de esta
   decisión.
 - **Referir a otra tensión.** Las impedancias se pasan al otro lado de cada
@@ -112,7 +113,7 @@ Conviene distinguir dos cosas que no son lo mismo:
 - **Factor de los motores.** `k = 4` es un criterio de ingeniería del perfil,
   no un valor de la norma.
 - **Solo la falla trifásica o de fase a fase.** En 120/240 V la falla de fase
-  a neutro puede ser mayor. La falla a tierra, la relación X/R y la asimetría
+  a neutro puede ser mayor (resuelto en la 0029 con el factor del perfil). La falla a tierra, la relación X/R y la asimetría
   son del programa de cortocircuito de la suite.
 
 ## Consecuencias para otros módulos
