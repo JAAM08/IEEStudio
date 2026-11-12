@@ -120,10 +120,14 @@ pub enum Rule {
     /// Falla de fase a neutro en el secundario de un transformador
     /// monofásico con derivación central (decisión 0029).
     LineToNeutralFault,
+    /// Falla en el secundario con el dato de la suministradora en media
+    /// tensión: la red como impedancia, combinada con la del transformador
+    /// (decisión 0029).
+    NetworkFaultImpedance,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 52] = [
+    pub const ALL: [Rule; 53] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -176,6 +180,7 @@ impl Rule {
         Rule::MotorFaultContribution,
         Rule::TransformerImpedanceLimits,
         Rule::LineToNeutralFault,
+        Rule::NetworkFaultImpedance,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -233,6 +238,7 @@ impl Rule {
             Rule::MotorFaultContribution => "motor_fault_contribution",
             Rule::TransformerImpedanceLimits => "transformer_impedance_limits",
             Rule::LineToNeutralFault => "line_to_neutral_fault",
+            Rule::NetworkFaultImpedance => "network_fault_impedance",
         }
     }
 }

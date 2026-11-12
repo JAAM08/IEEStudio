@@ -45,8 +45,11 @@ use crate::transformer::Rating;
 /// De dónde sale la corriente de falla de unas barras.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum FaultOrigin {
-    /// Dato de la suministradora en el punto de conexión.
+    /// Dato de la suministradora en baja tensión, en el punto de conexión.
     Supplier,
+    /// Dato de la suministradora en media tensión, combinado con la
+    /// impedancia del transformador de la acometida (decisión 0029, D-2).
+    SupplierPrimary,
     /// Bus infinito del transformador de la acometida.
     Substation,
     /// Bus infinito del transformador intermedio que alimenta el tablero.
@@ -56,7 +59,10 @@ pub enum FaultOrigin {
 impl FaultOrigin {
     /// Se estimó con la red sin impedancia.
     pub fn infinite_bus(&self) -> bool {
-        !matches!(self, FaultOrigin::Supplier)
+        matches!(
+            self,
+            FaultOrigin::Substation | FaultOrigin::Transformer { .. }
+        )
     }
 
     /// `por bus infinito` o `con el dato de la suministradora`: la hipótesis
@@ -64,8 +70,16 @@ impl FaultOrigin {
     pub fn basis(&self) -> &'static str {
         match self {
             FaultOrigin::Supplier => "con el dato de la suministradora",
+            FaultOrigin::SupplierPrimary => {
+                "con el dato de la suministradora en media tensión y el transformador"
+            }
             _ => "por bus infinito",
         }
+    }
+
+    /// Es una cota superior y no el dato tal cual de la suministradora.
+    pub fn upper_bound(&self) -> bool {
+        !matches!(self, FaultOrigin::Supplier)
     }
 }
 
@@ -274,6 +288,8 @@ pub struct InterruptingGroup {
     pub infinite_bus: bool,
     /// Es la falla de fase a neutro de un secundario 1F-3H (decisión 0029).
     pub line_to_neutral: bool,
+    /// De dónde sale la falla. `None` si no se pudo estimar.
+    pub origin: Option<FaultOrigin>,
     /// Por qué no hay falla estimada, si no la hay.
     pub issue: Option<String>,
     /// Motores sin datos que aportarían aquí.
@@ -341,19 +357,23 @@ impl InterruptingGroup {
             }
         };
         let fault = format!("{fault_ka:.2} kA");
-        let basis = if self.infinite_bus && self.line_to_neutral {
-            "estimados por bus infinito, de fase a neutro, que es una cota superior"
-        } else if self.infinite_bus {
-            "estimados por bus infinito, que es una cota superior"
-        } else {
-            "estimados con el dato de la suministradora, sin descontar los alimentadores"
-        };
-        let method = if self.infinite_bus && self.line_to_neutral {
-            "un método conservador (bus infinito, de fase a neutro)"
-        } else if self.infinite_bus {
-            "un método conservador (bus infinito)"
-        } else {
-            "un método conservador (dato de la suministradora)"
+        let (basis, method) = match (&self.origin, self.line_to_neutral) {
+            (Some(FaultOrigin::Supplier), _) | (None, _) => (
+                "estimados con el dato de la suministradora, sin descontar los alimentadores",
+                "un método conservador (dato de la suministradora)",
+            ),
+            (Some(FaultOrigin::SupplierPrimary), _) => (
+                "estimados con el dato de la suministradora en media tensión y el transformador, que es una cota superior",
+                "un método conservador (dato en media tensión y transformador)",
+            ),
+            (_, true) => (
+                "estimados por bus infinito, de fase a neutro, que es una cota superior",
+                "un método conservador (bus infinito, de fase a neutro)",
+            ),
+            (_, false) => (
+                "estimados por bus infinito, que es una cota superior",
+                "un método conservador (bus infinito)",
+            ),
         };
         // «del punto de conexión», no «de el punto de conexión».
         let of_place = match self.place.strip_prefix("el ") {
@@ -534,39 +554,35 @@ fn infinite_bus_steps(
     Ok((icc / 1000.0, steps))
 }
 
-/// Falla base en el punto de conexión, sin motores.
-fn source_base(
-    profile: &Profile,
-    project: &Project,
-) -> Result<(f64, FaultOrigin, Vec<Step>), FaultIssue> {
+/// Inicio del motivo cuando el dato de la suministradora no dice dónde está.
+/// La interfaz lo usa para ofrecer los dos lugares.
+pub const MISSING_LOCATION: &str = "falta indicar dónde da la suministradora la corriente de falla";
+
+/// El transformador de la acometida para la falla: su corriente nominal, su
+/// impedancia reducida y su bus infinito, con los pasos.
+struct SubstationFault {
+    rating: Rating,
+    /// Impedancia con la que se calcula, en por unidad.
+    z_pu: f64,
+    infinite_ka: f64,
+    /// Corriente nominal, impedancia y bus infinito.
+    steps: Vec<Step>,
+}
+
+/// Bus infinito del transformador de la acometida. Fuera de alcance si no
+/// hay transformador; sin evaluar o inválido si le falta o tiene mal un dato.
+fn substation_fault(profile: &Profile, project: &Project) -> Result<SubstationFault, FaultIssue> {
     let source = &project.source;
-    let incomplete = |reason: String| FaultIssue {
-        kind: IssueKind::Incomplete,
-        reason,
-    };
-    if let Some(ka) = source.fault.available_ka {
-        if !(ka.is_finite() && ka > 0.0) {
-            return Err(FaultIssue {
-                kind: IssueKind::Invalid,
-                reason: "la corriente de falla de la suministradora debe ser mayor que cero".into(),
-            });
-        }
-        let step = Step {
-            title: "Corriente de falla de la suministradora".into(),
-            formula: None,
-            substitution: format!("Icc = {ka} kA en el punto de conexión"),
-            note: Some("Dato de la suministradora; manda sobre cualquier estimación.".into()),
-            references: vec![profile.reference(Rule::InterruptingRating)],
-        };
-        return Ok((ka, FaultOrigin::Supplier, vec![step]));
-    }
     let Some(substation) = source.substation.as_ref() else {
         return Err(FaultIssue {
             kind: IssueKind::OutOfScope,
             reason: "no hay corriente de falla de la suministradora ni datos del transformador de la acometida".into(),
         });
     };
-    let what = |r: String| incomplete(format!("en el transformador de la acometida {r}"));
+    let what = |r: String| FaultIssue {
+        kind: IssueKind::Incomplete,
+        reason: format!("en el transformador de la acometida {r}"),
+    };
     let invalid = |r: &str| FaultIssue {
         kind: IssueKind::Invalid,
         reason: format!("en el transformador de la acometida {r}"),
@@ -595,7 +611,7 @@ fn source_base(
         kva,
         three_phase,
     };
-    let (ka, steps) = infinite_bus_steps(
+    let (infinite_ka, steps) = infinite_bus_steps(
         profile,
         &rating,
         impedance,
@@ -603,7 +619,171 @@ fn source_base(
         substation.impedance_from_table,
     )
     .map_err(what)?;
-    Ok((ka, FaultOrigin::Substation, steps))
+    // El mínimo de la tabla ya incluye la tolerancia (decisión 0029, D-8).
+    let tolerance = if substation.impedance_from_table {
+        0.0
+    } else {
+        profile.parameters.fault_impedance_tolerance
+    };
+    let z_pu = effective_impedance_pu(impedance, tolerance).map_err(|e| what(reason(&e)))?;
+    Ok(SubstationFault {
+        rating,
+        z_pu,
+        infinite_ka,
+        steps,
+    })
+}
+
+/// Falla base en el punto de conexión, sin motores (decisión 0029, D-2):
+///
+/// - Sin dato de la suministradora, el bus infinito del transformador de la
+///   acometida.
+/// - Con el dato en baja tensión, el dato tal cual; no puede pasar del bus
+///   infinito del transformador, si se conoce.
+/// - Con el dato en media tensión, la red como impedancia combinada en
+///   cuadratura con la del transformador. En un secundario 1F-3H no reduce
+///   el bus infinito.
+/// - Con el dato sin decir dónde, sin evaluar: nunca se supone.
+fn source_base(
+    profile: &Profile,
+    project: &Project,
+) -> Result<(f64, FaultOrigin, Vec<Step>), FaultIssue> {
+    use crate::model::FaultLocation;
+    let source = &project.source;
+    let Some(ka) = source.fault.available_ka else {
+        let s = substation_fault(profile, project)?;
+        return Ok((s.infinite_ka, FaultOrigin::Substation, s.steps));
+    };
+    if !(ka.is_finite() && ka > 0.0) {
+        return Err(FaultIssue {
+            kind: IssueKind::Invalid,
+            reason: "la corriente de falla de la suministradora debe ser mayor que cero".into(),
+        });
+    }
+    let datum = |place: String| Step {
+        title: "Corriente de falla de la suministradora".into(),
+        formula: None,
+        substitution: format!("Icc = {ka} kA {place}"),
+        note: Some("Dato de la suministradora; manda sobre cualquier estimación.".into()),
+        references: vec![profile.reference(Rule::InterruptingRating)],
+    };
+    match source.fault.location {
+        None => Err(FaultIssue {
+            kind: IssueKind::Incomplete,
+            reason: format!(
+                "{MISSING_LOCATION}: en baja tensión, en el punto de conexión, o en media tensión, en el primario del transformador de la acometida"
+            ),
+        }),
+        Some(FaultLocation::LowVoltage) => {
+            // Ninguna falla en el secundario pasa del bus infinito de su
+            // transformador: un dato mayor es imposible.
+            if let Ok(s) = substation_fault(profile, project) {
+                let (bound, what) = if center_tapped(&source.system) {
+                    (
+                        s.infinite_ka * profile.parameters.fault_line_to_neutral_factor,
+                        "por bus infinito, de fase a neutro",
+                    )
+                } else {
+                    (s.infinite_ka, "por bus infinito")
+                };
+                if ka > bound {
+                    return Err(FaultIssue {
+                        kind: IssueKind::Invalid,
+                        reason: format!(
+                            "la corriente de falla de la suministradora en baja tensión ({ka} kA) es mayor que la mayor posible con el transformador de la acometida ({bound:.2} kA {what}); revisa el dato o si es de media tensión"
+                        ),
+                    });
+                }
+            }
+            Ok((
+                ka,
+                FaultOrigin::Supplier,
+                vec![datum("en baja tensión, en el punto de conexión".into())],
+            ))
+        }
+        Some(FaultLocation::Primary) => {
+            let s = substation_fault(profile, project).map_err(|issue| match issue.kind {
+                IssueKind::OutOfScope => FaultIssue {
+                    kind: IssueKind::Incomplete,
+                    reason: "con el dato de la suministradora en media tensión falta el transformador de la acometida: potencia, impedancia y tensión del primario".into(),
+                },
+                _ => issue,
+            })?;
+            let primary_kv = source.substation.as_ref().and_then(|t| t.primary_kv);
+            let kv = match primary_kv {
+                Some(kv) if kv.is_finite() && kv > 0.0 => kv,
+                Some(_) => {
+                    return Err(FaultIssue {
+                        kind: IssueKind::Invalid,
+                        reason: "en el transformador de la acometida la tensión del primario debe ser mayor que cero".into(),
+                    })
+                }
+                None => {
+                    return Err(FaultIssue {
+                        kind: IssueKind::Incomplete,
+                        reason: "con el dato de la suministradora en media tensión, en el transformador de la acometida falta la tensión del primario".into(),
+                    })
+                }
+            };
+            let mut steps = vec![datum(format!(
+                "en {kv} kV, en el primario del transformador de la acometida"
+            ))];
+            if center_tapped(&source.system) {
+                steps.extend(s.steps);
+                steps.push(Step {
+                    title: "Dato de media tensión en un secundario 1F-3H".into(),
+                    formula: None,
+                    substitution: format!(
+                        "Se usa el bus infinito del transformador: {:.2} kA",
+                        s.infinite_ka
+                    ),
+                    note: Some(
+                        "Con media bobina no está definida la combinación con la red; el bus infinito es la cota superior y el dato de media tensión no la reduce."
+                            .into(),
+                    ),
+                    references: vec![profile.reference(Rule::LineToNeutralFault)],
+                });
+                return Ok((s.infinite_ka, FaultOrigin::Substation, steps));
+            }
+            let z_net = s.rating.kva / (3f64.sqrt() * kv * ka * 1000.0);
+            let z = (z_net * z_net + s.z_pu * s.z_pu).sqrt();
+            let icc = s.rating.rated_a / z;
+            // Corriente nominal e impedancia del transformador; su bus
+            // infinito no se usa.
+            steps.extend(s.steps.into_iter().take(2));
+            let network = vec![profile.reference(Rule::NetworkFaultImpedance)];
+            steps.push(Step {
+                title: "Impedancia de la red".into(),
+                formula: Some("Zred = S / (√3 · V · Icc)".into()),
+                substitution: format!(
+                    "Zred = {} kVA / (√3 · {kv} kV · {ka} kA) = {z_net:.5}",
+                    s.rating.kva
+                ),
+                note: Some(if s.rating.three_phase {
+                    "La red se representa con la impedancia que da esa corriente, en por unidad de la potencia del transformador.".into()
+                } else {
+                    "La red se representa con la impedancia que da esa corriente, en por unidad de la potencia del transformador. En un transformador monofásico se usa la misma expresión: da la impedancia de red menor y la falla mayor.".into()
+                }),
+                references: network.clone(),
+            });
+            steps.push(Step {
+                title: "Falla en el secundario".into(),
+                formula: Some("Z = √(Zred² + Ztr²); Icc = In / Z".into()),
+                substitution: format!(
+                    "Z = √({z_net:.5}² + {:.5}²) = {z:.5}; Icc = {:.2} A / {z:.5} = {icc:.0} A = {:.2} kA",
+                    s.z_pu,
+                    s.rating.rated_a,
+                    icc / 1000.0
+                ),
+                note: Some(
+                    "Sin la relación X/R de la red y del transformador se combinan en cuadratura: nunca da una impedancia mayor que la real, así que la falla es una cota superior."
+                        .into(),
+                ),
+                references: network,
+            });
+            Ok((icc / 1000.0, FaultOrigin::SupplierPrimary, steps))
+        }
+    }
 }
 
 /// Impedancia con la que se calcula la falla del transformador de la
@@ -952,8 +1132,27 @@ impl<'a> Topology<'a> {
             None => {
                 inputs.push(Datum::new("Sistema de suministro", system(&source.system)));
                 if let Some(ka) = source.fault.available_ka {
-                    inputs.push(Datum::new("Falla de la suministradora", format!("{ka} kA")));
-                } else if let Some(sub) = &source.substation {
+                    use crate::model::FaultLocation;
+                    let place = match source.fault.location {
+                        Some(FaultLocation::LowVoltage) => {
+                            "en baja tensión, en el punto de conexión".to_string()
+                        }
+                        Some(FaultLocation::Primary) => format!(
+                            "en media tensión{}, en el primario del transformador",
+                            source
+                                .substation
+                                .as_ref()
+                                .and_then(|s| s.primary_kv)
+                                .map_or(String::new(), |kv| format!(" ({kv} kV)"))
+                        ),
+                        None => "sin decir dónde".to_string(),
+                    };
+                    inputs.push(Datum::new(
+                        "Falla de la suministradora",
+                        format!("{ka} kA {place}"),
+                    ));
+                }
+                if let Some(sub) = &source.substation {
                     inputs.push(Datum::new(
                         "Transformador de la acometida",
                         shown(sub.kva, "kVA"),
@@ -1003,9 +1202,15 @@ impl<'a> Topology<'a> {
                     None => format!("{:.2} kA", bus.base_ka),
                 };
                 match &bus.origin {
+                    FaultOrigin::SupplierPrimary => {
+                        assumptions.push("Dato de la suministradora en media tensión: la red se representa con la impedancia que da esa corriente y se combina en cuadratura con la del transformador, sin la relación X/R (decisión 0029).".into());
+                        contributors.push(format!("Red y transformador de la acometida: {base}"));
+                    }
                     FaultOrigin::Supplier => {
-                        assumptions
-                            .push("Dato de la suministradora en el punto de conexión.".into());
+                        assumptions.push(
+                            "Dato de la suministradora en baja tensión, en el punto de conexión."
+                                .into(),
+                        );
                         if center_tapped(&self.system(zone)) {
                             assumptions.push("Servicio 1F-3H: el dato de la suministradora se toma como la corriente máxima disponible en el punto de conexión y no se multiplica por el factor de fase a neutro.".into());
                         }
@@ -1028,7 +1233,7 @@ impl<'a> Topology<'a> {
                         ln.factor
                     ));
                 }
-                if bus.origin.infinite_bus() {
+                if bus.origin.upper_bound() {
                     let from_table = zone.is_none()
                         && source
                             .substation
@@ -1226,7 +1431,7 @@ fn check_breaker(
         ),
         Some(ka) => (
             Status::NotEvaluated,
-            if bus.origin.infinite_bus() {
+            if bus.origin.upper_bound() {
                 format!(
                     "no concluyente: {ka} kA es menor que los {icc:.2} kA estimados en {bus_name} {}, que es una cota superior; requiere estudio de cortocircuito",
                     bus.basis()
@@ -1261,6 +1466,9 @@ fn group_rules(bus: &BusFault) -> Vec<Rule> {
     let mut rules = vec![Rule::InterruptingRating];
     if bus.origin.infinite_bus() {
         rules.push(Rule::AvailableFault);
+    }
+    if bus.origin == FaultOrigin::SupplierPrimary {
+        rules.push(Rule::NetworkFaultImpedance);
     }
     if bus.line_to_neutral.is_some() {
         rules.push(Rule::LineToNeutralFault);
@@ -1403,12 +1611,13 @@ pub(crate) fn study(
         let status = breakers
             .iter()
             .fold(Status::Complies, |all, b| worse(all, b.status));
-        let (fault_ka, infinite_bus, line_to_neutral, issue, incomplete_motors, references) =
+        let (fault_ka, infinite_bus, line_to_neutral, origin, issue, incomplete_motors, references) =
             match &zones[&zone] {
                 Ok(bus) => (
                     Some(bus.total_ka),
                     bus.origin.infinite_bus(),
                     bus.line_to_neutral.is_some(),
+                    Some(bus.origin.clone()),
                     None,
                     bus.incomplete.len(),
                     group_rules(bus),
@@ -1417,6 +1626,7 @@ pub(crate) fn study(
                     None,
                     false,
                     false,
+                    None,
                     Some(issue.reason.clone()),
                     0,
                     vec![Rule::InterruptingRating],
@@ -1463,6 +1673,7 @@ pub(crate) fn study(
             fault_ka,
             infinite_bus,
             line_to_neutral,
+            origin,
             issue,
             incomplete_motors,
             board_ka,

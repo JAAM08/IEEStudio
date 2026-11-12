@@ -146,7 +146,7 @@ fn project_round_trips_through_json() {
     close(p.settings.total_drop_limit_percent, 5.0);
     assert!(Project::from_json("{").is_err());
     assert!(
-        Project::from_json(&json.replace("\"format_version\": 3", "\"format_version\": 99"))
+        Project::from_json(&json.replace("\"format_version\": 4", "\"format_version\": 99"))
             .is_err()
     );
 }
@@ -846,6 +846,7 @@ fn supplier_fault_current_takes_precedence() {
         brand: String::new(),
     });
     project.source.fault.available_ka = Some(5.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     let result = calculate(&project).unwrap();
     let study = result.fault.unwrap();
     let source = study.source.unwrap();
@@ -863,6 +864,7 @@ fn supplier_fault_current_takes_precedence() {
 fn a_project_transformer_sets_its_own_fault() {
     let mut project = transformer_project();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     project.panels[0].board.interrupting_ka = Some(25.0);
     project.panels[1].board.interrupting_ka = Some(10.0);
     project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(25.0);
@@ -1094,6 +1096,7 @@ fn two_levels() -> Project {
 fn motors_contribute_by_voltage_zone() {
     let mut project = two_levels();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     let result = calculate(&project).unwrap();
     let study = study(&result);
 
@@ -1194,6 +1197,7 @@ fn a_partial_study_evaluates_what_has_data() {
 fn a_transformer_without_data_never_inherits_the_primary_fault() {
     let mut project = two_levels();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     project.panels[0].board.interrupting_ka = Some(35.0);
     project.panels[1].board.interrupting_ka = Some(35.0);
     project.panels[1]
@@ -1242,6 +1246,7 @@ fn a_transformer_without_data_never_inherits_the_primary_fault() {
 fn a_motor_without_power_makes_the_fault_incomplete() {
     let mut project = two_levels();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     project.panels[0].board.interrupting_ka = Some(35.0);
     project.panels[1].board.interrupting_ka = Some(35.0);
     project.panels[1]
@@ -1283,6 +1288,7 @@ fn a_motor_without_power_makes_the_fault_incomplete() {
 fn a_two_phase_transformer_uses_its_single_phase_current() {
     let mut project = transformer_project();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     let tf = &mut project.panels[1];
     tf.kind = CircuitKind::LineToLine;
     tf.circuits[0].kind = CircuitKind::LineToLine;
@@ -1317,6 +1323,7 @@ fn a_transformer_with_equal_voltages_is_flagged() {
 fn a_transformer_without_power_is_not_evaluated() {
     let mut project = transformer_project();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     project.panels[1].transformer.as_mut().unwrap().kva = None;
     let result = calculate(&project).unwrap();
     let tf = panel(&result, "TF-1");
@@ -1392,6 +1399,7 @@ fn a_cfe_transformer_with_enough_data_is_valid() {
 fn low_voltage_service_with_the_supplier_fault() {
     let mut project = example::house();
     project.source.fault.available_ka = Some(10.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     project.panels[0].board.interrupting_ka = Some(10.0);
     project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(22.0);
     let result = calculate(&project).unwrap();
@@ -1463,6 +1471,7 @@ fn an_intermediate_transformer_with_invalid_data() {
     ] {
         let mut project = two_levels();
         project.source.fault.available_ka = Some(25.0);
+        project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
         project.panels[1].board.interrupting_ka = Some(35.0);
         let t = project.panels[1].transformer.as_mut().unwrap();
         t.kva = kva;
@@ -1538,6 +1547,7 @@ fn equal_ratings_are_flagged_only_beside_the_service() {
 fn a_one_to_one_transformer_is_not_rejected() {
     let mut project = transformer_project();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     let t = project.panels[1].transformer.as_mut().unwrap();
     t.secondary = System::WYE_480_277;
     let result = calculate(&project).unwrap();
@@ -1565,6 +1575,7 @@ fn a_one_to_one_transformer_is_not_rejected() {
 fn voltage_and_fault_propagate_through_several_panels() {
     let mut project = transformer_project();
     project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     let mut t2 = project.panels[1].clone();
     t2.id = "T-2".into();
     t2.name = "Subtablero".into();

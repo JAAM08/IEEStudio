@@ -631,16 +631,28 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                                 None => "transformador de la acometida sin potencia".to_string(),
                             });
                         }
+                        use ieestudio_project::fault::IssueKind;
+                        // Con algo por resolver en la falla, la sección se
+                        // abre sola: ahí está el dato que falta.
+                        let mut attention = false;
                         match study.as_ref().map(|f| (&f.source, &f.source_issue)) {
                             Some((Some(bus), _)) => summary.push(format!("falla de {:.2} kA en el punto de conexión", bus.total_ka)),
-                            Some((None, Some(issue))) if issue.kind == ieestudio_project::fault::IssueKind::Incomplete => {
+                            Some((None, Some(issue))) if issue.kind == IssueKind::Incomplete => {
+                                attention = true;
                                 summary.push(format!("falla sin estimar: {}", issue.reason))
+                            }
+                            Some((None, Some(issue))) if issue.kind == IssueKind::Invalid => {
+                                attention = true;
+                                summary.push(format!("dato inválido: {}", issue.reason))
                             }
                             _ => summary.push("sin datos de falla: la capacidad interruptiva de lo que depende de la acometida queda fuera de alcance".into()),
                         }
                         ui.label(muted(p, crate::widgets::capitalize(&summary.join(" · "))).size(12.5));
                         egui::CollapsingHeader::new("Datos de la acometida, su transformador y la falla")
-                            .id_salt("acometida-guiado")
+                            // Otro identificador con algo por resolver: egui
+                            // recuerda si estaba cerrada antes del cálculo.
+                            .id_salt(("acometida-guiado", attention))
+                            .default_open(attention)
                             .show(ui, |ui| {
                                 changed |= properties::source_inputs(ui, p, &mut project.source, study.as_ref());
                             });
@@ -1915,6 +1927,25 @@ fn interrupting_card(
             }
             ui.add(egui::Label::new(muted(p, detail).size(12.5)).wrap());
             ui.add_space(4.0);
+            // El dato de la suministradora sin decir dónde: se resuelve aquí
+            // con un clic, sin suponer nada (decisión 0029, D-2).
+            let missing_location = group
+                .issue
+                .as_deref()
+                .is_some_and(|i| i.starts_with(ieestudio_project::fault::MISSING_LOCATION));
+            if missing_location {
+                let ka = doc.project.source.fault.available_ka.unwrap_or_default();
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(format!("¿Dónde da la suministradora los {ka} kA?"));
+                    for location in ieestudio_project::FaultLocation::ALL {
+                        if ui.button(location.label()).clicked() {
+                            doc.project.source.fault.location = Some(location);
+                            action = Some(CardAction::Changed);
+                        }
+                    }
+                });
+                ui.add_space(2.0);
+            }
             match group.panel.as_deref().and_then(|id| index_of(doc, id)) {
                 // En las barras de un tablero: el dato del tablero lo toman
                 // todos sus interruptores sin dato propio.
@@ -2126,10 +2157,11 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                     if let Some(f) = &panel.fault {
                                         ui.label(muted(
                                             p,
-                                            match (f.origin.infinite_bus(), f.line_to_neutral.is_some()) {
-                                                (true, true) => "Falla (bus infinito, F-N)",
-                                                (true, false) => "Falla (bus infinito)",
-                                                _ => "Falla (suministradora)",
+                                            match (&f.origin, f.line_to_neutral.is_some()) {
+                                                (ieestudio_project::fault::FaultOrigin::Supplier, _) => "Falla (suministradora)",
+                                                (ieestudio_project::fault::FaultOrigin::SupplierPrimary, _) => "Falla (dato en MT)",
+                                                (_, true) => "Falla (bus infinito, F-N)",
+                                                (_, false) => "Falla (bus infinito)",
                                             },
                                         ));
                                         let mut hover = if f.motor_ka > 0.0 {

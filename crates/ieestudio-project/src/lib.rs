@@ -25,9 +25,9 @@ pub use calc::{
 };
 pub use demand::DemandLine;
 pub use model::{
-    Area, Board, BreakerData, Circuit, CompressorLoad, Connection, Demand, Feeder, Load, LoadKind,
-    MotorLoad, Mounting, Overrides, Panel, Phase, Project, ProjectInfo, Settings, Source,
-    SourceFault, Substation, Transformer, FORMAT_VERSION,
+    Area, Board, BreakerData, Circuit, CompressorLoad, Connection, Demand, FaultLocation, Feeder,
+    Load, LoadKind, MotorLoad, Mounting, Overrides, Panel, Phase, Project, ProjectInfo, Settings,
+    Source, SourceFault, Substation, Transformer, FORMAT_VERSION,
 };
 pub use motors::hp_label;
 pub use procedure::{insulation_name, material_name, size_label, Step};

@@ -22,8 +22,15 @@ use crate::workspace::{self, Tab, Workspace};
 
 const STORAGE_KEY: &str = "ieestudio-interfaz-1";
 /// En el navegador, el proyecto abierto se guarda solo con esta clave, para
-/// no perder trabajo si se cierra la pestaña.
-const WEB_PROJECT_KEY: &str = "ieestudio-proyecto-web";
+/// no perder trabajo si se cierra la pestaña. Desde el formato 4.
+const WEB_PROJECT_KEY: &str = "ieestudio-proyecto-web-4";
+/// Donde lo guardaban las versiones del formato 3. Se lee si la clave nueva
+/// está vacía y nunca se escribe: una versión anterior que siga en la caché
+/// del navegador no lee el formato 4 y pondría un proyecto vacío en su lugar.
+const WEB_PROJECT_KEY_V3: &str = "ieestudio-proyecto-web";
+/// Copia de un proyecto guardado que esta versión no pudo leer, para no
+/// perderlo al guardar el que se abre en su lugar.
+const WEB_PROJECT_UNREADABLE_KEY: &str = "ieestudio-proyecto-web-no-leido";
 
 const EXCEL_FILTER: Filter<'static> = Filter {
     name: "Libro de Excel",
@@ -91,6 +98,9 @@ pub struct App {
     dark: bool,
     accent: usize,
     notice: Option<String>,
+    /// En el navegador, el proyecto guardado que no se pudo leer: se copia a
+    /// `WEB_PROJECT_UNREADABLE_KEY` antes de guardar otro encima.
+    unreadable: Option<String>,
     done: Option<String>,
     about: bool,
     capture: Option<Capture>,
@@ -206,6 +216,7 @@ impl App {
             dark,
             accent,
             notice: None,
+            unreadable: None,
             done: None,
             about: false,
             capture: options.capture.map(|path| Capture { path, frames: 0 }),
@@ -230,14 +241,27 @@ impl App {
             app.load(path);
             resumed = true;
         } else if files::WEB {
-            // En el navegador se retoma el proyecto en el que se trabajaba.
-            let saved = cc
-                .storage
-                .and_then(|s| s.get_string(WEB_PROJECT_KEY))
-                .and_then(|text| Project::from_json(&text).ok());
-            if let Some(project) = saved {
-                app.set_project(project, None);
-                resumed = true;
+            // En el navegador se retoma el proyecto en el que se trabajaba:
+            // el del formato 4 o, si no hay, el de una versión anterior.
+            let saved = cc.storage.and_then(|s| {
+                s.get_string(WEB_PROJECT_KEY)
+                    .or_else(|| s.get_string(WEB_PROJECT_KEY_V3))
+            });
+            if let Some(text) = saved {
+                match Project::from_json(&text) {
+                    Ok(project) => {
+                        app.set_project(project, None);
+                        resumed = true;
+                    }
+                    // Nunca se pierde: se guarda una copia antes de escribir
+                    // otro proyecto en su lugar.
+                    Err(why) => {
+                        app.unreadable = Some(text);
+                        app.notice = Some(format!(
+                            "No se pudo abrir el proyecto guardado en este navegador ({why}). Se conserva una copia; actualiza la página para usar la versión más reciente."
+                        ));
+                    }
+                }
             }
         }
         // Sin nada que retomar se empieza en la pantalla de inicio; las
@@ -1729,6 +1753,9 @@ impl eframe::App for App {
             storage.set_string(STORAGE_KEY, text);
         }
         if files::WEB {
+            if let Some(text) = self.unreadable.take() {
+                storage.set_string(WEB_PROJECT_UNREADABLE_KEY, text);
+            }
             storage.set_string(WEB_PROJECT_KEY, self.doc.project.to_json());
         }
     }

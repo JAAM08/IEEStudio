@@ -1,5 +1,5 @@
 {
-  "format_version": 3,
+  "format_version": 4,
   "name": "Caso de auditoría",
   "profile": "nom-001-sede-2012",
   "info": {
@@ -43,7 +43,8 @@
       "mounting": "Substation"
     },
     "fault": {
-      "available_ka": 50.0
+      "available_ka": 50.0,
+      "location": "LowVoltage"
     }
   },
   "panels": [

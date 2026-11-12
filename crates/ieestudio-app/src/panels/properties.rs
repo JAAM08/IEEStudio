@@ -952,7 +952,27 @@ pub(crate) fn source_inputs(
     property(ui, p, "Falla disponible", |ui| {
         changed |= blank_number(ui, "falla-suministradora", &mut source.fault.available_ka, "kA");
     })
-    .on_hover_text("Corriente de cortocircuito en el punto de conexión, si la da la suministradora. Manda sobre la que se estima con el transformador de la acometida.");
+    .on_hover_text("Corriente de cortocircuito que da la suministradora. Manda sobre la que se estima con el transformador de la acometida.");
+    if source.fault.available_ka.is_some() {
+        // Nunca se supone: un dato de media tensión no es el del secundario
+        // (decisión 0029, D-2).
+        property(ui, p, "Dónde la da", |ui| {
+            // Más ancha que las demás listas: las opciones son frases.
+            let location = &mut source.fault.location;
+            egui::ComboBox::from_id_salt("ubicacion-falla")
+                .width(300.0)
+                .selected_text(location.map_or("Sin indicar", |l| l.label()))
+                .show_ui(ui, |ui| {
+                    changed |= ui.selectable_value(location, None, "Sin indicar").changed();
+                    for option in ieestudio_project::FaultLocation::ALL {
+                        changed |= ui
+                            .selectable_value(location, Some(option), option.label())
+                            .changed();
+                    }
+                });
+        })
+        .on_hover_text("En baja tensión se usa tal cual. En media tensión se pasa por el transformador de la acometida: hacen falta su potencia, su impedancia y la tensión de su primario.");
+    }
     let mut has_substation = source.substation.is_some();
     if ui
         .checkbox(&mut has_substation, "La acometida tiene transformador (CFE o propio)")
@@ -1045,10 +1065,15 @@ pub(crate) fn source_inputs(
             fault_box(ui, p, "Corriente de falla en el punto de conexión", bus);
         }
         None => {
+            use ieestudio_project::fault::IssueKind;
             let (text, color) = match study.and_then(|s| s.source_issue.as_ref()) {
-                Some(issue) if issue.kind == ieestudio_project::fault::IssueKind::Incomplete => (
+                Some(issue) if issue.kind == IssueKind::Incomplete => (
                     format!("{} Sin falla en el punto de conexión: {}.", icon::WARNING, issue.reason),
                     p.warn,
+                ),
+                Some(issue) if issue.kind == IssueKind::Invalid => (
+                    format!("{} Dato inválido: {}.", icon::WARNING, issue.reason),
+                    p.bad,
                 ),
                 _ => (
                     "Sin la falla de la suministradora ni el transformador de la acometida, la capacidad interruptiva de lo que depende de la acometida queda fuera de alcance.".to_string(),
@@ -1084,7 +1109,8 @@ pub(crate) fn fault_box(
                     .strong(),
             );
             let mut origin = match &bus.origin {
-                FaultOrigin::Supplier => "Dato de la suministradora, sin descontar los alimentadores.".to_string(),
+                FaultOrigin::Supplier => "Dato de la suministradora en baja tensión, sin descontar los alimentadores.".to_string(),
+                FaultOrigin::SupplierPrimary => "Dato de la suministradora en media tensión, combinado con la impedancia del transformador de la acometida: es una cota superior.".to_string(),
                 FaultOrigin::Substation => {
                     "Bus infinito del transformador de la acometida: la red se toma sin impedancia, así que es la corriente mayor posible.".to_string()
                 }

@@ -22,8 +22,9 @@
 mod casos;
 
 use ieestudio_project::evaluation::Evaluation;
-use ieestudio_project::fault::InterruptingGroup;
+use ieestudio_project::fault::{FaultOrigin, InterruptingGroup, IssueKind};
 use ieestudio_project::verdict::Compliance;
+use ieestudio_project::FaultLocation;
 use ieestudio_project::{calculate, Project, ProjectResult, Status};
 
 fn calc(project: &Project) -> ProjectResult {
@@ -229,6 +230,7 @@ fn h01_ejemplo_de_la_decision_50_kva() {
 fn h01_el_dato_de_la_suministradora_no_se_multiplica() {
     let mut project = casos::h01_acometida_240_120();
     project.source.fault.available_ka = Some(5.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     let result = calc(&project);
     let study = result.fault.as_ref().unwrap();
     let bus = study.source.as_ref().unwrap();
@@ -291,34 +293,175 @@ fn h01_la_regla_cita_su_fuente() {
 }
 
 // --------------------------------------------- H-02 tensión del dato de CFE
+//
+// Corregido en la etapa 1B con la decisión 0029 (D-2). Subestación propia de
+// 1000 kVA, 5.75 % (5.175 % reducida), 13.2 kV a 480Y/277 V:
+// In = 1 000 kVA / (√3 · 480 V) = 1 202.81 A; bus infinito 23.24 kA.
 
-/// H-02 (alto). Un dato de la suministradora mayor que el bus infinito de
-/// su propio transformador es imposible: 1000 kVA, 5.75 % (5.175 %) a
-/// 480 V dan 23.24 kA como máximo y el dato dice 50 kA. Debe avisarse con
-/// cualquier alternativa de D-2.
+/// In del transformador de 1000 kVA a 480 V, en amperes.
+const IN_1000: f64 = 1_000_000.0 / (1.732_050_807_568_877_2 * 480.0);
+
+/// H-02 (alto). Un dato en baja tensión mayor que el bus infinito de su
+/// propio transformador es imposible: 50 kA contra 23.24 kA. «Dato
+/// inválido» con la causa, nunca «Cumple».
 #[test]
-#[ignore = "H-02 abierto (D-2)"]
 fn h02_un_dato_mayor_que_el_bus_infinito_se_avisa() {
-    let result = calc(&casos::h02_subestacion_con_dato(50.0, 65.0));
+    let result = calc(&casos::h02_subestacion_con_dato(
+        50.0,
+        Some(FaultLocation::LowVoltage),
+        65.0,
+    ));
     let g = group(&result, Some("TG"));
+    assert_eq!(g.evaluation, Evaluation::Invalid, "H-02: hoy {}", state(g));
+    assert_eq!(g.label(), "Dato inválido");
+    let issue = &result
+        .fault
+        .as_ref()
+        .unwrap()
+        .source_issue
+        .as_ref()
+        .unwrap();
+    assert_eq!(issue.kind, IssueKind::Invalid);
     assert!(
-        warned(&result, g, &["bus infinito", "contradic", "mayor que"]),
-        "H-02: sin aviso; hoy {}",
-        state(g)
+        issue.reason.contains("(50 kA) es mayor que la mayor posible con el transformador de la acometida (23.24 kA por bus infinito)"),
+        "{}",
+        issue.reason
     );
 }
 
-/// H-02 (alto). 5 kA sin decir si son de 13.2 kV o de 480 V, con una
-/// subestación propia de 1000 kVA. Si fueran de media tensión, el
-/// secundario tendría unos 19.9 kA; hoy se usan 5 kA en 480 V y los
-/// interruptores de 10 kA «cumplen». Con la decisión 0029 (D-2) un dato
-/// sin decir dónde está queda «Sin evaluar»; en 13.2 kV daría 22.92 kA.
+/// Un dato en baja tensión que no pasa del bus infinito se usa tal cual.
 #[test]
-#[ignore = "H-02 abierto (D-2)"]
+fn h02_un_dato_en_baja_tension_se_usa_tal_cual() {
+    let result = calc(&casos::h02_subestacion_con_dato(
+        20.0,
+        Some(FaultLocation::LowVoltage),
+        22.0,
+    ));
+    let study = result.fault.as_ref().unwrap();
+    let bus = study.source.as_ref().unwrap();
+    assert_eq!(bus.origin, FaultOrigin::Supplier);
+    assert_eq!(bus.total_ka, 20.0);
+    assert_eq!(group(&result, Some("TG")).label(), "Cumple");
+}
+
+/// H-02 (alto). 5 kA sin decir si son de 13.2 kV o de 480 V: antes se
+/// usaban en 480 V y los interruptores de 10 kA «cumplían». Ahora queda
+/// «Sin evaluar» y el motivo pide indicar dónde.
+#[test]
 fn h02_un_dato_sin_tension_no_da_cumple() {
-    let result = calc(&casos::h02_subestacion_con_dato(5.0, 10.0));
+    let result = calc(&casos::h02_subestacion_con_dato(5.0, None, 10.0));
     let g = group(&result, Some("TG"));
-    assert_ne!(g.label(), "Cumple", "H-02: hoy {}", state(g));
+    assert_eq!(g.label(), "Sin evaluar", "H-02: hoy {}", state(g));
+    assert!(g
+        .issue
+        .as_deref()
+        .unwrap()
+        .starts_with(ieestudio_project::fault::MISSING_LOCATION));
+    assert_ne!(result.verdict.compliance, Compliance::Conforms);
+}
+
+/// Matemática y referencia (ejemplo de la decisión 0029): 5 kA en 13.2 kV.
+/// `Zred = 1000 / (√3 · 13.2 · 5 · 1000) = 0.008748`;
+/// `Z = √(0.008748² + 0.05175²) = 0.052484`; `Icc = 1202.81 / 0.052484 =
+/// 22.92 kA`. Con interruptores de 10 kA, «No concluyente».
+#[test]
+fn h02_un_dato_en_media_tension_pasa_por_el_transformador() {
+    let result = calc(&casos::h02_subestacion_con_dato(
+        5.0,
+        Some(FaultLocation::Primary),
+        10.0,
+    ));
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    assert_eq!(bus.origin, FaultOrigin::SupplierPrimary);
+    let z_net = 1000.0 / (3f64.sqrt() * 13.2 * 5.0 * 1000.0);
+    let z = (z_net * z_net + 0.05175f64 * 0.05175).sqrt();
+    close(bus.total_ka, IN_1000 / z / 1000.0, 1e-9);
+    close(bus.total_ka, 22.9177, 1e-4);
+    // Menor que el bus infinito y mayor que la suma de magnitudes.
+    assert!(bus.total_ka < IN_1000 / 0.05175 / 1000.0);
+    assert!(bus.total_ka > IN_1000 / (z_net + 0.05175) / 1000.0);
+    let g = group(&result, Some("TG"));
+    assert_eq!(g.label(), "No concluyente");
+    assert!(g
+        .summary()
+        .contains("estimados con el dato de la suministradora en media tensión y el transformador, que es una cota superior"));
+    let steps: Vec<&str> = bus.steps.iter().map(|s| s.title.as_str()).collect();
+    assert_eq!(
+        steps,
+        [
+            "Corriente de falla de la suministradora",
+            "Corriente nominal del transformador de la acometida",
+            "Impedancia para la falla",
+            "Impedancia de la red",
+            "Falla en el secundario",
+        ]
+    );
+    assert_eq!(
+        bus.steps[3].substitution,
+        "Zred = 1000 kVA / (√3 · 13.2 kV · 5 kA) = 0.00875"
+    );
+}
+
+/// Con el dato en media tensión hacen falta los datos del transformador:
+/// sin él o sin la tensión del primario, «Sin evaluar» con la causa.
+#[test]
+fn h02_un_dato_en_media_tension_necesita_el_transformador() {
+    let mut project = casos::h02_subestacion_con_dato(5.0, Some(FaultLocation::Primary), 10.0);
+    project.source.substation.as_mut().unwrap().primary_kv = None;
+    let result = calc(&project);
+    let issue = result.fault.as_ref().unwrap().source_issue.clone().unwrap();
+    assert_eq!(issue.kind, IssueKind::Incomplete);
+    assert!(issue.reason.contains("falta la tensión del primario"));
+
+    project.source.substation = None;
+    let result = calc(&project);
+    let issue = result.fault.as_ref().unwrap().source_issue.clone().unwrap();
+    assert_eq!(issue.kind, IssueKind::Incomplete);
+    assert!(issue
+        .reason
+        .contains("falta el transformador de la acometida"));
+}
+
+/// En un secundario 1F-3H el dato de media tensión no reduce la falla: se
+/// queda el bus infinito de fase a neutro (decisión 0029, D-1), y el
+/// procedimiento lo dice.
+#[test]
+fn h02_en_1f_3h_el_dato_de_media_tension_no_reduce() {
+    let mut project = casos::h01_acometida_240_120();
+    project.source.fault.available_ka = Some(1.0);
+    project.source.fault.location = Some(FaultLocation::Primary);
+    let result = calc(&project);
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    assert_eq!(bus.origin, FaultOrigin::Substation);
+    close(bus.total_ka, LN * LL_25, 1e-9);
+    assert!(bus
+        .steps
+        .iter()
+        .any(|s| s.title == "Dato de media tensión en un secundario 1F-3H"));
+}
+
+/// Normativa: la regla del equivalente de red cita la IEC 60909-0 con su
+/// edición y dice que falta cotejar la de 2026; la verificación la lleva.
+#[test]
+fn h02_la_regla_de_la_red_cita_su_fuente() {
+    use ieestudio_rules::{Profile, Rule};
+    let profile = Profile::nom_001_sede_2012();
+    let clause = profile.clause(Rule::NetworkFaultImpedance);
+    assert!(clause.contains("IEC 60909-0:2016"), "{clause}");
+    assert!(profile
+        .rule_description(Rule::NetworkFaultImpedance)
+        .unwrap()
+        .contains("edición 2026"));
+    let result = calc(&casos::h02_subestacion_con_dato(
+        5.0,
+        Some(FaultLocation::Primary),
+        10.0,
+    ));
+    let g = group(&result, Some("TG"));
+    assert!(g
+        .references
+        .iter()
+        .any(|r| r.clause.as_deref() == Some(clause.as_str())));
 }
 
 // ----------------------------------------------- H-03 cargas que parecen motor

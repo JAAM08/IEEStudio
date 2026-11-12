@@ -15,8 +15,8 @@
 
 use ieestudio_core::{CircuitKind, System};
 use ieestudio_project::{
-    example, Area, Circuit, Connection, Demand, Feeder, Load, LoadKind, Mounting, Overrides, Panel,
-    Phase, Project, Source, Substation, Transformer,
+    example, Area, Circuit, Connection, Demand, FaultLocation, Feeder, Load, LoadKind, Mounting,
+    Overrides, Panel, Phase, Project, Source, Substation, Transformer,
 };
 
 /// Circuito de alumbrado: no aporta a la falla y siempre se calcula.
@@ -180,6 +180,7 @@ pub fn h01_acometida_240_120() -> Project {
 pub fn h01_intermedio_240_120() -> Project {
     let mut p = single_board(System::WYE_480_277, CircuitKind::ThreePhase);
     p.source.fault.available_ka = Some(25.0);
+    p.source.fault.location = Some(FaultLocation::LowVoltage);
     breakers(&mut p, 0, 35.0);
     let mut tf = board("TF-1", Some("TG"), CircuitKind::LineToLine);
     tf.transformer = Some(transformer(Some(25.0), 3.0, System::SPLIT_240_120));
@@ -194,14 +195,20 @@ pub fn h01_intermedio_240_120() -> Project {
     p
 }
 
-/// H-02: subestación propia de 1000 kVA, 5.75 %, 480Y/277 V, con un dato de
-/// la suministradora de `available_ka` sin decir a qué tensión.
-pub fn h02_subestacion_con_dato(available_ka: f64, breaker_ka: f64) -> Project {
+/// H-02: subestación propia de 1000 kVA, 5.75 %, 13.2 kV a 480Y/277 V, con
+/// un dato de la suministradora de `available_ka` en `location` (`None`:
+/// sin decir dónde).
+pub fn h02_subestacion_con_dato(
+    available_ka: f64,
+    location: Option<FaultLocation>,
+    breaker_ka: f64,
+) -> Project {
     let mut p = single_board(System::WYE_480_277, CircuitKind::ThreePhase);
     let mut sub = substation(1000.0, Some(5.75), Connection::DeltaWye);
     sub.mounting = Some(Mounting::Substation);
     p.source.substation = Some(sub);
     p.source.fault.available_ka = Some(available_ka);
+    p.source.fault.location = location;
     breakers(&mut p, 0, breaker_ka);
     p
 }
@@ -211,6 +218,7 @@ pub fn h02_subestacion_con_dato(available_ka: f64, breaker_ka: f64) -> Project {
 pub fn h03_bombas(as_motor: bool) -> Project {
     let mut p = single_board(System::WYE_220_127, CircuitKind::ThreePhase);
     p.source.fault.available_ka = Some(9.8);
+    p.source.fault.location = Some(FaultLocation::LowVoltage);
     for id in ["M-1", "M-2"] {
         let mut c = motor(id, "Bomba 50 hp", "50");
         if !as_motor {
@@ -303,6 +311,7 @@ pub fn h09_transformador_sin_potencia() -> Project {
 pub fn h11_dato_invalido() -> Project {
     let mut p = single_board(System::WYE_220_127, CircuitKind::ThreePhase);
     p.source.fault.available_ka = Some(0.0);
+    p.source.fault.location = Some(FaultLocation::LowVoltage);
     breakers(&mut p, 0, 10.0);
     p
 }
@@ -311,6 +320,7 @@ pub fn h11_dato_invalido() -> Project {
 pub fn h12_motor_detras_de_transformador_sin_datos() -> Project {
     let mut p = single_board(System::WYE_480_277, CircuitKind::ThreePhase);
     p.source.fault.available_ka = Some(25.0);
+    p.source.fault.location = Some(FaultLocation::LowVoltage);
     breakers(&mut p, 0, 35.0);
     let mut tf = board("TF-1", Some("TG"), CircuitKind::ThreePhase);
     tf.transformer = Some(transformer(None, 3.0, System::WYE_220_127));
@@ -371,11 +381,15 @@ pub fn all() -> Vec<(&'static str, Project)> {
         ("h01-intermedio-240-120.iees", h01_intermedio_240_120()),
         (
             "h02-dato-media-tension-5ka.iees",
-            h02_subestacion_con_dato(5.0, 10.0),
+            h02_subestacion_con_dato(5.0, None, 10.0),
+        ),
+        (
+            "h02-dato-en-primario-5ka.iees",
+            h02_subestacion_con_dato(5.0, Some(FaultLocation::Primary), 10.0),
         ),
         (
             "h02-dato-mayor-que-bus-infinito.iees",
-            h02_subestacion_con_dato(50.0, 65.0),
+            h02_subestacion_con_dato(50.0, Some(FaultLocation::LowVoltage), 65.0),
         ),
         ("h03-bombas-como-otra-carga.iees", h03_bombas(false)),
         ("h03-bombas-como-motor.iees", h03_bombas(true)),

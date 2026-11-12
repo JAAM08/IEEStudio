@@ -16,9 +16,13 @@ use serde::{Deserialize, Serialize};
 ///
 /// Los archivos de la versión 3 escritos antes de retirar el cortocircuito
 /// (decisión 0018) traen campos de falla y de capacidad interruptiva; al
-/// leerlos se ignoran y ya no se escriben. Por eso el formato sigue siendo el 3:
-/// un programa anterior abre sin error lo que escribe este.
-pub const FORMAT_VERSION: u32 = 3;
+/// leerlos se ignoran y ya no se escriben.
+///
+/// La 4 dice dónde da la suministradora la corriente de falla (decisión
+/// 0029, D-2 y D-7). Se leen los formatos 1 a 4 sin suponer datos: un dato
+/// de falla de un archivo anterior queda sin ubicación hasta que se indique.
+/// Un programa anterior no abre un archivo de la 4 y dice que es más nuevo.
+pub const FORMAT_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Project {
@@ -158,11 +162,36 @@ pub struct SourceFault {
     /// Corriente de cortocircuito disponible, en kA.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub available_ka: Option<f64>,
+    /// Dónde la da la suministradora. `None` si no se ha dicho: nunca se
+    /// supone que es de baja tensión (decisión 0029, D-2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<FaultLocation>,
 }
 
 impl SourceFault {
     pub fn is_empty(&self) -> bool {
-        self.available_ka.is_none()
+        self.available_ka.is_none() && self.location.is_none()
+    }
+}
+
+/// Dónde está la corriente de falla que da la suministradora.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FaultLocation {
+    /// En baja tensión, en el punto de conexión: se usa tal cual.
+    LowVoltage,
+    /// En media tensión, en el primario del transformador de la acometida, a
+    /// la tensión de su primario: se pasa por el transformador.
+    Primary,
+}
+
+impl FaultLocation {
+    pub const ALL: [FaultLocation; 2] = [FaultLocation::LowVoltage, FaultLocation::Primary];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FaultLocation::LowVoltage => "En baja tensión, en el punto de conexión",
+            FaultLocation::Primary => "En media tensión, en el primario del transformador",
+        }
     }
 }
 
@@ -563,14 +592,25 @@ fn yes() -> bool {
 impl Project {
     /// Lee un proyecto desde JSON.
     pub fn from_json(text: &str) -> Result<Project, String> {
+        // El formato se revisa antes que lo demás: un archivo más nuevo puede
+        // traer campos con otra forma, y el error debe decir que es más nuevo,
+        // no qué campo no entendió.
+        #[derive(Deserialize)]
+        struct Version {
+            format_version: Option<u64>,
+        }
+        if let Ok(Version {
+            format_version: Some(version),
+        }) = serde_json::from_str::<Version>(text)
+        {
+            if version > u64::from(FORMAT_VERSION) {
+                return Err(format!(
+                    "el archivo usa el formato {version}, más nuevo que el que este programa entiende ({FORMAT_VERSION}); actualiza IEEStudio para abrirlo"
+                ));
+            }
+        }
         let mut project: Project =
             serde_json::from_str(text).map_err(|e| format!("archivo de proyecto inválido: {e}"))?;
-        if project.format_version > FORMAT_VERSION {
-            return Err(format!(
-                "el archivo usa el formato {}, más nuevo que el que este programa entiende ({FORMAT_VERSION})",
-                project.format_version
-            ));
-        }
         // Formatos 1 y 2: el factor de demanda era un número sobre toda la
         // carga, 1 por omisión. Uno distinto de 1 se conserva como factor
         // propio; el 1 pasa al método del artículo 220.
@@ -668,6 +708,45 @@ mod tests {
         again.source.fault = SourceFault::default();
         again.panels[0].feeder.overrides.breaker = BreakerData::default();
         assert_eq!(again, project);
+    }
+
+    /// Un dato de falla de un archivo del formato 3 se lee sin ubicación:
+    /// no se supone que es de baja tensión. Se escribe en el formato 4 con la
+    /// ubicación que se le dé.
+    #[test]
+    fn a_format_3_fault_datum_has_no_location() {
+        let json = crate::example::house()
+            .to_json()
+            .replacen("\"format_version\": 4", "\"format_version\": 3", 1)
+            .replacen(
+                "\"source\": {",
+                "\"source\": {\n    \"fault\": { \"available_ka\": 10.0 },",
+                1,
+            );
+        let mut read = Project::from_json(&json).unwrap();
+        assert_eq!(read.source.fault.available_ka, Some(10.0));
+        assert_eq!(read.source.fault.location, None);
+        read.source.fault.location = Some(FaultLocation::Primary);
+        let written = read.to_json();
+        assert!(written.contains("\"format_version\": 4"));
+        assert!(written.contains("\"location\": \"Primary\""));
+        assert_eq!(Project::from_json(&written).unwrap().to_json(), written);
+    }
+
+    /// Un archivo de un formato más nuevo no se abre a medias: el error dice
+    /// que es más nuevo aunque traiga campos que este programa no entiende.
+    #[test]
+    fn a_newer_format_is_refused() {
+        let json = crate::example::house().to_json().replacen(
+            "\"format_version\": 4",
+            "\"format_version\": 5",
+            1,
+        );
+        let error = Project::from_json(&json).unwrap_err();
+        assert!(error.contains("formato 5, más nuevo"), "{error}");
+        let changed = json.replacen("\"name\": \"Acometida\"", "\"name\": 7", 1);
+        let error = Project::from_json(&changed).unwrap_err();
+        assert!(error.contains("formato 5, más nuevo"), "{error}");
     }
 
     #[test]

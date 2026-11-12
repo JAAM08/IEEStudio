@@ -25,3 +25,13 @@ Es decir, H-09 alcanza más que lo que reportó Fable: además del
 transformador intermedio sin potencia, una acometida con «impedancia de la
 tabla» tampoco abre en la versión anterior, aunque el formato sigue diciendo
 3.
+
+## Desde la etapa 1B (formato 4)
+
+Los archivos se escriben en el formato 4. Con `tools/auditoria.sh anterior`,
+la versión `ef59295` rechaza los 19 casos: 15 con «el archivo usa el formato
+4, más nuevo que el que este programa entiende (3)» y 4 con «missing field»,
+porque esa versión lee todo el archivo antes de revisar el formato. Ninguno se
+abre a medias. Desde la etapa 1B el programa revisa el formato antes de leer
+lo demás, así que un archivo de un formato futuro siempre dará el mensaje
+claro.
