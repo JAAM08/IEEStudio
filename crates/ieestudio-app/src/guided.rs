@@ -642,6 +642,7 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         ui.label(strong("Acometida y cortocircuito"));
+                        changed |= properties::fault_study_toggle(ui, &mut project.settings.fault_study);
                         let source = &project.source;
                         let mut summary = Vec::new();
                         if !source.supplier.trim().is_empty() {
@@ -658,6 +659,9 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                         // abre sola: ahí está el dato que falta.
                         let mut attention = false;
                         match study.as_ref().map(|f| (&f.source, &f.source_issue)) {
+                            _ if !project.settings.fault_study => summary.push(
+                                "cálculo de cortocircuito apagado: la capacidad interruptiva queda fuera de alcance y la memoria lo anota".into(),
+                            ),
                             Some((Some(bus), _)) => summary.push(format!("falla de {:.2} kA en el punto de conexión", bus.total_ka)),
                             Some((None, Some(issue))) if issue.kind == IssueKind::Incomplete => {
                                 attention = true;

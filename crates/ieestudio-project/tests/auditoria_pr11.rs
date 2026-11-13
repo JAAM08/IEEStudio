@@ -1356,3 +1356,78 @@ fn p31_cita_la_tabla_9_y_la_regla() {
         tg.summary()
     );
 }
+
+// ------------------------------- Cálculo de cortocircuito opcional (12 nov.)
+
+/// Apagado, no hay estudio de falla ni verificación de capacidad
+/// interruptiva; el dictamen la anota fuera de alcance con el motivo. Lo
+/// demás no cambia.
+#[test]
+fn cortocircuito_apagado_queda_fuera_de_alcance_anotado() {
+    let mut project = casos::h07_todo_cumple(false);
+    let on = calc(&project);
+    project.settings.fault_study = false;
+    let off = calc(&project);
+    assert!(off.fault.is_none());
+    assert!(off
+        .panels
+        .iter()
+        .flat_map(|p| p.runs())
+        .all(|r| r.interrupting.is_none()));
+    assert!(off.panels.iter().all(|p| p.fault.is_none()));
+    assert_eq!(off.verdict.compliance, Compliance::Conforms);
+    assert_eq!(
+        compliance_text(&off),
+        "Conforme en lo evaluado con NOM-001-SEDE-2012: lo que el programa verifica cumple y nada quedó sin evaluar. Fuera de alcance: capacidad interruptiva (NOM-001-SEDE-2012: 110-9, 110-10), no se revisó en este proyecto porque el cálculo de cortocircuito está apagado; requiere estudio de cortocircuito."
+    );
+    // Los tramos son los mismos.
+    let statuses = |r: &ProjectResult| -> Vec<Status> {
+        r.panels
+            .iter()
+            .flat_map(|p| p.runs())
+            .map(|r| r.status)
+            .collect()
+    };
+    assert_eq!(statuses(&on), statuses(&off));
+}
+
+/// Apagado, un interruptor que no alcanzaría la falla ya no deja el dictamen
+/// incompleto, pero nunca se dice que cumple: queda fuera de alcance.
+#[test]
+fn cortocircuito_apagado_no_afirma_que_cumple() {
+    let mut project = casos::h01_acometida_240_120();
+    assert_ne!(calc(&project).verdict.compliance, Compliance::Conforms);
+    project.settings.fault_study = false;
+    let off = calc(&project);
+    let text = compliance_text(&off);
+    assert!(
+        text.contains("Fuera de alcance: capacidad interruptiva"),
+        "{text}"
+    );
+    assert!(!text.contains("cota superior"), "{text}");
+}
+
+/// La carga que parece motor ya no habla de la capacidad interruptiva.
+#[test]
+fn cortocircuito_apagado_el_aviso_de_tipo_no_habla_de_la_falla() {
+    let mut project = casos::h03_bombas(false);
+    project.settings.fault_study = false;
+    let result = calc(&project);
+    assert_eq!(result.kind_hints.len(), 2);
+    let text = result.kind_hints[0].text();
+    assert!(!text.contains("capacidad interruptiva"), "{text}");
+    assert!(!text.contains("falla"), "{text}");
+}
+
+/// Encendido por omisión: no se escribe en el archivo, y un archivo sin el
+/// dato lo lee encendido. Apagado se escribe y se lee.
+#[test]
+fn cortocircuito_opcional_en_el_archivo() {
+    let mut project = casos::h07_todo_cumple(false);
+    assert!(project.settings.fault_study);
+    assert!(!project.to_json().contains("fault_study"));
+    project.settings.fault_study = false;
+    let json = project.to_json();
+    assert!(json.contains("\"fault_study\": false"), "{json}");
+    assert!(!Project::from_json(&json).unwrap().settings.fault_study);
+}
