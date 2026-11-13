@@ -30,9 +30,9 @@ monofásica (H-05).
 | T-7 | Archivos anteriores | Toman la topología solo si sus tensiones son exactamente uno de los seis sistemas de la interfaz; formato 5 | Aprobada, etapa 1D |
 | C-1 | Conexión del transformador de la acometida | Si contradice al sistema, «Dato inválido» en la capacidad interruptiva | Aprobada, etapa 1D |
 | C-2 | Banco de tres monofásicos | Se captura como banco trifásico con la conexión del banco | Aprobada, etapa 1D |
-| N-1 | Impedancia fuera del intervalo de la NMX-J-116 | Abajo del mínimo, aviso; arriba del máximo, «No concluyente» hasta confirmar la placa | **Pendiente**: tabla de la edición 2017 |
-| N-2 | Nota 3: monofásico tipo subestación | Columna del trifásico tipo subestación de su clase de aislamiento, sin importar los kVA | **Pendiente**: tabla de la edición 2017 |
-| N-3 | Renglón de un banco de monofásicos | Renglón monofásico con la potencia de cada unidad (kVA del banco / 3) | **Pendiente**: tabla de la edición 2017 |
+| N-1 | Impedancia fuera del intervalo de la NMX-J-116 | Abajo del mínimo, aviso; arriba del máximo, «No concluyente» hasta confirmar la placa | **En pausa** (ajuste del plan del 12 de noviembre; además espera la tabla 2017) |
+| N-2 | Nota 3: monofásico tipo subestación | Columna del trifásico tipo subestación de su clase de aislamiento, sin importar los kVA | **En pausa** (ajuste del plan del 12 de noviembre; además espera la tabla 2017) |
+| N-3 | Renglón de un banco de monofásicos | Renglón monofásico con la potencia de cada unidad (kVA del banco / 3) | **En pausa** (ajuste del plan del 12 de noviembre; además espera la tabla 2017) |
 
 ## T-1 a T-7. Topología declarada
 

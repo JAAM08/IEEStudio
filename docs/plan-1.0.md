@@ -137,6 +137,28 @@ El informe Fable demuestra que el programa puede mostrar 3.86 kA y «Cumple» pa
 - Detectar impedancias fuera del rango válido de la tabla o clase de equipo; no inventar límites: deben venir de fuente aprobada y estar documentados.
 - Pruebas: relación de tensión 1.88; relación 2.1; transformador monofásico asociado a sistema 220Y/127 V; impedancia anómala; cada caso debe mostrar error/advertencia con estado correcto y no generar un «Cumple» falso.
 
+> **Ajuste del 12 de noviembre de 2026 (aprobado por el dueño).** El
+> objetivo de la revisión de cortocircuito es elegir bien los interruptores,
+> con el menor número de datos. Por eso:
+>
+> - **1E se reduce** a H-07, H-10 y H-11: dictamen y textos, sin datos nuevos.
+>   H-06 (capacidad del transformador propio) queda en pausa porque agrega
+>   la pregunta «¿es propio o de la suministradora?».
+> - **N-1 a N-3** de la 0030 (intervalo de la NMX-J-116, nota 3 y bancos de
+>   monofásicos) quedan en pausa: son casos poco comunes. Mientras tanto,
+>   esos casos piden la impedancia de placa.
+> - **Nueva etapa 1F: falla en cada tablero descontando los conductores**
+>   (método punto a punto, decisión 0031), si se aprueba. No pide datos
+>   nuevos y es la parte que más ayuda a elegir interruptores.
+> - **El alcance de cortocircuito se congela después de 1F.** Un caso que no
+>   cubra queda «No concluyente: requiere estudio de cortocircuito».
+> - **En el rediseño de interfaz:** la captura del cortocircuito se reduce a
+>   «tengo el dato de la suministradora» o «tengo el transformador», con lo
+>   demás oculto hasta que haga falta, y la carga no lineal se pregunta al
+>   crear el alimentador. Antes del rediseño, una prueba de uso con alguien
+>   que no conozca el programa y una campaña de validación contra cálculos
+>   de ingenieros.
+
 #### 1E. H-06, H-07, H-10 y H-11 — Capacidad, dictamen y presentación consistente
 
 - H-06: evaluar la capacidad del transformador de acometida cuando sea equipo propio y haya datos de carga y placa suficientes. Distinguir claramente transformador de CFE y transformador del usuario. No emitir verificación si faltan datos.
