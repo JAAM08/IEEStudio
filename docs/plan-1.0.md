@@ -148,8 +148,11 @@ El informe Fable demuestra que el programa puede mostrar 3.86 kA y «Cumple» pa
 >   monofásicos) quedan en pausa: son casos poco comunes. Mientras tanto,
 >   esos casos piden la impedancia de placa.
 > - **Nueva etapa 1F: falla en cada tablero descontando los conductores**
->   (método punto a punto, decisión 0031), si se aprueba. No pide datos
->   nuevos y es la parte que más ayuda a elegir interruptores.
+>   (método punto a punto, decisión 0031, aceptada e implementada). No pide
+>   datos nuevos y es la parte que más ayuda a elegir interruptores.
+> - **Cálculo de cortocircuito opcional por proyecto** (pedido del dueño, 12
+>   de noviembre): encendido por omisión; apagado, la capacidad
+>   interruptiva queda «fuera de alcance» y la memoria lo anota.
 > - **El alcance de cortocircuito se congela después de 1F.** Un caso que no
 >   cubra queda «No concluyente: requiere estudio de cortocircuito».
 > - **En el rediseño de interfaz:** la captura del cortocircuito se reduce a

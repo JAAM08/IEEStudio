@@ -32,8 +32,9 @@ con ella (110-9, 110-10). No es un estudio de cortocircuito:
   para la sensibilidad de las protecciones, ni coordinación.
 - No revisa la relación X/R con la que se probó cada interruptor; cerca de
   transformadores grandes la capacidad real puede ser menor que la de placa.
-- No descuenta la impedancia de los conductores: todas las barras de una
-  zona ven la falla de su fuente.
+- ~~No descuenta la impedancia de los conductores~~. **Cambiado por la 0031
+  en la etapa 1F:** cada tablero descuenta sus alimentadores (punto a
+  punto), y la falla sigue siendo una cota superior.
 - No usa el factor de tensión `c` ni la corrección `KT` de la IEC 60909-0:
   el margen viene de reducir la impedancia de placa con la tolerancia del
   perfil. Los dos métodos no se mezclan.

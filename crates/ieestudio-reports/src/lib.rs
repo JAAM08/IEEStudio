@@ -632,7 +632,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
 
     if let Some(study) = &result.fault {
         out.push_str("\n= Corriente de falla y capacidad interruptiva\n");
-        out.push_str(&format!("#text(fill: gris)[Método conservador. El dato de la suministradora en baja tensión se usa tal cual; en media tensión, la red se representa con la impedancia que da esa corriente y se combina en cuadratura con la del transformador de la acometida (decisión 0029). Sin dato, por bus infinito: la red aguas arriba se toma sin impedancia. No se descuenta la impedancia de los alimentadores, así que cada valor es una cota superior. Los motores de cada tensión aportan completos y los de otra tensión llegan a través de la impedancia de su transformador (decisión 0028). En el secundario de un transformador monofásico con derivación central (1F-3H) manda la falla de fase a neutro, estimada como {ln} veces la de fase a fase (máximo teórico del método punto a punto de Eaton Bussmann, decisión 0029); el dato de la suministradora no se multiplica. Un interruptor que alcanza la falla cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n", ln = study.line_to_neutral_factor));
+        out.push_str(&format!("#text(fill: gris)[Método conservador. El dato de la suministradora en baja tensión se usa tal cual; en media tensión, la red se representa con la impedancia que da esa corriente y se combina en cuadratura con la del transformador de la acometida (decisión 0029). Sin dato, por bus infinito: la red aguas arriba se toma sin impedancia. En cada tablero se descuentan sus alimentadores (método punto a punto, decisión 0031): resistencia y reactancia de la Tabla 9, con la resistencia corregida a {temp} °C con la Tabla 8, nota 2, combinadas en cuadratura con la impedancia de la fuente, cuya relación X/R no se conoce; un tramo sin longitud no se descuenta. Así cada valor sigue siendo una cota superior. Los motores de cada tensión aportan completos y los de otra tensión llegan a través de la impedancia de su transformador (decisión 0028). En el secundario de un transformador monofásico con derivación central (1F-3H) manda la falla de fase a neutro, estimada como {ln} veces la de fase a fase (máximo teórico del método punto a punto de Eaton Bussmann, decisión 0029); el dato de la suministradora no se multiplica. Un interruptor que alcanza la falla cumple; uno que no, queda no concluyente y requiere un estudio de cortocircuito.]\n", ln = study.line_to_neutral_factor, temp = study.conductor_temperature_c));
         out.push_str("\n== Punto de conexión\n");
         match (&study.source, &study.source_issue) {
             (Some(bus), _) => {
@@ -651,7 +651,13 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
         for panel in &result.panels {
             match (&panel.fault, &panel.fault_issue) {
                 (Some(bus), _) => {
-                    if let ieestudio_project::fault::FaultOrigin::Transformer { .. } = bus.origin {
+                    // Las barras con su propia falla: las de un transformador
+                    // y las que descuentan sus alimentadores (decisión 0031).
+                    if matches!(
+                        bus.origin,
+                        ieestudio_project::fault::FaultOrigin::Transformer { .. }
+                    ) || bus.feeders.is_some()
+                    {
                         let _ = writeln!(out, "\n== Barras de #{};", q(&panel.name));
                         steps(&mut out, &bus.steps);
                         motor_table(&mut out, bus);

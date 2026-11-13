@@ -14,6 +14,16 @@ fn close(actual: f64, expected: f64) {
     );
 }
 
+/// Falla en unas barras con sus alimentadores descontados, recalculada a
+/// mano (decisión 0031): `Icc' = Icc · Zf / √(Zf² + (k · Zc)²)` con
+/// `Zf = V / Icc`. `v` es la tensión de la falla (de fase a neutro en
+/// trifásico) y `k` los conductores del lazo.
+fn point_to_point(bus: &ieestudio_project::fault::BusFault, v: f64, k: f64) -> f64 {
+    let f = bus.feeders.as_ref().expect("con alimentadores descontados");
+    let zf = v / (f.source_ka * 1000.0);
+    f.source_ka * zf / zf.hypot(k * f.r_ohm.hypot(f.x_ohm))
+}
+
 fn circuit<'a>(items: &'a [RunResult], id: &str) -> &'a RunResult {
     items
         .iter()
@@ -806,10 +816,14 @@ fn fault_by_infinite_bus_with_motors() {
     assert_eq!(motors.multiplier, 4.0);
     close(motors.total_a, 4.0 * (8.9 + 12.0));
     close(source.total_ka, 9.8412 / 0.9 + 0.0836);
-    // El tablero sin transformador ve la misma falla que el punto de conexión.
+    // El tablero ve la del punto de conexión menos su alimentador
+    // (decisión 0031), y los motores completos.
     let panel = &result.panels[0];
     let bus = panel.fault.as_ref().unwrap();
-    close(bus.total_ka, source.total_ka);
+    close(bus.feeders.as_ref().unwrap().source_ka, source.base_ka);
+    close(bus.base_ka, point_to_point(bus, 220.0 / 3f64.sqrt(), 1.0));
+    close(bus.motor_ka, source.motor_ka);
+    assert!(bus.total_ka < source.total_ka);
     // El procedimiento muestra la aportación de motores.
     assert!(bus
         .steps
@@ -844,8 +858,9 @@ fn fault_by_infinite_bus_with_motors() {
         assert!(clauses.iter().any(|x| x == "110-9, 110-10"));
     }
 
-    // 10 kA no alcanza los 11 kA estimados: no concluyente, nunca «no cumple».
-    project.panels[0].board.interrupting_ka = Some(10.0);
+    // 1 kA no alcanza lo que llega a las barras: no concluyente, nunca «no
+    // cumple».
+    project.panels[0].board.interrupting_ka = Some(1.0);
     let result = calculate(&project).unwrap();
     let c02 = circuit(&result.panels[0].circuits, "C-02");
     let c = checks_named(c02, "Capacidad interruptiva")[0];
@@ -1053,7 +1068,9 @@ fn interrupting_capacity_is_one_check_per_place() {
         brand: String::new(),
     });
     let before = calculate(&example::house()).unwrap();
-    project.panels[0].board.interrupting_ka = Some(10.0);
+    // Menos de lo que llega a las barras de TG-1 con su alimentador
+    // descontado (decisión 0031).
+    project.panels[0].board.interrupting_ka = Some(1.0);
     let result = calculate(&project).unwrap();
     // El estado de cada tramo es el mismo que sin estudio de falla.
     for (with, without) in result.panels[0].runs().zip(before.panels[0].runs()) {
@@ -1135,13 +1152,15 @@ fn motors_contribute_by_voltage_zone() {
     // Secundario de TF-1: In = 45 000 / (√3 · 220) = 118.09 A; Z = 3 % · 0.9
     // = 0.027; Icc = 4 373.9 A. Motores de 220 V: 4 · 28 = 112 A.
     let tf = panel(&result, "TF-1").fault.as_ref().unwrap();
-    close(tf.base_ka, 4.3739);
+    // En las terminales; las barras descuentan el secundario (decisión 0031).
+    close(tf.feeders.as_ref().unwrap().source_ka, 4.3739);
+    close(tf.base_ka, point_to_point(tf, 220.0 / 3f64.sqrt(), 1.0));
     let m = tf.motors.as_ref().unwrap();
     assert_eq!(m.motors.len(), 1);
     close(m.motors[0].full_load_a, 28.0);
     assert!(m.through.is_empty(), "los motores de 480 V no cuentan aquí");
     close(tf.motor_ka, 0.112);
-    close(tf.total_ka, 4.4859);
+    close(tf.total_ka, tf.base_ka + 0.112);
 
     // Punto de conexión: 25 kA del dato más 4 · 14 = 56 A directos y lo que
     // llega por el transformador: Ib₁ = 54.13 A, Ib₂ = 118.09 A,
@@ -1159,11 +1178,10 @@ fn motors_contribute_by_voltage_zone() {
     close(m.through[0].contribution_a, 50.05);
     close(m.total_a, 106.05);
     close(source.total_ka, 25.10605);
-    // TGN está en la zona de la fuente: la misma falla.
-    close(
-        panel(&result, "TGN").fault.as_ref().unwrap().total_ka,
-        source.total_ka,
-    );
+    // TGN está en la zona de la fuente: su falla, menos su alimentador.
+    let tgn = panel(&result, "TGN").fault.as_ref().unwrap();
+    close(tgn.base_ka, point_to_point(tgn, 480.0 / 3f64.sqrt(), 1.0));
+    close(tgn.motor_ka, source.motor_ka);
     // Nunca se suman amperes de 220 V tal cual en 480 V.
     assert!(m.total_a < 4.0 * (14.0 + 28.0));
     // El procedimiento lo muestra.
@@ -1436,8 +1454,17 @@ fn low_voltage_service_with_the_supplier_fault() {
     project.panels[0].feeder.overrides.breaker.interrupting_ka = Some(22.0);
     let result = calculate(&project).unwrap();
     let id = project.panels[0].id.clone();
-    let g = group(&result, Some(&id));
+    // En el punto de conexión, donde está el interruptor del alimentador:
+    // el dato tal cual más los motores.
+    let g = group(&result, None);
     close(g.fault_ka.unwrap(), 10.0836);
+    assert_eq!(g.label(), "Cumple", "el alimentador tiene 22 kA");
+    // Las barras del tablero descuentan su alimentador (decisión 0031); con
+    // 1 kA en el tablero no alcanza.
+    project.panels[0].board.interrupting_ka = Some(1.0);
+    let result = calculate(&project).unwrap();
+    let g = group(&result, Some(&id));
+    assert!(g.fault_ka.unwrap() < 10.0836);
     assert!(!g.infinite_bus);
     assert_eq!(g.evaluation, Evaluation::Inconclusive);
     assert_eq!(g.label(), "No concluyente");
@@ -1655,10 +1682,22 @@ fn voltage_and_fault_propagate_through_several_panels() {
             panel: "TF-1".into()
         }
     );
-    close(bus.total_ka, 4.4347);
-    close(
-        panel(&result, "T-2").fault.as_ref().unwrap().total_ka,
-        4.4347,
+    // Cada tablero descuenta su cadena de conductores desde las terminales
+    // de TF-1 (decisión 0031): la falla baja tablero por tablero.
+    let t2 = panel(&result, "T-2").fault.as_ref().unwrap();
+    let tf = panel(&result, "TF-1").fault.as_ref().unwrap();
+    for b in [tf, t2, bus] {
+        close(b.feeders.as_ref().unwrap().source_ka, 4.3739);
+        close(b.base_ka, point_to_point(b, 220.0 / 3f64.sqrt(), 1.0));
+    }
+    assert!(bus.base_ka < t2.base_ka && t2.base_ka < tf.base_ka);
+    assert_eq!(
+        bus.feeders.as_ref().unwrap().counted,
+        [
+            "alimentador de T-3",
+            "alimentador de T-2",
+            "secundario de TF-1"
+        ]
     );
     assert!(bus.motors.as_ref().unwrap().motors[0]
         .label

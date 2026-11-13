@@ -107,6 +107,36 @@ pub struct BusFault {
     /// En un secundario 1F-3H por bus infinito, `base_ka` es la falla de
     /// fase a neutro; aquí queda la de fase a fase y el factor.
     pub line_to_neutral: Option<LineToNeutral>,
+    /// Conductores descontados desde la fuente de la zona hasta estas barras
+    /// (punto a punto, decisión 0031). `None` en la fuente misma o si ningún
+    /// tramo tiene datos para descontar.
+    pub feeders: Option<FeederDrop>,
+}
+
+/// Conductores entre la fuente de una zona y unas barras, y la falla que
+/// dejan pasar (decisión 0031).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FeederDrop {
+    /// Falla de la fuente de la zona, sin motores, en kA.
+    pub source_ka: f64,
+    /// Resistencia a la temperatura del perfil y reactancia de los
+    /// conductores, sumadas tramo por tramo, en ohms.
+    pub r_ohm: f64,
+    pub x_ohm: f64,
+    /// Tramos descontados: `alimentador de TA`.
+    pub counted: Vec<String>,
+    /// Tramos que no se pudieron descontar, con su causa: la falla de arriba
+    /// pasa completa por ellos (P-4).
+    pub skipped: Vec<String>,
+}
+
+/// Un tramo de conductores entre la fuente de una zona y unas barras.
+#[derive(Debug, Clone)]
+pub(crate) struct Segment {
+    /// `alimentador de TA`, `secundario de TF-1`.
+    pub label: String,
+    /// El tramo calculado; `None` si no se pudo calcular.
+    pub run: Option<crate::calc::Run>,
 }
 
 /// Falla de fase a neutro en el secundario de un transformador monofásico
@@ -122,10 +152,14 @@ pub struct LineToNeutral {
 impl BusFault {
     /// `por bus infinito, de fase a neutro`: la hipótesis con que se obtuvo.
     pub fn basis(&self) -> String {
-        match self.line_to_neutral {
-            Some(_) => format!("{}, de fase a neutro", self.origin.basis()),
-            None => self.origin.basis().to_string(),
+        let mut basis = self.origin.basis().to_string();
+        if self.line_to_neutral.is_some() {
+            basis.push_str(", de fase a neutro");
         }
+        if self.feeders.is_some() {
+            basis.push_str(", descontando los alimentadores");
+        }
+        basis
     }
 
     /// Válida, o no concluyente si le faltan motores.
@@ -278,6 +312,9 @@ pub struct FaultStudy {
     /// Veces la falla de fase a fase con que se estima la de fase a neutro en
     /// un secundario 1F-3H (perfil, decisión 0029).
     pub line_to_neutral_factor: f64,
+    /// Temperatura del conductor con que se descuentan los alimentadores, en
+    /// °C (decisión 0031).
+    pub conductor_temperature_c: f64,
     /// Motores sin datos de todo el proyecto.
     pub incomplete_motors: Vec<IncompleteMotor>,
     /// Lugares cuya falla depende de una fuente sin datos: su capacidad
@@ -322,6 +359,9 @@ pub struct InterruptingGroup {
     pub infinite_bus: bool,
     /// Es la falla de fase a neutro de un secundario 1F-3H (decisión 0029).
     pub line_to_neutral: bool,
+    /// Se descontaron los alimentadores entre la fuente y el lugar (punto a
+    /// punto, decisión 0031).
+    pub feeders_discounted: bool,
     /// De dónde sale la falla. `None` si no se pudo estimar.
     pub origin: Option<FaultOrigin>,
     /// Por qué no hay falla estimada, si no la hay.
@@ -402,22 +442,38 @@ impl InterruptingGroup {
             }
         };
         let fault = format!("{fault_ka:.2} kA");
+        // Con los alimentadores descontados (punto a punto, decisión 0031) la
+        // falla sigue siendo una cota superior.
+        let feeders = if self.feeders_discounted {
+            ", descontando los alimentadores"
+        } else {
+            ""
+        };
+        let p2p = if self.feeders_discounted {
+            " y punto a punto"
+        } else {
+            ""
+        };
         let (basis, method) = match (&self.origin, self.line_to_neutral) {
+            (Some(FaultOrigin::Supplier), _) | (None, _) if self.feeders_discounted => (
+                "estimados con el dato de la suministradora, descontando los alimentadores, que es una cota superior".to_string(),
+                "un método conservador (dato de la suministradora y punto a punto)".to_string(),
+            ),
             (Some(FaultOrigin::Supplier), _) | (None, _) => (
-                "estimados con el dato de la suministradora, sin descontar los alimentadores",
-                "un método conservador (dato de la suministradora)",
+                "estimados con el dato de la suministradora, sin descontar los alimentadores".to_string(),
+                "un método conservador (dato de la suministradora)".to_string(),
             ),
             (Some(FaultOrigin::SupplierPrimary), _) => (
-                "estimados con el dato de la suministradora en media tensión y el transformador, que es una cota superior",
-                "un método conservador (dato en media tensión y transformador)",
+                format!("estimados con el dato de la suministradora en media tensión y el transformador{feeders}, que es una cota superior"),
+                format!("un método conservador (dato en media tensión y transformador{p2p})"),
             ),
             (_, true) => (
-                "estimados por bus infinito, de fase a neutro, que es una cota superior",
-                "un método conservador (bus infinito, de fase a neutro)",
+                format!("estimados por bus infinito, de fase a neutro{feeders}, que es una cota superior"),
+                format!("un método conservador (bus infinito, de fase a neutro{p2p})"),
             ),
             (_, false) => (
-                "estimados por bus infinito, que es una cota superior",
-                "un método conservador (bus infinito)",
+                format!("estimados por bus infinito{feeders}, que es una cota superior"),
+                format!("un método conservador (bus infinito{p2p})"),
             ),
         };
         // «del punto de conexión», no «de el punto de conexión».
@@ -940,6 +996,171 @@ pub fn substation_impedance(
         })
 }
 
+/// Descuenta los conductores entre la fuente de una zona y unas barras
+/// (decisión 0031). `base_ka` es la falla de la fuente sin motores, ya de
+/// fase a neutro si es un secundario 1F-3H por bus infinito. Devuelve la
+/// falla que llega, con sus pasos, o `None` si ningún tramo tiene datos y
+/// la falla es la de la fuente.
+fn feeder_drop(
+    profile: &Profile,
+    system: &System,
+    base_ka: f64,
+    line_to_neutral: &mut Option<LineToNeutral>,
+    segments: &[Segment],
+    place: &str,
+) -> Option<(FeederDrop, f64, Vec<Step>)> {
+    use ieestudio_electrical::voltage_drop::{temperature_coefficient, TABLE_9_TEMPERATURE_C};
+    if segments.is_empty() {
+        return None;
+    }
+    let temperature = profile.parameters.fault_conductor_temperature_c;
+    let (mut r, mut x) = (0.0, 0.0);
+    let (mut counted, mut skipped, mut lines) = (Vec::new(), Vec::new(), Vec::new());
+    for segment in segments {
+        let Some(run) = &segment.run else {
+            skipped.push(format!("{}: no se calculó", segment.label));
+            continue;
+        };
+        if !(run.length_m.is_finite() && run.length_m > 0.0) {
+            skipped.push(format!("{}: falta su longitud", segment.label));
+            continue;
+        }
+        let Ok((r75, x_km)) = profile.impedance(&run.size, run.material, run.raceway) else {
+            skipped.push(format!(
+                "{}: el calibre {} no está en la Tabla 9",
+                segment.label,
+                crate::procedure::size_label(&run.size)
+            ));
+            continue;
+        };
+        let r_km = r75
+            * (1.0 + temperature_coefficient(run.material) * (temperature - TABLE_9_TEMPERATURE_C));
+        let n = f64::from(run.conductors_per_phase.max(1));
+        let km = run.length_m / 1000.0;
+        let (dr, dx) = (r_km * km / n, x_km * km / n);
+        r += dr;
+        x += dx;
+        lines.push(format!(
+            "{}: {}{}, {} m: R = {r_km:.4} · {km} / {n} = {dr:.5} Ω, X = {x_km:.3} · {km} / {n} = {dx:.5} Ω",
+            segment.label,
+            if run.conductors_per_phase > 1 {
+                format!("{} × ", run.conductors_per_phase)
+            } else {
+                String::new()
+            },
+            crate::procedure::size_label(&run.size),
+            run.length_m
+        ));
+        counted.push(segment.label.clone());
+    }
+    let zc = r.hypot(x);
+    if counted.is_empty() || zc <= 0.0 {
+        return None;
+    }
+    // Lo que puede ser la falla mayor en estas barras: tres fases con un
+    // conductor por fase; en una fase el lazo es de dos conductores, entre
+    // fases o de fase a neutro (con el neutro del mismo calibre, que es la
+    // impedancia menor). Se queda la mayor.
+    let ll = system.line_to_line_v;
+    let ln = system.line_to_neutral_v;
+    let mut candidates: Vec<(&str, f64, f64, f64)> = Vec::new(); // (falla, kA, V, k)
+    match line_to_neutral.as_ref() {
+        Some(t) => {
+            if let Some(v) = ln {
+                candidates.push(("de fase a neutro", base_ka, v, 2.0));
+            }
+            if let Some(v) = ll {
+                candidates.push(("de fase a fase", t.line_to_line_ka, v, 2.0));
+            }
+        }
+        None if system.has_three_phases() => {
+            if let Some(v) = ll {
+                candidates.push(("trifásica", base_ka, v / ieestudio_core::units::SQRT_3, 1.0));
+            }
+        }
+        None => {
+            if let Some(v) = ll {
+                candidates.push(("de fase a fase", base_ka, v, 2.0));
+            }
+            if let Some(v) = ln {
+                candidates.push(("de fase a neutro", base_ka, v, 2.0));
+            }
+        }
+    }
+    let reduce = |(_, ka, v, k): &(&str, f64, f64, f64)| {
+        let zf = v / (ka * 1000.0);
+        let zl = k * zc;
+        (zf, ka * zf / zf.hypot(zl))
+    };
+    let (best, (zf, reduced_ka)) = candidates
+        .iter()
+        .map(|c| (c, reduce(c)))
+        .max_by(|a, b| a.1 .1.total_cmp(&b.1 .1))?;
+    let (kind, ka, v, k) = *best;
+    // Si ya manda la de fase a fase, la de fase a neutro deja de ser la
+    // falla de estas barras.
+    if kind != "de fase a neutro" {
+        *line_to_neutral = None;
+    }
+    let refs = vec![
+        profile.reference(Rule::Impedance),
+        profile.reference(Rule::ResistanceTemperature),
+        profile.reference(Rule::FeederFaultImpedance),
+    ];
+    let mut steps = vec![Step {
+        title: format!("Conductores hasta {place}"),
+        formula: Some(format!(
+            "R = r{temperature:.0} · L / n, con r{temperature:.0} = r75 · (1 + α · ({temperature:.0} − 75)); X = x · L / n"
+        )),
+        substitution: format!(
+            "{}; Zc = √({r:.5}² + {x:.5}²) = {zc:.5} Ω",
+            lines.join("; ")
+        ),
+        note: Some(format!(
+            "Resistencia y reactancia de la Tabla 9, en Ω/km; la resistencia se corrige a {temperature:.0} °C porque un conductor frío deja pasar más falla. Los tramos se suman con su R y su X."
+        )),
+        references: refs.clone(),
+    }];
+    if !skipped.is_empty() {
+        steps.push(Step {
+            title: "Tramos sin descontar".into(),
+            formula: None,
+            substitution: skipped.join("; "),
+            note: Some(
+                "Un tramo sin datos no reduce nada: la falla de arriba pasa completa por él, que es una cota superior. Nunca se supone una longitud."
+                    .into(),
+            ),
+            references: vec![],
+        });
+    }
+    let two = if k > 1.0 { "2 · " } else { "" };
+    steps.push(Step {
+        title: format!("Falla en {place}"),
+        formula: Some(format!(
+            "Zf = V / Icc; Icc' = Icc · Zf / √(Zf² + ({two}Zc)²)"
+        )),
+        substitution: format!(
+            "Falla {kind}: Zf = {v:.1} V / {ka:.2} kA = {zf:.5} Ω; Icc' = {ka:.2} kA · {zf:.5} / √({zf:.5}² + ({two}{zc:.5})²) = {reduced_ka:.2} kA"
+        ),
+        note: Some(
+            "La impedancia de la fuente y la de los conductores se combinan en cuadratura porque de la fuente no se conoce la relación X/R: nunca da más impedancia que la real, así que la falla sigue siendo una cota superior. En una fase el lazo recorre dos conductores. Se toma la mayor de las fallas posibles en estas barras."
+                .into(),
+        ),
+        references: refs,
+    });
+    Some((
+        FeederDrop {
+            source_ka: base_ka,
+            r_ohm: r,
+            x_ohm: x,
+            counted,
+            skipped,
+        },
+        reduced_ka,
+        steps,
+    ))
+}
+
 fn worse(a: Status, b: Status) -> Status {
     match (a, b) {
         (Status::Fails, _) | (_, Status::Fails) => Status::Fails,
@@ -1243,6 +1464,18 @@ impl<'a> Topology<'a> {
     }
 
     fn bus(&self, zone: Zone) -> Result<BusFault, FaultIssue> {
+        self.bus_at(zone, &[], "")
+    }
+
+    /// Falla en unas barras de la zona, descontando los conductores que hay
+    /// entre ellas y la fuente de la zona (decisión 0031). Sin tramos es la
+    /// de la fuente.
+    fn bus_at(
+        &self,
+        zone: Zone,
+        segments: &[Segment],
+        place: &str,
+    ) -> Result<BusFault, FaultIssue> {
         let (mut base_ka, origin, mut steps) = self.base(zone)?;
         // Por bus infinito en un secundario 1F-3H manda la falla de fase a
         // neutro. El dato de la suministradora ya es la máxima disponible.
@@ -1257,6 +1490,24 @@ impl<'a> Topology<'a> {
                     line_to_line_ka,
                 }
             });
+        // Los conductores hasta estas barras (punto a punto). La aportación
+        // de los motores se suma después, sin reducir (P-3).
+        let mut line_to_neutral = line_to_neutral;
+        let feeders = match feeder_drop(
+            self.profile,
+            &self.system(zone),
+            base_ka,
+            &mut line_to_neutral,
+            segments,
+            place,
+        ) {
+            Some((drop, reduced_ka, drop_steps)) => {
+                base_ka = reduced_ka;
+                steps.extend(drop_steps);
+                Some(drop)
+            }
+            None => None,
+        };
         let (motors, incomplete) = self.motors_at(zone, 0);
         let motor_ka = motors.as_ref().map_or(0.0, |m| m.total_a / 1000.0);
         if let Some(m) = &motors {
@@ -1272,6 +1523,7 @@ impl<'a> Topology<'a> {
             incomplete,
             suspected: self.suspects_at(zone, 0),
             line_to_neutral,
+            feeders,
         })
     }
 
@@ -1411,10 +1663,25 @@ impl<'a> Topology<'a> {
                         )
                     });
                 }
-                assumptions.push(
-                    "Sin descontar la impedancia de los alimentadores: es una cota superior."
-                        .into(),
-                );
+                // Punto a punto (decisión 0031): qué conductores se
+                // descontaron y cuáles no.
+                match &bus.feeders {
+                    Some(f) => {
+                        assumptions.push(format!(
+                            "Se descuentan {}: R y X de la Tabla 9, con la resistencia a {:.0} °C, en cuadratura con la impedancia de la fuente; sigue siendo una cota superior (decisión 0031).",
+                            f.counted.join(", "),
+                            self.profile.parameters.fault_conductor_temperature_c
+                        ));
+                        missing.extend(
+                            f.skipped
+                                .iter()
+                                .map(|s| format!("{}; no se descuenta", capitalize(s))),
+                        );
+                    }
+                    None => assumptions.push(
+                        "En la fuente, sin conductores que descontar: es una cota superior.".into(),
+                    ),
+                }
                 if let Some(m) = &bus.motors {
                     assumptions.push(format!(
                         "Motores de esta tensión: {} veces su corriente a plena carga; los de otra tensión, a través de la impedancia de su transformador (decisión 0028).",
@@ -1650,6 +1917,9 @@ fn group_rules(bus: &BusFault) -> Vec<Rule> {
     if bus.motor_ka > 0.0 {
         rules.push(Rule::MotorFaultContribution);
     }
+    if bus.feeders.is_some() {
+        rules.push(Rule::FeederFaultImpedance);
+    }
     rules
 }
 
@@ -1674,6 +1944,59 @@ pub(crate) fn study(
     }
     let source = &zones[&None];
 
+    // Falla en las barras de cada tablero: la de su zona, descontando los
+    // conductores que hay entre la fuente de la zona y el tablero (punto a
+    // punto, decisión 0031).
+    let runs: HashMap<&str, (Option<crate::Run>, Option<Option<crate::Run>>)> = panels
+        .iter()
+        .map(|r| {
+            (
+                r.id.as_str(),
+                (
+                    r.feeder.run.clone(),
+                    r.secondary.as_ref().map(|s| s.run.clone()),
+                ),
+            )
+        })
+        .collect();
+    let segments = |i: usize| -> Vec<Segment> {
+        let mut out = Vec::new();
+        let mut at = i;
+        for _ in 0..=n {
+            let id = &project.panels[at].id;
+            let (feeder, secondary) = runs.get(id.as_str()).cloned().unwrap_or((None, None));
+            if topology.zone[i] == Some(at) {
+                // Del transformador al tablero: los conductores del
+                // secundario, si los hay.
+                if let Some(run) = secondary {
+                    out.push(Segment {
+                        label: format!("secundario de {id}"),
+                        run,
+                    });
+                }
+                break;
+            }
+            out.push(Segment {
+                label: format!("alimentador de {id}"),
+                run: feeder,
+            });
+            match topology.parent[at] {
+                Some(p) => at = p,
+                None => break,
+            }
+        }
+        out
+    };
+    let buses: Vec<Result<BusFault, FaultIssue>> = (0..n)
+        .map(|i| {
+            topology.bus_at(
+                topology.zone[i],
+                &segments(i),
+                &format!("las barras de {}", project.panels[i].id),
+            )
+        })
+        .collect();
+
     // Interruptores por lugar: índice 0 el punto de conexión, después las
     // barras de cada tablero.
     let mut found: Vec<Vec<BreakerVerdict>> = vec![Vec::new(); n + 1];
@@ -1697,9 +2020,14 @@ pub(crate) fn study(
         }
     };
     for (i, panel) in project.panels.iter().enumerate() {
-        let own = &zones[&topology.zone[i]];
+        let own = &buses[i];
         let parent = topology.parent[i];
-        let upstream = &zones[&topology.upstream_zone(i)];
+        // El alimentador sale de las barras del tablero de arriba, o del
+        // punto de conexión.
+        let upstream = match parent {
+            Some(k) => &buses[k],
+            None => source,
+        };
         let (upstream_name, upstream_board_ka) = match parent {
             Some(k) => (
                 format!("las barras de {}", project.panels[k].id),
@@ -1776,6 +2104,12 @@ pub(crate) fn study(
                 project.panels[i].board.interrupting_ka,
             ),
         };
+        // La falla del lugar: la del punto de conexión o la de las barras
+        // del tablero, con sus alimentadores descontados.
+        let place_bus = match k.checked_sub(1) {
+            None => source,
+            Some(i) => &buses[i],
+        };
         if outside[k] {
             out_of_scope.push(place.clone());
         }
@@ -1786,7 +2120,7 @@ pub(crate) fn study(
             .iter()
             .fold(Status::Complies, |all, b| worse(all, b.status));
         let (fault_ka, infinite_bus, line_to_neutral, origin, issue, incomplete_motors, references) =
-            match &zones[&zone] {
+            match place_bus {
                 Ok(bus) => (
                     Some(bus.total_ka),
                     bus.origin.infinite_bus(),
@@ -1806,8 +2140,9 @@ pub(crate) fn study(
                     vec![Rule::InterruptingRating],
                 ),
             };
-        let suspected_loads = zones[&zone].as_ref().map_or(0, |b| b.suspected.len());
-        let mut trace = topology.trace(zone, &zones[&zone], &place);
+        let suspected_loads = place_bus.as_ref().map_or(0, |b| b.suspected.len());
+        let feeders_discounted = place_bus.as_ref().is_ok_and(|b| b.feeders.is_some());
+        let mut trace = topology.trace(zone, place_bus, &place);
         trace.what = "Capacidad interruptiva frente a la falla estimada".into();
         let missing_ka = breakers.iter().filter(|b| b.ka.is_none()).count();
         if missing_ka > 0 {
@@ -1848,6 +2183,7 @@ pub(crate) fn study(
             fault_ka,
             infinite_bus,
             line_to_neutral,
+            feeders_discounted,
             origin,
             issue,
             incomplete_motors,
@@ -1895,6 +2231,7 @@ pub(crate) fn study(
         impedance_tolerance: profile.parameters.fault_impedance_tolerance,
         multiplier: profile.parameters.fault_motor_multiplier,
         line_to_neutral_factor: profile.parameters.fault_line_to_neutral_factor,
+        conductor_temperature_c: profile.parameters.fault_conductor_temperature_c,
         incomplete_motors,
         out_of_scope,
         groups,

@@ -36,6 +36,7 @@ normativo nuevo ni un caso de referencia firmado (`reviewed_by`).
 | `h16-aislamiento-127.iees` | H-16 | Transformador 127 → 127 V sin aviso de relación 1:1 |
 | `p17-secundario-con-otra-conexion.iees` | 17 | Elevador 127 → 240/120 V que rechaza un circuito de 240 V |
 | `p19-longitud-cero.iees` | 19 | Circuito de 0 m que cumple |
+| `p31-punto-a-punto.iees` | 0031 | Ejemplo de la decisión 0031: 500 kVA, 4.5 %, 220Y/127 V. La falla baja tablero por tablero: 32.40 kA en terminales, 32.15 en TG, 5.79 en TA y 2.31 en TB (etapa 1F) |
 
 Desde la etapa 1D todos están en el formato 5: cada sistema lleva su
 topología declarada (salvo el de `h04`, que no la trae a propósito) y los

@@ -1,8 +1,19 @@
 # 0031. Falla en cada tablero descontando los conductores (punto a punto)
 
-**Estado:** propuesta (12 de noviembre de 2026). No se implementa hasta que
-el dueño del proyecto apruebe los puntos P-1 a P-6. Si se aprueba, modifica
-la 0029 en un solo punto: «no descuenta la impedancia de los conductores».
+**Estado:** aceptada (12 de noviembre de 2026). El dueño del proyecto aprobó
+los puntos P-1 a P-6 tal como están. Modifica la 0029 en un solo punto: «no
+descuenta la impedancia de los conductores».
+
+**Implementado en la etapa 1F.** Una precisión sobre P-2: la resistencia se
+corrige a 20 °C con la fórmula de la Tabla 8, nota 2, de la NOM
+(`R2 = R1 · (1 + α · (T2 − 75))`, α = 0.00323 en cobre y 0.00330 en
+aluminio), la misma que ya usa la caída de tensión, en lugar de las
+constantes 234.5 y 228.1 del artículo citado. Da 0.82235 en cobre contra
+0.82229: la diferencia no se ve en ningún resultado y la fuente es la norma.
+La temperatura de 20 °C está en `profile.csv`
+(`fault_conductor_temperature_c`). El interruptor del secundario de un
+transformador se compara con la falla de las barras de su tablero, como los
+demás interruptores del tablero (P-5).
 
 ## Contexto
 
