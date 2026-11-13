@@ -146,7 +146,7 @@ fn project_round_trips_through_json() {
     close(p.settings.total_drop_limit_percent, 5.0);
     assert!(Project::from_json("{").is_err());
     assert!(
-        Project::from_json(&json.replace("\"format_version\": 4", "\"format_version\": 99"))
+        Project::from_json(&json.replace("\"format_version\": 5", "\"format_version\": 99"))
             .is_err()
     );
 }
@@ -170,7 +170,11 @@ fn industrial() -> Project {
                 demand: Demand::Custom(0.8),
                 demand_factor: None,
                 has_neutral: true,
-                overrides: Overrides::default(),
+                overrides: Overrides {
+                    // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             },
             transformer: None,
             areas: vec![],
@@ -189,7 +193,11 @@ fn industrial() -> Project {
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: false,
-                overrides: Overrides::default(),
+                overrides: Overrides {
+                    // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             },
             transformer: None,
             areas: vec![],
@@ -210,7 +218,11 @@ fn industrial() -> Project {
                 },
                 length_m: 25.0,
                 has_neutral: false,
-                overrides: Overrides::default(),
+                overrides: Overrides {
+                    // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             }],
         },
     ];
@@ -392,7 +404,11 @@ fn motor_circuit(id: &str, hp: &str, length_m: f64) -> Circuit {
         },
         length_m,
         has_neutral: false,
-        overrides: Overrides::default(),
+        overrides: Overrides {
+            // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+            nonlinear: Some(false),
+            ..Overrides::default()
+        },
     }
 }
 
@@ -419,7 +435,11 @@ fn motor_panel() -> Project {
         },
         length_m: 10.0,
         has_neutral: false,
-        overrides: Overrides::default(),
+        overrides: Overrides {
+            // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+            nonlinear: Some(false),
+            ..Overrides::default()
+        },
     };
     project.panels = vec![Panel {
         board: Default::default(),
@@ -434,7 +454,11 @@ fn motor_panel() -> Project {
             demand: Demand::Article220,
             demand_factor: None,
             has_neutral: false,
-            overrides: Overrides::default(),
+            overrides: Overrides {
+                // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                nonlinear: Some(false),
+                ..Overrides::default()
+            },
         },
         transformer: None,
         areas: vec![Area {
@@ -555,6 +579,7 @@ fn a_motor_without_data_is_not_evaluated() {
     project.source.system = System {
         line_to_line_v: Some(380.0),
         line_to_neutral_v: Some(220.0),
+        topology: Some(ieestudio_core::Topology::ThreePhaseWye),
     };
     let result = calculate(&project).unwrap();
     let m10 = circuit(&result.panels[0].circuits, "M-10");
@@ -670,7 +695,11 @@ fn transformer_project() -> Project {
         secondary_protection: true,
         secondary_length_m: Some(3.0),
         secondary_has_neutral: true,
-        secondary_overrides: Overrides::default(),
+        secondary_overrides: Overrides {
+            // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+            nonlinear: Some(false),
+            ..Overrides::default()
+        },
         confirmed_distinct: false,
     });
     project

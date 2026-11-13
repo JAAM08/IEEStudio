@@ -120,7 +120,11 @@ pub fn house() -> Project {
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: true,
-                overrides: Overrides::default(),
+                // Vivienda: carga lineal, declarada (decisión 0030, T-6).
+                overrides: Overrides {
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             },
             transformer: None,
             areas: vec![Area {

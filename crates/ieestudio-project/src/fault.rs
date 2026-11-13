@@ -255,6 +255,10 @@ pub struct FaultIssue {
     pub kind: IssueKind,
     /// `falta la potencia del transformador de T-2`.
     pub reason: String,
+    /// Regla del perfil que hace inválido o incompleto el dato, si la hay
+    /// (decisión 0030): se cita junto a la de capacidad interruptiva.
+    #[serde(skip)]
+    pub rule: Option<Rule>,
 }
 
 /// Resultado del estudio para todo el proyecto.
@@ -476,31 +480,73 @@ fn capitalize(text: &str) -> String {
 /// Texto de un error sin el prefijo «dato inválido».
 fn reason(e: &Error) -> String {
     match e {
-        Error::InvalidInput(msg) => msg.clone(),
+        Error::InvalidInput(msg) | Error::MissingData(msg) => msg.clone(),
         other => other.to_string(),
     }
 }
 
 /// Si el sistema es trifásico y la tensión con la que se calcula la
-/// corriente del transformador de la acometida.
+/// corriente del transformador de la acometida, según la topología
+/// declarada (decisión 0030): un monofásico de tres hilos usa la tensión
+/// entre fases. Sin topología no se supone nada.
 fn transformer_voltage(system: &System) -> Option<(f64, bool)> {
+    let topology = system.topology?;
+    let three_phase = topology.phases() == 3;
     match (system.line_to_line_v, system.line_to_neutral_v) {
-        // Monofásico de tres hilos: el transformador es de una fase a la
-        // tensión entre fases.
-        (Some(ll), Some(ln)) if (ll / ln - 2.0).abs() < 0.1 => Some((ll, false)),
-        (Some(ll), _) => Some((ll, true)),
-        (None, Some(ln)) => Some((ln, false)),
+        (Some(ll), _) => Some((ll, three_phase)),
+        (None, Some(ln)) => Some((ln, three_phase)),
         (None, None) => None,
     }
 }
 
-/// Secundario de un transformador monofásico con derivación central: tres
-/// hilos, con tensión entre fases y al neutro, y una sola fase. Usa el mismo
-/// criterio que la corriente del transformador.
+/// Secundario de un transformador monofásico con derivación central (1F-3H
+/// declarado).
 fn center_tapped(system: &System) -> bool {
-    system.line_to_line_v.is_some()
-        && system.line_to_neutral_v.is_some()
-        && transformer_voltage(system).is_some_and(|(_, three_phase)| !three_phase)
+    system.topology == Some(ieestudio_core::Topology::SinglePhaseThreeWire)
+}
+
+/// El sistema de una zona debe poder usarse para calcular con un
+/// transformador: tensiones de acuerdo con la topología declarada
+/// (decisión 0030, T-3). `place` es «el sistema de suministro» o «el
+/// secundario del transformador de TF-1».
+fn usable_system(profile: &Profile, system: &System, place: &str) -> Result<(), FaultIssue> {
+    system
+        .check(profile.parameters.system_voltage_ratio_tolerance)
+        .map(|_| ())
+        .map_err(|issue| FaultIssue {
+            kind: if issue.invalid {
+                IssueKind::Invalid
+            } else {
+                IssueKind::Incomplete
+            },
+            reason: format!("en {place}, {}", issue.reason),
+            rule: issue.invalid.then_some(Rule::SystemVoltageRatio),
+        })
+}
+
+/// La conexión del transformador de la acometida debe corresponder al
+/// sistema declarado (decisión 0030, C-1). No se supone ninguna.
+fn connection_matches(
+    system: &System,
+    connection: Option<crate::model::Connection>,
+) -> Result<(), FaultIssue> {
+    use crate::model::Connection;
+    let (Some(topology), Some(connection)) = (system.topology, connection) else {
+        return Ok(());
+    };
+    let single = connection == Connection::SinglePhase;
+    if single == (topology.phases() == 1) {
+        return Ok(());
+    }
+    Err(FaultIssue {
+        kind: IssueKind::Invalid,
+        reason: format!(
+            "la conexión del transformador de la acometida ({}) no corresponde al sistema declarado ({}). Verifica si capturaste una unidad monofásica o un banco: varias unidades monofásicas que forman un banco trifásico se capturan con la conexión del banco completo",
+            connection.label(),
+            topology.label()
+        ),
+        rule: Some(Rule::TransformerConnection),
+    })
 }
 
 /// Paso de la falla de fase a neutro de un secundario 1F-3H.
@@ -619,18 +665,23 @@ fn substation_fault(profile: &Profile, project: &Project) -> Result<SubstationFa
     let source = &project.source;
     let Some(substation) = source.substation.as_ref() else {
         return Err(FaultIssue {
+            rule: None,
             kind: IssueKind::OutOfScope,
             reason: "no hay corriente de falla de la suministradora ni datos del transformador de la acometida".into(),
         });
     };
     let what = |r: String| FaultIssue {
+        rule: None,
         kind: IssueKind::Incomplete,
         reason: format!("en el transformador de la acometida {r}"),
     };
     let invalid = |r: &str| FaultIssue {
+        rule: None,
         kind: IssueKind::Invalid,
         reason: format!("en el transformador de la acometida {r}"),
     };
+    usable_system(profile, &source.system, "el sistema de suministro")?;
+    connection_matches(&source.system, substation.connection)?;
     if substation.kva.is_some_and(|k| !(k.is_finite() && k > 0.0)) {
         return Err(invalid("la potencia debe ser mayor que cero"));
     }
@@ -700,6 +751,7 @@ fn source_base(
     };
     if !(ka.is_finite() && ka > 0.0) {
         return Err(FaultIssue {
+            rule: None,
             kind: IssueKind::Invalid,
             reason: "la corriente de falla de la suministradora debe ser mayor que cero".into(),
         });
@@ -713,6 +765,7 @@ fn source_base(
     };
     match source.fault.location {
         None => Err(FaultIssue {
+            rule: None,
             kind: IssueKind::Incomplete,
             reason: format!(
                 "{MISSING_LOCATION}: en baja tensión, en el punto de conexión, o en media tensión, en el primario del transformador de la acometida"
@@ -732,6 +785,7 @@ fn source_base(
                 };
                 if ka > bound {
                     return Err(FaultIssue {
+                        rule: None,
                         kind: IssueKind::Invalid,
                         reason: format!(
                             "la corriente de falla de la suministradora en baja tensión ({ka} kA) es mayor que la mayor posible con el transformador de la acometida ({bound:.2} kA {what}); revisa el dato o si es de media tensión"
@@ -748,6 +802,7 @@ fn source_base(
         Some(FaultLocation::Primary) => {
             let s = substation_fault(profile, project).map_err(|issue| match issue.kind {
                 IssueKind::OutOfScope => FaultIssue {
+                    rule: None,
                     kind: IssueKind::Incomplete,
                     reason: "con el dato de la suministradora en media tensión falta el transformador de la acometida: potencia, impedancia y tensión del primario".into(),
                 },
@@ -758,12 +813,14 @@ fn source_base(
                 Some(kv) if kv.is_finite() && kv > 0.0 => kv,
                 Some(_) => {
                     return Err(FaultIssue {
+                        rule: None,
                         kind: IssueKind::Invalid,
                         reason: "en el transformador de la acometida la tensión del primario debe ser mayor que cero".into(),
                     })
                 }
                 None => {
                     return Err(FaultIssue {
+                        rule: None,
                         kind: IssueKind::Incomplete,
                         reason: "con el dato de la suministradora en media tensión, en el transformador de la acometida falta la tensión del primario".into(),
                     })
@@ -1111,10 +1168,12 @@ impl<'a> Topology<'a> {
         };
         let id = &self.project.panels[t].id;
         let incomplete = |why: String| FaultIssue {
+            rule: None,
             kind: IssueKind::Incomplete,
             reason: format!("en el transformador de {id} {why}"),
         };
         let invalid = |why: String| FaultIssue {
+            rule: None,
             kind: IssueKind::Invalid,
             reason: format!("en el transformador de {id} {why}"),
         };
@@ -1130,9 +1189,15 @@ impl<'a> Topology<'a> {
         if transformer.impedance_percent.is_some_and(|z| !positive(z)) {
             return Err(invalid("la impedancia debe ser mayor que cero".into()));
         }
+        // El secundario, con su topología declarada (decisión 0030).
+        let secondary_system = crate::connection::bus_system(self.project, t);
+        usable_system(
+            self.profile,
+            &secondary_system,
+            &format!("el secundario del transformador de {id}"),
+        )?;
         // Una conexión que el secundario no tiene es inconsistente, no un
         // dato que falta.
-        let secondary_system = crate::connection::bus_system(self.project, t);
         if transformer.kva.is_some() && panel.kind.reference_voltage(&secondary_system).is_err() {
             return Err(invalid(format!(
                 "el secundario no admite la conexión del tablero ({})",
@@ -1505,7 +1570,10 @@ fn check_breaker(
                     },
                     issue.reason
                 ),
-                references: vec![profile.reference(Rule::InterruptingRating)],
+                references: std::iter::once(Rule::InterruptingRating)
+                    .chain(issue.rule)
+                    .map(|r| profile.reference(r))
+                    .collect(),
             });
             return Some((breaker_ka, Status::NotEvaluated));
         }

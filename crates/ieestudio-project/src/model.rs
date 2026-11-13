@@ -24,7 +24,12 @@ use serde::{Deserialize, Serialize};
 /// Un programa anterior no abre un archivo de la 4 y dice que es más nuevo.
 /// La confirmación de «Es otra carga» (`Load::confirmed_general`, D-3) se
 /// agregó a la 4 antes de publicar ninguna versión con ella.
-pub const FORMAT_VERSION: u32 = 4;
+///
+/// La 5 guarda la topología declarada de cada sistema y la carga no lineal
+/// en tres estados (decisión 0030). De un archivo anterior, un sistema toma
+/// la topología solo si sus tensiones son las de un sistema de la interfaz,
+/// y «carga no lineal: no», que era el valor de fábrica, queda sin capturar.
+pub const FORMAT_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Project {
@@ -570,9 +575,12 @@ pub struct Overrides {
     pub conduit: Option<ConduitType>,
     /// Tramo de 60 cm o menos entre cajas o gabinetes.
     pub nipple: bool,
-    /// La mayor parte de la carga es no lineal: el neutro cuenta como
-    /// conductor portador de corriente.
-    pub nonlinear: bool,
+    /// La mayor parte de la carga es no lineal: el neutro de un circuito
+    /// trifásico de un sistema en estrella cuenta como conductor portador de
+    /// corriente (310-15(b)(5)(3)). `None` mientras no se capture: no se
+    /// supone lineal (decisión 0030, T-6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonlinear: Option<bool>,
     /// Otros conductores portadores de corriente en la misma canalización.
     pub other_current_carrying_conductors: u32,
     /// Interruptor fijado. El programa lo verifica, no lo cambia.
@@ -606,18 +614,20 @@ impl Project {
         struct Version {
             format_version: Option<u64>,
         }
-        if let Ok(Version {
-            format_version: Some(version),
-        }) = serde_json::from_str::<Version>(text)
-        {
-            if version > u64::from(FORMAT_VERSION) {
-                return Err(format!(
-                    "el archivo usa el formato {version}, más nuevo que el que este programa entiende ({FORMAT_VERSION}); actualiza IEEStudio para abrirlo"
-                ));
-            }
+        let version = serde_json::from_str::<Version>(text)
+            .ok()
+            .and_then(|v| v.format_version)
+            .unwrap_or(1);
+        if version > u64::from(FORMAT_VERSION) {
+            return Err(format!(
+                "el archivo usa el formato {version}, más nuevo que el que este programa entiende ({FORMAT_VERSION}); actualiza IEEStudio para abrirlo"
+            ));
         }
         let mut project: Project =
             serde_json::from_str(text).map_err(|e| format!("archivo de proyecto inválido: {e}"))?;
+        if version < 5 {
+            project.declare_offered_topologies();
+        }
         // Formatos 1 y 2: el factor de demanda era un número sobre toda la
         // carga, 1 por omisión. Uno distinto de 1 se conserva como factor
         // propio; el 1 pasa al método del artículo 220.
@@ -641,6 +651,35 @@ impl Project {
             }
         }
         Ok(project)
+    }
+
+    /// Formatos 1 a 4 (decisión 0030, T-6 y T-7): los sistemas no guardaban
+    /// su topología. Uno que es exactamente un sistema de la interfaz toma
+    /// la topología con que se mostraba; cualquier otro queda sin declarar.
+    /// «Carga no lineal: no» era el valor de fábrica y no se distingue de
+    /// una decisión: queda sin capturar.
+    fn declare_offered_topologies(&mut self) {
+        let declare = |system: &mut ieestudio_core::System| {
+            if system.topology.is_none() {
+                system.topology = system.offered_topology();
+            }
+        };
+        let forget_default = |ov: &mut Overrides| {
+            if ov.nonlinear == Some(false) {
+                ov.nonlinear = None;
+            }
+        };
+        declare(&mut self.source.system);
+        for panel in &mut self.panels {
+            forget_default(&mut panel.feeder.overrides);
+            if let Some(t) = &mut panel.transformer {
+                declare(&mut t.secondary);
+                forget_default(&mut t.secondary_overrides);
+            }
+            for circuit in &mut panel.circuits {
+                forget_default(&mut circuit.overrides);
+            }
+        }
     }
 
     /// Escribe el proyecto como JSON legible, siempre en el formato actual.
@@ -724,7 +763,7 @@ mod tests {
     fn a_format_3_fault_datum_has_no_location() {
         let json = crate::example::house()
             .to_json()
-            .replacen("\"format_version\": 4", "\"format_version\": 3", 1)
+            .replacen("\"format_version\": 5", "\"format_version\": 3", 1)
             .replacen(
                 "\"source\": {",
                 "\"source\": {\n    \"fault\": { \"available_ka\": 10.0 },",
@@ -735,7 +774,7 @@ mod tests {
         assert_eq!(read.source.fault.location, None);
         read.source.fault.location = Some(FaultLocation::Primary);
         let written = read.to_json();
-        assert!(written.contains("\"format_version\": 4"));
+        assert!(written.contains("\"format_version\": 5"));
         assert!(written.contains("\"location\": \"Primary\""));
         assert_eq!(Project::from_json(&written).unwrap().to_json(), written);
     }
@@ -745,15 +784,76 @@ mod tests {
     #[test]
     fn a_newer_format_is_refused() {
         let json = crate::example::house().to_json().replacen(
-            "\"format_version\": 4",
             "\"format_version\": 5",
+            "\"format_version\": 6",
             1,
         );
         let error = Project::from_json(&json).unwrap_err();
-        assert!(error.contains("formato 5, más nuevo"), "{error}");
+        assert!(error.contains("formato 6, más nuevo"), "{error}");
         let changed = json.replacen("\"name\": \"Acometida\"", "\"name\": 7", 1);
         let error = Project::from_json(&changed).unwrap_err();
-        assert!(error.contains("formato 5, más nuevo"), "{error}");
+        assert!(error.contains("formato 6, más nuevo"), "{error}");
+    }
+
+    /// Un archivo del formato 4 no guardaba la topología: la toma solo un
+    /// sistema de la interfaz (decisión 0030, T-7), y «carga no lineal: no»
+    /// queda sin capturar (T-6).
+    #[test]
+    fn a_format_4_file_takes_only_offered_topologies() {
+        use ieestudio_core::{System, Topology};
+        let mut project = crate::example::house();
+        project.source.system = System::WYE_220_127;
+        project.panels[0].circuits[0].overrides.nonlinear = Some(false);
+        project.panels[0].circuits[1].overrides.nonlinear = Some(true);
+        // Como lo escribía el formato 4: sin topología.
+        fn strip(v: &mut serde_json::Value) {
+            match v {
+                serde_json::Value::Object(map) => {
+                    map.remove("topology");
+                    map.values_mut().for_each(strip);
+                }
+                serde_json::Value::Array(items) => items.iter_mut().for_each(strip),
+                _ => {}
+            }
+        }
+        let old = |p: &Project| {
+            let mut v: serde_json::Value = serde_json::from_str(&p.to_json()).unwrap();
+            strip(&mut v);
+            v["format_version"] = 4.into();
+            v.to_string()
+        };
+        let json = old(&project);
+        assert!(!json.contains("topology"), "{json}");
+        let read = Project::from_json(&json).unwrap();
+        assert_eq!(read.source.system.topology, Some(Topology::ThreePhaseWye));
+        assert_eq!(read.panels[0].circuits[0].overrides.nonlinear, None);
+        assert_eq!(read.panels[0].circuits[1].overrides.nonlinear, Some(true));
+
+        // 226/120 V no es de la interfaz: queda sin declarar.
+        project.source.system = System {
+            line_to_line_v: Some(226.0),
+            line_to_neutral_v: Some(120.0),
+            topology: None,
+        };
+        let read = Project::from_json(&old(&project)).unwrap();
+        assert_eq!(read.source.system.topology, None);
+    }
+
+    /// En el formato 5 la topología y «carga no lineal: no» se guardan y se
+    /// leen tal cual; un sistema sin topología no la toma de la interfaz.
+    #[test]
+    fn a_format_5_file_keeps_what_was_declared() {
+        use ieestudio_core::Topology;
+        let mut project = crate::example::house();
+        project.panels[0].circuits[0].overrides.nonlinear = Some(false);
+        let json = project.to_json();
+        assert!(json.contains("\"topology\": \"ThreePhaseWye\""), "{json}");
+        let read = Project::from_json(&json).unwrap();
+        assert_eq!(read, project);
+        project.source.system.topology = None;
+        let read = Project::from_json(&project.to_json()).unwrap();
+        assert_eq!(read.source.system.topology, None);
+        assert_ne!(Some(Topology::ThreePhaseWye), read.source.system.topology);
     }
 
     #[test]

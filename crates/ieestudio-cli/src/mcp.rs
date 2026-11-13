@@ -128,7 +128,7 @@ fn tools() -> Value {
                 "properties": {
                     "entrada": {
                         "type": "object",
-                        "description": "Campos de QuickInput: system {line_to_line_v, line_to_neutral_v}, kind (LineToNeutral, LineToLine, ThreePhase), load_in_amperes, power_w, current_a, power_factor, continuous, length_m, size (\"12\", \"3/0\", \"250\"), conductors_per_phase, material (Copper, Aluminum), insulation (Thw, Thhn, Thwn2, Xhhw2…), has_neutral, conduit (Emt, Imc, Rmc, Pvc40, Pvc80), ambient_c, limit_percent, resistance_temperature_c, motor {hp, motor_type, nameplate_a, service_factor_marked}."
+                        "description": "Campos de QuickInput: system {line_to_line_v, line_to_neutral_v, topology (SinglePhaseTwoWire, SinglePhaseThreeWire, ThreePhaseDelta, ThreePhaseWye; sin ella no se supone: tres fases y el neutro portador quedan sin evaluar)}, kind (LineToNeutral, LineToLine, ThreePhase), load_in_amperes, power_w, current_a, power_factor, continuous, length_m, size (\"12\", \"3/0\", \"250\"), conductors_per_phase, material (Copper, Aluminum), insulation (Thw, Thhn, Thwn2, Xhhw2…), has_neutral, nonlinear (true, false o ausente: sin capturar), conduit (Emt, Imc, Rmc, Pvc40, Pvc80), ambient_c, limit_percent, resistance_temperature_c, motor {hp, motor_type, nameplate_a, service_factor_marked}."
                     }
                 }
             }
@@ -255,6 +255,11 @@ fn call(name: &str, args: &Value) -> Result<String, String> {
                 serde_json::to_value(QuickInput::default()).map_err(|e| e.to_string())?;
             if let Some(patch) = args.get("entrada") {
                 merge(&mut input, patch);
+                // El sistema se toma completo: unas tensiones nuevas no
+                // heredan la topología del de omisión (decisión 0030).
+                if let Some(system) = patch.get("system") {
+                    input["system"] = system.clone();
+                }
             }
             let input: QuickInput =
                 serde_json::from_value(input).map_err(|e| format!("entrada inválida: {e}"))?;
@@ -378,6 +383,19 @@ mod tests {
         assert!(!error, "{text}");
         let quick: Value = serde_json::from_str(&text).unwrap();
         assert_eq!(quick["entrada"]["size"], "300");
+        // Unas tensiones sin topología no toman la de omisión: tres fases
+        // queda sin evaluar (decisión 0030).
+        let (error, text) = call_tool(
+            "calculo_rapido",
+            json!({"entrada": {"system": {"line_to_line_v": 226.0, "line_to_neutral_v": 120.0}}}),
+        );
+        assert!(error);
+        assert!(text.contains("falta declarar la topología"), "{text}");
+        let (error, text) = call_tool(
+            "calculo_rapido",
+            json!({"entrada": {"system": {"line_to_line_v": 220.0, "line_to_neutral_v": 127.0, "topology": "ThreePhaseWye"}}}),
+        );
+        assert!(!error, "{text}");
         let (error, text) = call_tool("calculo_rapido", json!({"entrada": {"kind": "Cuatro"}}));
         assert!(error);
         assert!(text.contains("entrada inválida"));

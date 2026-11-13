@@ -586,6 +586,23 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                     });
                     ui.add_space(10.0);
                 }
+                // Un sistema que no es de la lista (archivo anterior o
+                // importado) declara aquí su topología (decisión 0030).
+                if !SYSTEMS.iter().any(|(_, s)| *s == project.source.system) {
+                    let tolerance = crate::panels::properties::ratio_tolerance(&project.profile);
+                    ui.label(strong(format!(
+                        "Sistema del archivo: {}",
+                        project.source.system.voltages_label()
+                    )));
+                    changed |= crate::widgets::topology_row(
+                        ui,
+                        p,
+                        "topologia-guiado",
+                        &mut project.source.system,
+                        tolerance,
+                    );
+                    ui.add_space(10.0);
+                }
                 // Cambiar el suministro con tableros ya capturados puede
                 // dejar conexiones que el sistema nuevo no tiene.
                 let stale = ieestudio_project::connection::mismatches(project).len();
@@ -2244,6 +2261,20 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         doc.edited();
                     }
 
+                    // Sistemas sin topología o que no corresponden a la
+                    // declarada (decisión 0030): se declara aquí mismo.
+                    if let Some((at, topology)) = system_review(ui, p, doc) {
+                        match at {
+                            None => doc.project.source.system.topology = Some(topology),
+                            Some(i) => {
+                                if let Some(t) = &mut doc.project.panels[i].transformer {
+                                    t.secondary.topology = Some(topology);
+                                }
+                            }
+                        }
+                        doc.edited();
+                    }
+
                     // Primero el tipo de carga: cambia todo lo demás del circuito.
                     match kind_review(ui, p, doc) {
                         Some(KindAction::Change(i, c, kind)) => {
@@ -2287,6 +2318,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         ui.label(RichText::new(format!("{} Nada pendiente: todo lo que verifica IEEStudio cumple.", icon::CHECK_CIRCLE)).color(p.ok));
                     }
                     let mut action: Option<(Selection, bool)> = None;
+                    let mut nonlinear: Option<(Selection, bool)> = None;
                     for (k, item) in items.iter().enumerate() {
                         let color = status_color(p, item.check.status);
                         egui::Frame::new()
@@ -2317,6 +2349,16 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                             action = Some((item.selection, true));
                                         }
                                     }
+                                    // 310-15(b)(5)(3): el dato se contesta aquí.
+                                    if item.check.detail.starts_with(ieestudio_project::MISSING_NONLINEAR) {
+                                        let hover = "Se guarda en el tramo y se puede deshacer con Ctrl+Z.";
+                                        if ui.button("Carga lineal").on_hover_text(hover).clicked() {
+                                            nonlinear = Some((item.selection, false));
+                                        }
+                                        if ui.button("Mayormente no lineal").on_hover_text(hover).clicked() {
+                                            nonlinear = Some((item.selection, true));
+                                        }
+                                    }
                                     let go_label = match item.selection {
                                         Selection::Circuit(..) => "Ir al circuito",
                                         _ => "Ir al tablero",
@@ -2341,6 +2383,13 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                 go = Some(Step::Panels);
                             }
                             None => {}
+                        }
+                    }
+                    if let Some((selection, value)) = nonlinear {
+                        doc.selection = selection;
+                        if let Some(ov) = doc.selected_overrides_mut() {
+                            ov.nonlinear = Some(value);
+                            doc.edited();
                         }
                     }
                     if let Some((selection, fix)) = action {
@@ -2368,13 +2417,24 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         }
                     }
 
-                    if !result.warnings.is_empty() {
+                    // Los del sistema eléctrico ya tienen su tarjeta arriba.
+                    let warnings: Vec<&String> = result
+                        .warnings
+                        .iter()
+                        .filter(|w| !is_system_warning(w))
+                        .collect();
+                    if !warnings.is_empty() {
                         ui.add_space(20.0);
                         label_caps(ui, p, "Avisos");
                         ui.add_space(4.0);
-                        for warning in &result.warnings {
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(format!("{} {warning}", icon::WARNING)).color(p.warn));
+                        for warning in warnings {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(format!("{} {warning}", icon::WARNING)).color(p.warn),
+                                    )
+                                    .wrap(),
+                                );
                                 // El aviso de desbalance se arregla aquí mismo.
                                 if warning.contains("desbalance") {
                                     let name = warning.split(':').next().unwrap_or_default();
@@ -2496,6 +2556,97 @@ fn connection_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> bool {
 /// Aviso en Revisar: un circuito que parece motor o aire acondicionado pero
 /// se capturó como «Otra carga». Devuelve lo que se pidió: cambiarlo de tipo
 /// o confirmar que es otra carga, que se guarda en el proyecto.
+/// Aviso de un sistema que no se puede usar: lo muestra `system_review`.
+fn is_system_warning(warning: &str) -> bool {
+    warning.starts_with("Sistema de suministro: ")
+        || warning.contains(", secundario del transformador: ")
+}
+
+/// Sistemas que no se pueden usar tal como están (decisión 0030): el de
+/// suministro (`None`) y el secundario de cada transformador (`Some(i)`).
+/// Devuelve la topología que se declaró con un botón.
+fn system_review(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    doc: &Doc,
+) -> Option<(Option<usize>, ieestudio_core::Topology)> {
+    let tolerance = crate::panels::properties::ratio_tolerance(&doc.project.profile);
+    let mut systems = vec![(
+        None,
+        "Sistema de suministro".to_string(),
+        doc.project.source.system,
+    )];
+    for (i, panel) in doc.project.panels.iter().enumerate() {
+        if let Some(t) = &panel.transformer {
+            systems.push((
+                Some(i),
+                format!("Secundario del transformador de {}", panel.id),
+                t.secondary,
+            ));
+        }
+    }
+    let items: Vec<_> = systems
+        .into_iter()
+        .filter_map(|(at, place, system)| Some((at, place, system, system.check(tolerance).err()?)))
+        .collect();
+    if items.is_empty() {
+        return None;
+    }
+    let mut action = None;
+    ui.add_space(20.0);
+    label_caps(ui, p, &format!("Sistema eléctrico · {}", items.len()));
+    ui.add_space(4.0);
+    for (at, place, system, issue) in items {
+        let color = if issue.invalid { p.bad } else { p.warn };
+        egui::Frame::new()
+            .fill(p.panel)
+            .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.5)))
+            .corner_radius(8)
+            .inner_margin(egui::Margin::symmetric(14, 10))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width() - 2.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(if issue.invalid { icon::WARNING } else { icon::QUESTION }).color(color).size(16.0));
+                    ui.add(
+                        egui::Label::new(strong(format!(
+                            "{place} · {}: {}",
+                            system.voltages_label(),
+                            if issue.invalid { "dato inválido" } else { "topología sin declarar" }
+                        )))
+                        .wrap(),
+                    );
+                });
+                let consequence = if issue.invalid {
+                    "La capacidad interruptiva que se calcula con un transformador de este sistema no se concluye hasta corregir las tensiones o la topología."
+                } else {
+                    "Sin ella no se sabe cuántas fases tiene ni si el neutro es portador: los circuitos de tres fases, el neutro de los de dos fases y la capacidad interruptiva quedan sin evaluar. No se deduce de las tensiones."
+                };
+                ui.add(
+                    egui::Label::new(
+                        muted(p, format!("{} {consequence}", sentence(&issue.reason))).size(12.5),
+                    )
+                    .wrap(),
+                );
+                if system.topology.is_none() {
+                    ui.add_space(2.0);
+                    ui.horizontal_wrapped(|ui| {
+                        for topology in system.candidate_topologies() {
+                            if ui
+                                .button(topology.label())
+                                .on_hover_text("Se guarda en el proyecto y se puede deshacer con Ctrl+Z. Las tensiones no cambian: si no corresponden a esta topología, queda como dato inválido.")
+                                .clicked()
+                            {
+                                action = Some((at, topology));
+                            }
+                        }
+                    });
+                }
+            });
+        ui.add_space(6.0);
+    }
+    action
+}
+
 enum KindAction {
     Change(usize, usize, LoadKind),
     Confirm(usize, usize),

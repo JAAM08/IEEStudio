@@ -22,12 +22,14 @@ use crate::workspace::{self, Tab, Workspace};
 
 const STORAGE_KEY: &str = "ieestudio-interfaz-1";
 /// En el navegador, el proyecto abierto se guarda solo con esta clave, para
-/// no perder trabajo si se cierra la pestaña. Desde el formato 4.
-const WEB_PROJECT_KEY: &str = "ieestudio-proyecto-web-4";
-/// Donde lo guardaban las versiones del formato 3. Se lee si la clave nueva
-/// está vacía y nunca se escribe: una versión anterior que siga en la caché
-/// del navegador no lee el formato 4 y pondría un proyecto vacío en su lugar.
-const WEB_PROJECT_KEY_V3: &str = "ieestudio-proyecto-web";
+/// no perder trabajo si se cierra la pestaña. Una clave por formato desde el
+/// 4: el 5 agrega la topología declarada (decisión 0030).
+const WEB_PROJECT_KEY: &str = "ieestudio-proyecto-web-5";
+/// Donde lo guardaban las versiones anteriores, de la más nueva a la más
+/// vieja. Se leen si la clave nueva está vacía y nunca se escriben: una
+/// versión anterior que siga en la caché del navegador no lee el formato
+/// nuevo y pondría un proyecto vacío en su lugar.
+const WEB_PROJECT_OLD_KEYS: [&str; 2] = ["ieestudio-proyecto-web-4", "ieestudio-proyecto-web"];
 /// Copia de un proyecto guardado que esta versión no pudo leer, para no
 /// perderlo al guardar el que se abre en su lugar.
 const WEB_PROJECT_UNREADABLE_KEY: &str = "ieestudio-proyecto-web-no-leido";
@@ -242,10 +244,13 @@ impl App {
             resumed = true;
         } else if files::WEB {
             // En el navegador se retoma el proyecto en el que se trabajaba:
-            // el del formato 4 o, si no hay, el de una versión anterior.
+            // el del formato actual o, si no hay, el de una versión anterior.
             let saved = cc.storage.and_then(|s| {
-                s.get_string(WEB_PROJECT_KEY)
-                    .or_else(|| s.get_string(WEB_PROJECT_KEY_V3))
+                s.get_string(WEB_PROJECT_KEY).or_else(|| {
+                    WEB_PROJECT_OLD_KEYS
+                        .iter()
+                        .find_map(|key| s.get_string(key))
+                })
             });
             if let Some(text) = saved {
                 match Project::from_json(&text) {

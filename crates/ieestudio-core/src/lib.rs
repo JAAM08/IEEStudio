@@ -13,7 +13,7 @@ pub mod units;
 pub mod validation;
 
 pub use error::{Error, Result};
-pub use system::{CircuitKind, System};
+pub use system::{CircuitKind, System, SystemIssue, Topology};
 pub use types::{
     ConduitType, Insulation, InsulationGroup, Material, MotorType, RacewayMaterial, Size,
     TempRating,

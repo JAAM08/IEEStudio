@@ -29,7 +29,11 @@ fn circuit(id: String, kind: LoadKind, va: f64) -> Circuit {
         },
         length_m: 10.0,
         has_neutral: false,
-        overrides: Overrides::default(),
+        overrides: Overrides {
+            // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+            nonlinear: Some(false),
+            ..Overrides::default()
+        },
     }
 }
 
@@ -79,7 +83,11 @@ fn feeder_load_cases() {
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: true,
-                overrides: Overrides::default(),
+                overrides: Overrides {
+                    // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             },
             transformer: None,
             areas: area

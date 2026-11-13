@@ -17,7 +17,7 @@ use crate::widgets::{
     blank_number, combo, combo_override, connection_picker, load_kind_hint, motor_hp_combo, muted,
     number, optional_number, phase_picker, property, proposed_text, reset_button, section,
     source_badge, status_text, strong, Source, CONDUITS, INSULATIONS, LOAD_KINDS, MATERIALS,
-    MOTOR_TYPES, SYSTEMS,
+    MOTOR_TYPES, NONLINEAR, NONLINEAR_HELP, SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -169,6 +169,9 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     property(ui, p, "Sistema", |ui| {
         changed |= combo(ui, "sistema", &mut project.source.system, &SYSTEMS);
     });
+    let tolerance = ratio_tolerance(&project.profile);
+    changed |=
+        crate::widgets::topology_row(ui, p, "topologia", &mut project.source.system, tolerance);
     section(ui, p, "Acometida y cortocircuito");
     changed |= source_inputs(ui, p, &mut project.source, study.as_ref());
 
@@ -179,6 +182,14 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
 
 /// Criterios de diseño del proyecto: límites de caída, ambiente, conductor,
 /// canalización y tablas opcionales.
+/// Tolerancia de la relación de tensiones del perfil del proyecto.
+pub(crate) fn ratio_tolerance(profile: &str) -> f64 {
+    Profile::by_id(profile)
+        .unwrap_or(Profile::nom_001_sede_2012())
+        .parameters
+        .system_voltage_ratio_tolerance
+}
+
 pub(crate) fn criteria_inputs(
     ui: &mut egui::Ui,
     p: &Palette,
@@ -252,6 +263,7 @@ pub(crate) fn criteria_inputs(
 }
 
 pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> bool {
+    let tolerance = ratio_tolerance(&doc.project.profile);
     let mut changed = false;
     let fault = doc.panel_result(i).and_then(|r| r.fault.clone());
     let fault_issue = doc.panel_result(i).and_then(|r| r.fault_issue.clone());
@@ -469,6 +481,13 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         property(ui, p, "Secundario", |ui| {
             changed |= combo(ui, "sistema-secundario", &mut t.secondary, &SYSTEMS);
         });
+        changed |= crate::widgets::topology_row(
+            ui,
+            p,
+            ("topologia-secundario", i),
+            &mut t.secondary,
+            tolerance,
+        );
         property(ui, p, "Conexión", |ui| {
             changed |= optional_combo(
                 ui,
@@ -1559,10 +1578,10 @@ fn decisions(
     changed |= ui
         .checkbox(&mut ov.nipple, "Tramo de 60 cm o menos (niple)")
         .changed();
-    changed |= ui
-        .checkbox(&mut ov.nonlinear, "Carga mayormente no lineal")
-        .on_hover_text("El neutro cuenta como conductor portador de corriente.")
-        .changed();
+    property(ui, p, "Carga no lineal", |ui| {
+        changed |= crate::widgets::combo(ui, ("nolineal", id), &mut ov.nonlinear, &NONLINEAR);
+    })
+    .on_hover_text(NONLINEAR_HELP);
     property(ui, p, "Otros portadores", |ui| {
         changed |= ui
             .add(egui::DragValue::new(&mut ov.other_current_carrying_conductors).range(0..=40))

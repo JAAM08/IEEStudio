@@ -114,12 +114,17 @@ fn opt(text: &Option<String>) -> String {
     text.as_deref().map_or("none".to_string(), q)
 }
 
+/// `220/127 V, 3F-4H, trifásico en estrella`. La topología es la declarada
+/// (decisión 0030); sin ella, lo dice.
 fn system_label(system: &System) -> String {
-    match (system.line_to_line_v, system.line_to_neutral_v) {
+    let volts = match (system.line_to_line_v, system.line_to_neutral_v) {
         (Some(ll), Some(ln)) => format!("{ll:.0}/{ln:.0} V"),
-        (Some(ll), None) => format!("{ll:.0} V, sin neutro"),
-        (None, Some(ln)) => format!("{ln:.0} V, una fase y neutro"),
+        (Some(v), None) | (None, Some(v)) => format!("{v:.0} V"),
         (None, None) => "sin tensión definida".to_string(),
+    };
+    match system.topology {
+        Some(t) => format!("{volts}, {}", t.label()),
+        None => format!("{volts}, topología sin declarar"),
     }
 }
 

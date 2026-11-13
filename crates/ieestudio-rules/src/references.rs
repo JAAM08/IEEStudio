@@ -124,10 +124,16 @@ pub enum Rule {
     /// tensión: la red como impedancia, combinada con la del transformador
     /// (decisión 0029).
     NetworkFaultImpedance,
+    /// La relación entre la tensión entre fases y la de fase a neutro
+    /// corresponde a la topología declarada (decisión 0030).
+    SystemVoltageRatio,
+    /// La conexión del transformador de la acometida corresponde al sistema
+    /// declarado (decisión 0030).
+    TransformerConnection,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 53] = [
+    pub const ALL: [Rule; 55] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -181,6 +187,8 @@ impl Rule {
         Rule::TransformerImpedanceLimits,
         Rule::LineToNeutralFault,
         Rule::NetworkFaultImpedance,
+        Rule::SystemVoltageRatio,
+        Rule::TransformerConnection,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -239,6 +247,8 @@ impl Rule {
             Rule::TransformerImpedanceLimits => "transformer_impedance_limits",
             Rule::LineToNeutralFault => "line_to_neutral_fault",
             Rule::NetworkFaultImpedance => "network_fault_impedance",
+            Rule::SystemVoltageRatio => "system_voltage_ratio",
+            Rule::TransformerConnection => "transformer_connection",
         }
     }
 }
@@ -301,6 +311,10 @@ pub struct Parameters {
     /// fase a fase en sus terminales (decisión 0029). Criterio de
     /// ingeniería del método punto a punto de Eaton Bussmann, no de la norma.
     pub fault_line_to_neutral_factor: f64,
+    /// Desviación admitida, en por unidad, entre la relación de tensiones de
+    /// un sistema y la que pide su topología declarada: √3 en 3F-4H, 2 en
+    /// 1F-3H (decisión 0030). Criterio de ingeniería, no de la norma.
+    pub system_voltage_ratio_tolerance: f64,
 }
 
 /// Datos de la norma de un perfil.
