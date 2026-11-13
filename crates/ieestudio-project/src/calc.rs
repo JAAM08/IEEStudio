@@ -137,6 +137,11 @@ pub struct Run {
     /// Criterio que determinó el calibre propuesto.
     pub governing: Option<String>,
     pub conductors_per_phase: u32,
+    /// Material del conductor y de la canalización: con el calibre y la
+    /// longitud dan su impedancia (Tabla 9) para la falla de cada tablero
+    /// (decisión 0031).
+    pub material: ieestudio_core::Material,
+    pub raceway: ieestudio_core::RacewayMaterial,
     /// Conductores de fase y neutro en el tramo, sin el de puesta a tierra.
     pub conductor_count: u32,
     /// Los conductores en paralelo los propuso el programa.
@@ -863,6 +868,8 @@ fn size_run_n(
             .ok()
             .map(|r| governing_label(r.governing).to_string()),
         conductors_per_phase: n,
+        material,
+        raceway: conduit_type.raceway_material(),
         conductor_count: (phase_conductors + neutral_conductors) * raceways,
         parallel_auto: parallel_reason.is_some(),
         current_carrying_conductors,

@@ -205,7 +205,7 @@ fn h01_las_salidas_dicen_fase_a_neutro() {
         lines_with(&svg, "Icc")
     );
     assert!(
-        svg.contains("FASE A NEUTRO es 1.67 veces la de fase a fase"),
+        svg.contains("la de FASE A NEUTRO es 1.67"),
         "nota del unifilar: {:?}",
         lines_with(&svg, "Icc:")
     );
@@ -218,7 +218,7 @@ fn h01_las_salidas_dicen_fase_a_neutro() {
     let out = cli(case);
     assert!(
         out.contains(
-            "los 2 interruptores de las barras de TG no alcanzan los 6.44 kA estimados por bus infinito, de fase a neutro"
+            "1 interruptor del punto de conexión no alcanza los 6.44 kA estimados por bus infinito, de fase a neutro"
         ),
         "línea de comandos: {out}"
     );
@@ -309,4 +309,42 @@ fn h03_confirmadas_las_salidas_lo_dicen() {
     assert!(out.contains("Verificación normativa: Conforme"), "{out}");
     let source = report(case);
     assert!(source.contains("se confirmó como otra carga aunque su nombre parece de un motor"));
+}
+
+// ------------------------------------------- Punto a punto (decisión 0031)
+
+/// Etapa 1F. El ejemplo de la decisión 0031 dice lo mismo en el unifilar, la
+/// memoria y la línea de comandos: la falla baja tablero por tablero.
+#[test]
+fn p31_las_salidas_dicen_la_falla_de_cada_tablero() {
+    let case = "p31-punto-a-punto.iees";
+    let svg = plan_svg(case);
+    for text in [
+        "Icc = 32.40 kA (BUS INFINITO)",
+        "Icc = 32.15 kA (BUS INFINITO, PUNTO A PUNTO)",
+        "Icc = 5.79 kA (BUS INFINITO, PUNTO A PUNTO)",
+        "Icc = 2.31 kA (BUS INFINITO, PUNTO A PUNTO)",
+    ] {
+        assert!(
+            svg.contains(text),
+            "unifilar sin «{text}»: {:?}",
+            lines_with(&svg, "Icc =")
+        );
+    }
+    assert!(
+        svg.contains("PUNTO A PUNTO descuenta"),
+        "{:?}",
+        lines_with(&svg, "Icc:")
+    );
+
+    let source = report(case);
+    assert!(source.contains("Conductores hasta las barras de TA"));
+    assert!(source.contains("En cada tablero se descuentan sus alimentadores"));
+    assert!(!source.contains("No se descuenta la impedancia de los alimentadores"));
+
+    let out = cli(case);
+    assert!(out.contains("los 4 interruptores de las barras de TG no alcanzan los 32.15 kA estimados por bus infinito, descontando los alimentadores"), "{out}");
+    // TA y TB cumplen con 10 kA: no aparecen entre lo pendiente.
+    assert!(!out.contains("barras de TA"), "{out}");
+    assert!(!out.contains("barras de TB"), "{out}");
 }

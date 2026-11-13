@@ -130,10 +130,13 @@ pub enum Rule {
     /// La conexión del transformador de la acometida corresponde al sistema
     /// declarado (decisión 0030).
     TransformerConnection,
+    /// La falla de cada tablero descuenta la impedancia de sus alimentadores
+    /// (punto a punto, decisión 0031).
+    FeederFaultImpedance,
 }
 
 impl Rule {
-    pub const ALL: [Rule; 55] = [
+    pub const ALL: [Rule; 56] = [
         Rule::DesignCurrent,
         Rule::StandardRatings,
         Rule::ConductorProtection,
@@ -189,6 +192,7 @@ impl Rule {
         Rule::NetworkFaultImpedance,
         Rule::SystemVoltageRatio,
         Rule::TransformerConnection,
+        Rule::FeederFaultImpedance,
     ];
 
     /// Identificador con el que aparece en `references.csv`.
@@ -249,6 +253,7 @@ impl Rule {
             Rule::NetworkFaultImpedance => "network_fault_impedance",
             Rule::SystemVoltageRatio => "system_voltage_ratio",
             Rule::TransformerConnection => "transformer_connection",
+            Rule::FeederFaultImpedance => "feeder_fault_impedance",
         }
     }
 }
@@ -315,6 +320,10 @@ pub struct Parameters {
     /// un sistema y la que pide su topología declarada: √3 en 3F-4H, 2 en
     /// 1F-3H (decisión 0030). Criterio de ingeniería, no de la norma.
     pub system_voltage_ratio_tolerance: f64,
+    /// Temperatura del conductor para la falla de cada tablero, en °C: la
+    /// resistencia de la Tabla 9 (75 °C) se corrige a ella con la Tabla 8,
+    /// nota 2 (decisión 0031). Un conductor frío deja pasar más falla.
+    pub fault_conductor_temperature_c: f64,
 }
 
 /// Datos de la norma de un perfil.

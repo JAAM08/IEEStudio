@@ -393,6 +393,7 @@ impl Profile {
                 fault_impedance_tolerance: number("fault_impedance_tolerance"),
                 fault_line_to_neutral_factor: number("fault_line_to_neutral_factor"),
                 system_voltage_ratio_tolerance: number("system_voltage_ratio_tolerance"),
+                fault_conductor_temperature_c: number("fault_conductor_temperature_c"),
             };
             let motor_row = |columns: &'static [&'static str]| {
                 move |r: &csv::Row| MotorCurrentRow {
@@ -1002,6 +1003,8 @@ mod tests {
         assert_eq!(profile.parameters.fault_line_to_neutral_factor, 1.67);
         // Relación de tensiones contra la topología declarada (decisión 0030).
         assert_eq!(profile.parameters.system_voltage_ratio_tolerance, 0.01);
+        // Conductor frío para la falla de cada tablero (decisión 0031).
+        assert_eq!(profile.parameters.fault_conductor_temperature_c, 20.0);
         // Tabla 11 de la NMX-J-116-ANCE.
         assert_eq!(
             profile.impedance_limits("pole_three_phase", 112.5, 13.2),

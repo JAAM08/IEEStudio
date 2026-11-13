@@ -456,5 +456,36 @@ pub fn all() -> Vec<(&'static str, Project)> {
             p17_secundario_con_otra_conexion(),
         ),
         ("p19-longitud-cero.iees", p19_longitud_cero()),
+        ("p31-punto-a-punto.iees", p31_punto_a_punto()),
     ]
+}
+
+/// Decisión 0031, ejemplo: pedestal de 500 kVA, 4.5 %, 220Y/127 V; TG a 10 m
+/// con 3 × 500 kcmil por fase, TA a 40 m de TG en 2 AWG y TB a 25 m de TA en
+/// 6 AWG, todo de cobre en tubo de PVC. Interruptores de 10 kA en TA y TB.
+pub fn p31_punto_a_punto() -> Project {
+    let mut project = single_board(System::WYE_220_127, CircuitKind::ThreePhase);
+    project.name = "Caso de la decisión 0031".into();
+    let mut sub = substation(500.0, Some(4.5), Connection::DeltaWye);
+    sub.mounting = Some(Mounting::PadMounted);
+    project.source.substation = Some(sub);
+    let conductor = |size: &str, n: u32, m: f64, feeder: &mut Feeder| {
+        feeder.length_m = m;
+        feeder.overrides.size = Some(ieestudio_core::Size::new(size));
+        feeder.overrides.conductors_per_phase = Some(n);
+        feeder.overrides.conduit = Some(ieestudio_core::ConduitType::Pvc40);
+    };
+    conductor("500", 3, 10.0, &mut project.panels[0].feeder);
+    let mut ta = board("TA", Some("TG"), CircuitKind::ThreePhase);
+    conductor("2", 1, 40.0, &mut ta.feeder);
+    ta.circuits = project.panels[0].circuits.clone();
+    let mut tb = board("TB", Some("TA"), CircuitKind::ThreePhase);
+    conductor("6", 1, 25.0, &mut tb.feeder);
+    tb.circuits = project.panels[0].circuits.clone();
+    project.panels.push(ta);
+    project.panels.push(tb);
+    for i in 0..project.panels.len() {
+        breakers(&mut project, i, 10.0);
+    }
+    project
 }

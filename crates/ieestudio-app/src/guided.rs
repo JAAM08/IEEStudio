@@ -2179,11 +2179,15 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                     if let Some(f) = &panel.fault {
                                         ui.label(muted(
                                             p,
-                                            match (&f.origin, f.line_to_neutral.is_some()) {
-                                                (ieestudio_project::fault::FaultOrigin::Supplier, _) => "Falla (suministradora)",
-                                                (ieestudio_project::fault::FaultOrigin::SupplierPrimary, _) => "Falla (dato en MT)",
-                                                (_, true) => "Falla (bus infinito, F-N)",
-                                                (_, false) => "Falla (bus infinito)",
+                                            // Con los alimentadores descontados manda el método
+                                            // punto a punto (decisión 0031).
+                                            match (&f.origin, f.line_to_neutral.is_some(), f.feeders.is_some()) {
+                                                (_, true, true) => "Falla (punto a punto, F-N)",
+                                                (_, false, true) => "Falla (punto a punto)",
+                                                (ieestudio_project::fault::FaultOrigin::Supplier, _, _) => "Falla (suministradora)",
+                                                (ieestudio_project::fault::FaultOrigin::SupplierPrimary, _, _) => "Falla (dato en MT)",
+                                                (_, true, false) => "Falla (bus infinito, F-N)",
+                                                (_, false, false) => "Falla (bus infinito)",
                                             },
                                         ));
                                         let mut hover = if f.motor_ka > 0.0 {
@@ -2931,7 +2935,9 @@ mod tests {
             mounting: None,
             brand: String::new(),
         });
-        project.panels[0].board.interrupting_ka = Some(10.0);
+        // 1 kA no alcanza ni lo que llega a las barras con el alimentador
+        // descontado (decisión 0031).
+        project.panels[0].board.interrupting_ka = Some(1.0);
         let with_fault = Doc::new(project, None);
         assert_eq!(listed(&with_fault), counted(&with_fault));
         assert_eq!(counted(&with_fault), counted(&doc) + 2);

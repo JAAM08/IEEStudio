@@ -747,12 +747,18 @@ fn has_motor_contribution(result: &ProjectResult) -> bool {
         .any(|b| b.motor_ka > 0.0)
 }
 
-fn origin_text(fault: &ieestudio_project::fault::BusFault) -> &'static str {
-    match (&fault.origin, &fault.line_to_neutral) {
+fn origin_text(fault: &ieestudio_project::fault::BusFault) -> String {
+    let origin = match (&fault.origin, &fault.line_to_neutral) {
         (FaultOrigin::Supplier, _) => "DATO DE LA SUMINISTRADORA",
         (FaultOrigin::SupplierPrimary, _) => "DATO EN MEDIA TENSIÓN Y TRANSFORMADOR",
         (_, Some(_)) => "BUS INFINITO, FASE A NEUTRO",
         (_, None) => "BUS INFINITO",
+    };
+    // Con los alimentadores descontados (decisión 0031).
+    if fault.feeders.is_some() {
+        format!("{origin}, PUNTO A PUNTO")
+    } else {
+        origin.to_string()
     }
 }
 
@@ -1482,11 +1488,26 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
                 parts.push("la de DATO DE LA SUMINISTRADORA se usa tal cual".to_string());
             }
             let any_estimate = study.groups.iter().any(|g| g.fault_ka.is_some());
+            let any_feeders = study
+                .groups
+                .iter()
+                .any(|g| g.fault_ka.is_some() && g.feeders_discounted);
+            if any_feeders {
+                parts.push(format!(
+                    "la de PUNTO A PUNTO descuenta en cada tablero sus alimentadores: R y X de la Tabla 9, con la resistencia a {:.0} °C, en cuadratura con la de la fuente",
+                    study.conductor_temperature_c
+                ));
+            }
             let mut note = if !any_estimate {
                 // Sin ninguna falla estimada no hay método que explicar (H-10).
                 "Icc SIN ESTIMAR: falta un dato o hay un dato inválido; la causa de cada tablero está en la memoria".to_string()
             } else if parts.is_empty() {
                 "Icc: corriente de falla con el dato de la suministradora, sin descontar los alimentadores".to_string()
+            } else if parts.len() == 1 && any_feeders {
+                format!(
+                    "Icc: corriente de falla con el dato de la suministradora; {}",
+                    parts[0]
+                )
             } else {
                 format!("Icc: corriente de falla estimada; {}", parts.join("; "))
             };

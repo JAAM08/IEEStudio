@@ -165,7 +165,9 @@ fn h01_la_falla_de_fase_a_neutro_es_el_factor_por_la_de_fase_a_fase() {
 #[test]
 fn h01_acometida_240_120_no_cumple_con_la_falla_entre_lineas() {
     let result = calc(&casos::h01_acometida_240_120());
-    let g = group(&result, Some("TG"));
+    // En las terminales, donde está el interruptor del alimentador de TG.
+    // Desde la etapa 1F las barras de TG descuentan su alimentador.
+    let g = group(&result, None);
     assert_eq!(g.label(), "No concluyente", "H-01: hoy {}", state(g));
     close(g.fault_ka.unwrap(), LN * LL_25, 1e-9);
     assert!(g.line_to_neutral);
@@ -177,14 +179,15 @@ fn h01_acometida_240_120_no_cumple_con_la_falla_entre_lineas() {
         compliance_text(&result)
     );
     // Cada interruptor dice contra qué falla se comparó.
-    let detail = &result.panels[0].circuits[0]
+    let detail = &result.panels[0]
+        .feeder
         .interrupting
         .as_ref()
         .unwrap()
         .detail;
     assert_eq!(
         detail,
-        "no concluyente: 5 kA es menor que los 6.44 kA estimados en las barras de TG por bus infinito, de fase a neutro, que es una cota superior; requiere estudio de cortocircuito"
+        "no concluyente: 5 kA es menor que los 6.44 kA estimados en el punto de conexión por bus infinito, de fase a neutro, que es una cota superior; requiere estudio de cortocircuito"
     );
 }
 
@@ -205,10 +208,14 @@ fn h01_intermedio_240_120_no_cumple_con_la_falla_entre_lineas() {
     let result = calc(&casos::h01_intermedio_240_120());
     let g = group(&result, Some("TF-1"));
     assert_eq!(g.label(), "No concluyente", "H-01: hoy {}", state(g));
-    close(g.fault_ka.unwrap(), LN * LL_25, 1e-9);
-    let tg = group(&result, Some("TG"));
-    assert!(!tg.line_to_neutral);
-    assert_eq!(tg.fault_ka, Some(25.0));
+    // En las terminales del secundario, antes de sus conductores (1F).
+    let tf = result.panels[1].fault.as_ref().unwrap();
+    close(tf.feeders.as_ref().unwrap().source_ka, LN * LL_25, 1e-9);
+    assert!(g.line_to_neutral);
+    assert!(g.fault_ka.unwrap() < LN * LL_25);
+    let source = group(&result, None);
+    assert!(!source.line_to_neutral);
+    assert_eq!(source.fault_ka, Some(25.0));
 }
 
 /// Ejemplo de la decisión 0029: 50 kVA, 3 %, 240 V dan 7.72 kA de fase a
@@ -219,7 +226,7 @@ fn h01_ejemplo_de_la_decision_50_kva() {
     project.source.substation.as_mut().unwrap().kva = Some(50.0);
     casos::breakers(&mut project, 0, 10.0);
     let result = calc(&project);
-    let g = group(&result, Some("TG"));
+    let g = group(&result, None);
     close(g.fault_ka.unwrap(), 12.8858, 1e-4);
     assert_eq!(g.label(), "No concluyente");
 }
@@ -282,7 +289,7 @@ fn h01_la_regla_cita_su_fuente() {
         .contains("criterio de ingeniería"));
     assert_eq!(profile.parameters.fault_line_to_neutral_factor, LN);
     let result = calc(&casos::h01_acometida_240_120());
-    let g = group(&result, Some("TG"));
+    let g = group(&result, None);
     let clauses: Vec<&str> = g
         .references
         .iter()
@@ -381,7 +388,7 @@ fn h02_un_dato_en_media_tension_pasa_por_el_transformador() {
     // Menor que el bus infinito y mayor que la suma de magnitudes.
     assert!(bus.total_ka < IN_1000 / 0.05175 / 1000.0);
     assert!(bus.total_ka > IN_1000 / (z_net + 0.05175) / 1000.0);
-    let g = group(&result, Some("TG"));
+    let g = group(&result, None);
     assert_eq!(g.label(), "No concluyente");
     assert!(g
         .summary()
@@ -473,7 +480,7 @@ fn h02_la_regla_de_la_red_cita_su_fuente() {
 #[test]
 fn h03_capturadas_como_motor_no_concluyente() {
     let result = calc(&casos::h03_bombas(true));
-    let g = group(&result, Some("TG"));
+    let g = group(&result, None);
     close(g.fault_ka.unwrap(), 9.8 + 4.0 * 2.0 * 130.0 / 1000.0, 1e-6);
     assert_eq!(g.label(), "No concluyente");
 }
@@ -485,7 +492,7 @@ fn h03_capturadas_como_motor_no_concluyente() {
 fn h03_una_carga_que_parece_motor_no_da_cumple() {
     let result = calc(&casos::h03_bombas(false));
     assert_eq!(result.kind_hints.len(), 2, "el aviso ya existe");
-    let g = group(&result, Some("TG"));
+    let g = group(&result, None);
     assert_eq!(g.label(), "No concluyente", "H-03: hoy {}", state(g));
     assert_eq!(g.suspected_loads, 2);
     // La falla no cambia: no se inventa la aportación.
@@ -503,17 +510,14 @@ fn h03_una_carga_que_parece_motor_no_da_cumple() {
         .any(|m| m.contains("M-1 Bomba 50 hp: parece motor")));
     assert_ne!(result.verdict.compliance, Compliance::Conforms);
     let detail = &result.panels[0]
-        .circuits
-        .iter()
-        .find(|c| c.id == "A-1")
-        .unwrap()
+        .feeder
         .interrupting
         .as_ref()
         .unwrap()
         .detail;
     assert_eq!(
         detail,
-        "no concluyente: 10 kA ≥ 9.80 kA en las barras de TG, pero 2 cargas que parecen motor o aire acondicionado están sin confirmar"
+        "no concluyente: 10 kA ≥ 9.80 kA en el punto de conexión, pero 2 cargas que parecen motor o aire acondicionado están sin confirmar"
     );
 }
 
@@ -1156,4 +1160,199 @@ fn informe() {
             None => println!("| {name} | — | sin estudio de falla | {verdict} |"),
         }
     }
+}
+
+// ------------------------------------- Punto a punto (decisión 0031, etapa 1F)
+
+/// Falla de las barras de un tablero, con su procedimiento.
+fn bars<'a>(result: &'a ProjectResult, id: &str) -> &'a ieestudio_project::fault::BusFault {
+    result
+        .panels
+        .iter()
+        .find(|p| p.id == id)
+        .and_then(|p| p.fault.as_ref())
+        .unwrap_or_else(|| panic!("{id} sin falla estimada"))
+}
+
+/// Matemática: el ejemplo de la decisión 0031, a mano.
+/// In = 500 000 / (√3 · 220) = 1312.16 A; Z = 4.5 % · 0.9 = 4.05 %;
+/// Icc = 32.40 kA en las terminales. Zf = 127.02 V / 32.399 kA = 3.920 mΩ.
+/// R a 20 °C = r75 · (1 + 0.00323 · (20 − 75)) (Tabla 8, nota 2).
+#[test]
+fn p31_el_ejemplo_de_la_decision() {
+    let result = calc(&casos::p31_punto_a_punto());
+    let source = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    let in_a = 500_000.0 / (3f64.sqrt() * 220.0);
+    let terminals = in_a / 0.0405 / 1000.0;
+    close(source.base_ka, terminals, 1e-9);
+    let k20 = 1.0 + 0.00323 * (20.0 - 75.0);
+    let zf = 220.0 / 3f64.sqrt() / (terminals * 1000.0);
+    // Tramos: (r75, x) de la Tabla 9 en PVC, Ω/km; longitud en km; en paralelo.
+    let tramo = |r75: f64, x: f64, km: f64, n: f64| (r75 * k20 * km / n, x * km / n);
+    let tg = tramo(0.089, 0.128, 0.010, 3.0);
+    let ta = tramo(0.62, 0.148, 0.040, 1.0);
+    let tb = tramo(1.61, 0.167, 0.025, 1.0);
+    let expect = |parts: &[(f64, f64)]| {
+        let (r, x) = parts.iter().fold((0.0, 0.0), |a, p| (a.0 + p.0, a.1 + p.1));
+        terminals * zf / zf.hypot(r.hypot(x))
+    };
+    close(bars(&result, "TG").base_ka, expect(&[tg]), 1e-9);
+    close(bars(&result, "TA").base_ka, expect(&[tg, ta]), 1e-9);
+    close(bars(&result, "TB").base_ka, expect(&[tg, ta, tb]), 1e-9);
+    // Los valores de la decisión, redondeados.
+    close(bars(&result, "TG").base_ka, 32.15, 0.005);
+    close(bars(&result, "TA").base_ka, 5.79, 0.005);
+    close(bars(&result, "TB").base_ka, 2.31, 0.005);
+    // Con 10 kA: el punto de conexión y TG no alcanzan; TA y TB cumplen.
+    assert_eq!(group(&result, None).label(), "No concluyente");
+    assert_eq!(group(&result, Some("TG")).label(), "No concluyente");
+    assert_eq!(group(&result, Some("TA")).label(), "Cumple");
+    assert_eq!(group(&result, Some("TB")).label(), "Cumple");
+}
+
+/// La cuadratura queda siempre arriba de la suma de magnitudes (Bussmann)
+/// y abajo de la falla de la fuente: es el lado seguro.
+#[test]
+fn p31_queda_entre_bussmann_y_la_fuente() {
+    let result = calc(&casos::p31_punto_a_punto());
+    let source = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    for id in ["TG", "TA", "TB"] {
+        let bus = bars(&result, id);
+        let f = bus.feeders.as_ref().unwrap();
+        let zf = 220.0 / 3f64.sqrt() / (f.source_ka * 1000.0);
+        let bussmann = f.source_ka * zf / (zf + f.r_ohm.hypot(f.x_ohm));
+        assert!(bus.base_ka > bussmann, "{id}");
+        assert!(bus.base_ka < source.base_ka, "{id}");
+    }
+}
+
+/// Ningún tablero da más que el de arriba, en todos los casos.
+#[test]
+fn p31_ningun_tablero_da_mas_que_el_de_arriba() {
+    for (name, project) in casos::all() {
+        let result = calc(&project);
+        let Some(study) = result.fault.as_ref() else {
+            continue;
+        };
+        for (i, panel) in project.panels.iter().enumerate() {
+            let Some(bus) = result.panels[i].fault.as_ref() else {
+                continue;
+            };
+            let upstream = match &panel.parent {
+                Some(p) => result
+                    .panels
+                    .iter()
+                    .find(|r| &r.id == p)
+                    .and_then(|r| r.fault.as_ref()),
+                None => study.source.as_ref(),
+            };
+            // Mismo origen (misma zona): no puede subir.
+            if let Some(up) = upstream.filter(|u| u.origin == bus.origin) {
+                assert!(
+                    bus.base_ka <= up.base_ka + 1e-9,
+                    "{name}: {} da {} y arriba {}",
+                    panel.id,
+                    bus.base_ka,
+                    up.base_ka
+                );
+            }
+        }
+    }
+}
+
+/// P-4: un alimentador sin longitud no se descuenta; el tablero conserva la
+/// falla de arriba y el procedimiento lo dice. Nunca se supone una longitud.
+#[test]
+fn p31_un_tramo_sin_longitud_no_se_descuenta() {
+    let mut project = casos::p31_punto_a_punto();
+    project.panels[1].feeder.length_m = 0.0;
+    let result = calc(&project);
+    let ta = bars(&result, "TA");
+    let f = ta.feeders.as_ref().unwrap();
+    assert_eq!(f.counted, ["alimentador de TG"]);
+    assert_eq!(f.skipped, ["alimentador de TA: falta su longitud"]);
+    close(ta.base_ka, bars(&result, "TG").base_ka, 1e-9);
+    assert!(ta.steps.iter().any(|s| s.title == "Tramos sin descontar"));
+}
+
+/// P-3: la aportación de los motores llega completa a cada tablero.
+#[test]
+fn p31_los_motores_aportan_sin_reducir() {
+    let result = calc(&casos::h03_bombas(true));
+    let source = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    let tg = bars(&result, "TG");
+    close(tg.motor_ka, source.motor_ka, 1e-12);
+    assert!(tg.base_ka < source.base_ka);
+    close(tg.total_ka, tg.base_ka + source.motor_ka, 1e-12);
+}
+
+/// En 1F-3H se calculan las dos fallas y manda la mayor: cerca del
+/// transformador la de fase a neutro; lejos, la de fase a fase.
+#[test]
+fn p31_en_1f_3h_manda_la_mayor_de_las_dos() {
+    let mut project = casos::h01_acometida_240_120();
+    project.panels[0].feeder.length_m = 1.0;
+    project.panels[0].feeder.overrides.size = Some(ieestudio_core::Size::new("4/0"));
+    let result = calc(&project);
+    let near = bars(&result, "TG");
+    assert!(
+        near.line_to_neutral.is_some(),
+        "a 1 m en 4/0 manda la de fase a neutro"
+    );
+    let result = calc(&casos::h01_acometida_240_120());
+    let far = bars(&result, "TG");
+    assert!(
+        far.line_to_neutral.is_none(),
+        "a 15 m en 14 AWG manda la de fase a fase"
+    );
+    assert!(far
+        .steps
+        .iter()
+        .any(|s| s.substitution.starts_with("Falla de fase a fase")));
+}
+
+/// Normativa: cada tablero cita la Tabla 9, la Tabla 8, nota 2, y la regla
+/// del método; las verificaciones también.
+#[test]
+fn p31_cita_la_tabla_9_y_la_regla() {
+    let result = calc(&casos::p31_punto_a_punto());
+    let ta = bars(&result, "TA");
+    let step = ta
+        .steps
+        .iter()
+        .find(|s| s.title == "Conductores hasta las barras de TA")
+        .unwrap();
+    let clauses: Vec<&str> = step
+        .references
+        .iter()
+        .filter_map(|r| r.clause.as_deref())
+        .collect();
+    assert!(clauses.contains(&"Capítulo 10, Tabla 9"), "{clauses:?}");
+    assert!(
+        clauses.contains(&"Capítulo 10, Tabla 8, nota 2"),
+        "{clauses:?}"
+    );
+    assert!(
+        clauses.iter().any(|c| c.contains("decisión 0031")),
+        "{clauses:?}"
+    );
+    let g = group(&result, Some("TA"));
+    assert!(g.feeders_discounted);
+    assert!(g.references.iter().any(|r| r
+        .clause
+        .as_deref()
+        .is_some_and(|c| c.contains("decisión 0031"))));
+    assert!(
+        g.summary().contains("(bus infinito y punto a punto)"),
+        "{}",
+        g.summary()
+    );
+    let tg = group(&result, Some("TG"));
+    assert!(
+        tg.summary().contains(
+            "estimados por bus infinito, descontando los alimentadores, que es una cota superior"
+        ),
+        "{}",
+        tg.summary()
+    );
 }
