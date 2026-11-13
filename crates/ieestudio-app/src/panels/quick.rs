@@ -355,6 +355,23 @@ impl QuickView {
                     ui.end_row();
                 }
 
+                // 310-15(b)(5)(3): solo decide en tres fases con neutro en
+                // estrella (decisión 0030).
+                if input.kind == ieestudio_core::CircuitKind::ThreePhase
+                    && input.has_neutral
+                    && input.system.is_wye()
+                {
+                    ui.label(muted("Carga no lineal"))
+                        .on_hover_text(crate::widgets::NONLINEAR_HELP);
+                    changed |= combo(
+                        ui,
+                        "rapido-nolineal",
+                        &mut input.nonlinear,
+                        &crate::widgets::NONLINEAR,
+                    );
+                    ui.end_row();
+                }
+
                 ui.label(muted("Temp. ambiente"));
                 changed |= number(ui, &mut input.ambient_c, 0.5, -10.0, 80.0, " °C");
                 ui.end_row();

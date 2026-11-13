@@ -89,10 +89,13 @@ fn compare(
 fn voltage_drop_cases() {
     let mut failures = Vec::new();
     let rows = parse("voltage_drop.csv", &fixture("voltage_drop.csv"), |r| {
-        let system = System {
+        let mut system = System {
             line_to_line_v: r.opt("line_to_line_v"),
             line_to_neutral_v: r.opt("line_to_neutral_v"),
+            topology: None,
         };
+        // Los casos son de sistemas de la interfaz: toman su topología.
+        system.topology = Some(system.offered_topology().expect("sistema de la interfaz"));
         let kind = kind(&r.text("kind"));
         let power_factor: f64 = r.get("power_factor");
         let current_a = r.opt("current_a").unwrap_or_else(|| {

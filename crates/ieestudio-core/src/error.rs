@@ -12,6 +12,9 @@ pub enum Error {
     NotInTable { table: String, what: String },
     /// Un dato de entrada no es válido.
     InvalidInput(String),
+    /// Falta un dato que no se supone (decisión 0027): «sin evaluar», no
+    /// «dato inválido». El texto empieza con «falta».
+    MissingData(String),
     /// Ningún tubo de la tabla admite los conductores.
     NoConduitFits { conduit: String, area_mm2: f64 },
 }
@@ -26,6 +29,7 @@ impl fmt::Display for Error {
                 write!(f, "{table} no tiene un valor para {what}")
             }
             Error::InvalidInput(msg) => write!(f, "dato inválido: {msg}"),
+            Error::MissingData(msg) => write!(f, "{msg}"),
             Error::NoConduitFits { conduit, area_mm2 } => write!(
                 f,
                 "ningún tubo {conduit} de la tabla admite {area_mm2:.2} mm² de conductores"

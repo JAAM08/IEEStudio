@@ -38,7 +38,11 @@ pub fn lighting(id: &str, kind: CircuitKind, phases: &[Phase], watts: f64) -> Ci
         },
         length_m: 10.0,
         has_neutral: kind == CircuitKind::LineToNeutral,
-        overrides: Overrides::default(),
+        overrides: Overrides {
+            // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+            nonlinear: Some(false),
+            ..Overrides::default()
+        },
     }
 }
 
@@ -66,7 +70,11 @@ pub fn motor(id: &str, name: &str, hp: &str) -> Circuit {
         },
         length_m: 15.0,
         has_neutral: false,
-        overrides: Overrides::default(),
+        overrides: Overrides {
+            // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+            nonlinear: Some(false),
+            ..Overrides::default()
+        },
     }
 }
 
@@ -85,7 +93,11 @@ pub fn board(id: &str, parent: Option<&str>, kind: CircuitKind) -> Panel {
             demand: Demand::Full,
             demand_factor: None,
             has_neutral: true,
-            overrides: Overrides::default(),
+            overrides: Overrides {
+                // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                nonlinear: Some(false),
+                ..Overrides::default()
+            },
         },
         // Área para la carga mínima de alumbrado (220-12): sin ella la carga
         // del alimentador queda sin evaluar y el dictamen nunca es conforme.
@@ -158,7 +170,11 @@ pub fn transformer(kva: Option<f64>, z: f64, secondary: System) -> Transformer {
         secondary_protection: true,
         secondary_length_m: Some(3.0),
         secondary_has_neutral: secondary.line_to_neutral_v.is_some(),
-        secondary_overrides: Overrides::default(),
+        secondary_overrides: Overrides {
+            // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+            nonlinear: Some(false),
+            ..Overrides::default()
+        },
         confirmed_distinct: false,
         connection: None,
         mounting: None,
@@ -257,6 +273,8 @@ pub fn h04_relacion_1_88() -> Project {
     let system = System {
         line_to_line_v: Some(226.0),
         line_to_neutral_v: Some(120.0),
+        // Como en un archivo anterior: sin topología declarada.
+        topology: None,
     };
     let mut p = single_board(system, CircuitKind::LineToLine);
     p.source.substation = Some(substation(25.0, Some(3.0), Connection::SinglePhase));

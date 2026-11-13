@@ -24,7 +24,11 @@ fn industrial() -> Project {
                 demand: ieestudio_project::Demand::Custom(0.8),
                 demand_factor: None,
                 has_neutral: true,
-                overrides: Overrides::default(),
+                overrides: Overrides {
+                    // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             },
             transformer: None,
             areas: vec![],
@@ -43,7 +47,11 @@ fn industrial() -> Project {
                 demand: ieestudio_project::Demand::Article220,
                 demand_factor: None,
                 has_neutral: false,
-                overrides: Overrides::default(),
+                overrides: Overrides {
+                    // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             },
             transformer: None,
             areas: vec![],
@@ -64,7 +72,11 @@ fn industrial() -> Project {
                 },
                 length_m: 25.0,
                 has_neutral: false,
-                overrides: Overrides::default(),
+                overrides: Overrides {
+                    // Dato declarado del caso: carga lineal (decisión 0030, T-6).
+                    nonlinear: Some(false),
+                    ..Overrides::default()
+                },
             }],
         },
     ];

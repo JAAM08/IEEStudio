@@ -28,3 +28,4 @@ appliance_demand_min_count,4
 fault_motor_multiplier,4.0
 fault_impedance_tolerance,0.10
 fault_line_to_neutral_factor,1.67
+system_voltage_ratio_tolerance,0.01

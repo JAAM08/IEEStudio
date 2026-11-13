@@ -21,12 +21,12 @@
 
 mod casos;
 
+use ieestudio_core::{CircuitKind, System, Topology};
 use ieestudio_project::evaluation::Evaluation;
 use ieestudio_project::fault::{FaultOrigin, InterruptingGroup, IssueKind};
 use ieestudio_project::verdict::Compliance;
-use ieestudio_core::{CircuitKind, System};
-use ieestudio_project::{Connection, FaultLocation, Mounting};
 use ieestudio_project::{calculate, Project, ProjectResult, Status};
+use ieestudio_project::{Connection, FaultLocation, Mounting};
 
 fn calc(project: &Project) -> ProjectResult {
     calculate(project).expect("el caso se calcula")
@@ -575,52 +575,249 @@ fn h03_una_sospecha_aguas_abajo_alcanza_las_barras_de_arriba() {
 
 // ----------------------------------------------------- H-04 criterio trifásico
 
-/// H-04 (medio, etapa 1D). 226/120 V: el modelo (`System::has_three_phases`)
-/// lo toma como monofásico de tres hilos y la falla también:
-/// `25 000 / 226 / 0.027 = 4.097 kA` entre fases (antes 2.365 kA, como
-/// trifásico) y, por ser 1F-3H, `1.67 · 4.097 = 6.842 kA` de fase a neutro.
+/// H-04 (medio, etapa 1D, decisión 0030). 226/120 V (1.883) no corresponde a
+/// ningún sistema: la capacidad interruptiva calculada con el transformador
+/// queda «Dato inválido», con las tensiones, la relación y las esperadas.
+/// Antes daba 2.365 kA como trifásico y «Cumple»; nunca se toma como
+/// 240/120 V.
 #[test]
-fn h04_un_solo_criterio_de_trifasico() {
+fn h04_una_relacion_incompatible_es_dato_invalido() {
     let project = casos::h04_relacion_1_88();
-    assert!(!project.source.system.has_three_phases());
+    assert_eq!(project.source.system.topology, None);
     let result = calc(&project);
-    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
-    let ll = 25_000.0 / 226.0 / 0.027 / 1000.0;
-    let ln = bus.line_to_neutral.as_ref().expect("1F-3H");
-    assert!((ln.line_to_line_ka - ll).abs() < 1e-3, "H-04: {}", ln.line_to_line_ka);
-    assert!((bus.base_ka - 1.67 * ll).abs() < 1e-3, "H-04: {}", bus.base_ka);
+    let g = group(&result, Some("TG"));
+    assert_eq!(g.evaluation, Evaluation::Invalid, "{}", state(g));
+    let fault = result.fault.as_ref().unwrap();
+    assert!(fault.source.is_none());
+    let issue = fault.source_issue.as_ref().unwrap();
+    assert_eq!(issue.kind, IssueKind::Invalid);
+    assert_eq!(
+        issue.reason,
+        "en el sistema de suministro, la relación entre 226 V y 120 V es 1.883; no corresponde a un 3F-4H en estrella (√3 = 1.732) ni a un 1F-3H (2), con ±1 %"
+    );
+    assert!(!compliance_text(&result).contains("Conforme"));
 }
 
-/// H-04. Con relación 2.1 el criterio anterior de la falla (a menos de 0.1
-/// de 2) lo tomaba como trifásico; ahora es monofásico de tres hilos, como
-/// en el resto del programa.
+/// H-04. Declarado 1F-3H tampoco: la relación no es 2 con ±1 %.
 #[test]
-fn h04_relacion_2_1_es_monofasico_de_tres_hilos() {
+fn h04_declarado_con_relacion_incompatible_es_dato_invalido() {
     let mut project = casos::h04_relacion_1_88();
-    project.source.system.line_to_line_v = Some(252.0);
-    assert!(!project.source.system.has_three_phases());
+    project.source.system.topology = Some(Topology::SinglePhaseThreeWire);
     let result = calc(&project);
+    let issue = result.fault.as_ref().unwrap().source_issue.clone().unwrap();
+    assert_eq!(issue.kind, IssueKind::Invalid);
+    assert!(
+        issue.reason.ends_with("un 1F-3H pide 2.000, con ±1 %"),
+        "{}",
+        issue.reason
+    );
+    // Con relación 2.1 (252/120) igual: el criterio anterior de la falla lo
+    // tomaba como trifásico.
+    project.source.system.line_to_line_v = Some(252.0);
+    let result = calc(&project);
+    assert_eq!(group(&result, Some("TG")).evaluation, Evaluation::Invalid);
+}
+
+/// H-04. Sin topología declarada, el neutro del alimentador de dos fases no
+/// se sabe si es portador: «Sin evaluar». Con la topología declarada sí se
+/// calcula, aunque la relación sea incompatible, porque el alimentador no
+/// usa la relación (decisión 0030, T-3 y T-5).
+#[test]
+fn h04_lo_que_no_depende_de_la_relacion_sigue() {
+    let mut project = casos::h04_relacion_1_88();
+    let result = calc(&project);
+    let feeder = &result.panels[0].feeder;
+    assert!(feeder.run.is_none());
+    assert_eq!(feeder.status, Status::NotEvaluated);
+    assert!(
+        feeder.checks[0]
+            .detail
+            .starts_with("falta declarar la topología"),
+        "{}",
+        feeder.checks[0].detail
+    );
+    project.source.system.topology = Some(Topology::SinglePhaseThreeWire);
+    let result = calc(&project);
+    let feeder = result.panels[0]
+        .feeder
+        .run
+        .as_ref()
+        .expect("alimentador calculado");
+    assert_eq!(feeder.poles, 2);
+    assert_eq!(group(&result, Some("TG")).evaluation, Evaluation::Invalid);
+}
+
+/// H-04. Dentro del 1 %, la topología declarada se usa: 240/120 V da la
+/// falla de 1F-3H como en la etapa 1A (3.86 kA · 1.67 = 6.44 kA).
+#[test]
+fn h04_una_relacion_dentro_de_la_tolerancia_se_calcula() {
+    let result = calc(&casos::h01_acometida_240_120());
     let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
-    let ll = 25_000.0 / 252.0 / 0.027 / 1000.0;
-    let ln = bus.line_to_neutral.as_ref().expect("1F-3H");
-    assert!((ln.line_to_line_ka - ll).abs() < 1e-3, "{}", ln.line_to_line_ka);
+    close(bus.base_ka, 6.4429, 1e-3);
+}
+
+/// H-04. La regla cita su fuente: criterio de ingeniería del perfil.
+#[test]
+fn h04_la_regla_cita_su_fuente() {
+    let result = calc(&casos::h04_relacion_1_88());
+    let check = result.panels[0]
+        .runs()
+        .find_map(|r| r.interrupting.as_ref())
+        .expect("verificación de capacidad interruptiva");
+    assert!(
+        check.references.iter().any(|r| r
+            .clause
+            .as_deref()
+            .is_some_and(|c| c.contains("decisión 0030"))),
+        "{:?}",
+        check.references
+    );
 }
 
 // -------------------------------------------------- H-05 datos contradictorios
 
-/// H-05 (medio). Conexión «Monofásico» en el transformador de la acometida
-/// de un sistema 220Y/127 V: busca la impedancia de la tabla monofásica
-/// (1.5 %) y calcula la corriente como trifásico (13.12 kA en vez de
-/// 9.84 kA), sin aviso.
+/// H-05 (medio, etapa 1D, decisión 0030 C-1). Conexión «Monofásico» en el
+/// transformador de la acometida de un sistema 220Y/127 V. Antes buscaba la
+/// impedancia de la tabla monofásica (1.5 %) y calculaba como trifásico:
+/// 13.12 kA sin aviso. Ahora, «Dato inválido» con la orientación sobre los
+/// bancos.
 #[test]
-#[ignore = "H-05 abierto (decisión 0030, C-1)"]
-fn h05_conexion_que_contradice_el_sistema_se_avisa() {
+fn h05_conexion_que_contradice_el_sistema_es_dato_invalido() {
     let result = calc(&casos::h05_conexion_contradictoria());
     let g = group(&result, Some("TG"));
-    assert!(
-        g.evaluation == Evaluation::Invalid || warned(&result, g, &["conexión", "monofásico"]),
-        "H-05: sin aviso; hoy {}",
-        state(g)
+    assert_eq!(g.evaluation, Evaluation::Invalid, "{}", state(g));
+    let issue = result.fault.as_ref().unwrap().source_issue.clone().unwrap();
+    assert_eq!(issue.kind, IssueKind::Invalid);
+    assert_eq!(
+        issue.reason,
+        "la conexión del transformador de la acometida (Monofásico) no corresponde al sistema declarado (3F-4H, trifásico en estrella). Verifica si capturaste una unidad monofásica o un banco: varias unidades monofásicas que forman un banco trifásico se capturan con la conexión del banco completo"
+    );
+    let check = result.panels[0]
+        .runs()
+        .find_map(|r| r.interrupting.as_ref())
+        .unwrap();
+    assert!(check
+        .references
+        .iter()
+        .any(|r| r.clause.as_deref() == Some("coherencia de datos (decisión 0030)")));
+}
+
+/// H-05. Al revés: una conexión trifásica en un sistema 1F-3H 240/120 V.
+#[test]
+fn h05_conexion_trifasica_en_un_monofasico_es_dato_invalido() {
+    let mut project = casos::h01_acometida_240_120();
+    project.source.substation.as_mut().unwrap().connection = Some(Connection::DeltaWye);
+    let result = calc(&project);
+    assert_eq!(group(&result, Some("TG")).evaluation, Evaluation::Invalid);
+}
+
+/// H-05 (C-2). Un banco de tres monofásicos que da 220Y/127 V se captura
+/// con la conexión del banco: no hay contradicción y se calcula. Un
+/// monofásico en 1F-3H tampoco contradice nada.
+#[test]
+fn h05_un_banco_con_su_conexion_se_calcula() {
+    let mut project = casos::h05_conexion_contradictoria();
+    project.source.substation.as_mut().unwrap().connection = Some(Connection::WyeWye);
+    let result = calc(&project);
+    assert!(result.fault.as_ref().unwrap().source.is_some());
+    let result = calc(&casos::h01_acometida_240_120());
+    assert!(result.fault.as_ref().unwrap().source.is_some());
+}
+
+/// H-05 (punto 8). Con el dato de la suministradora en baja tensión el
+/// transformador no interviene: la conexión no se valida y el dato se usa.
+#[test]
+fn h05_con_dato_en_baja_tension_la_conexion_no_interviene() {
+    let mut project = casos::h05_conexion_contradictoria();
+    project.source.fault.available_ka = Some(10.0);
+    project.source.fault.location = Some(FaultLocation::LowVoltage);
+    let result = calc(&project);
+    let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
+    assert_eq!(bus.base_ka, 10.0);
+    assert_eq!(bus.origin, FaultOrigin::Supplier);
+}
+
+// ---------------------------- Neutro portador, 310-15(b)(5) (decisión 0030, T-5)
+
+/// El alimentador del caso con su sistema, conexión, neutro y carga no
+/// lineal: devuelve sus conductores portadores o el motivo de «Sin evaluar».
+fn feeder_carrying(
+    system: System,
+    kind: CircuitKind,
+    nonlinear: Option<bool>,
+) -> Result<u32, String> {
+    let mut project = casos::single_board(system, kind);
+    project.panels[0].feeder.has_neutral = true;
+    project.panels[0].feeder.overrides.nonlinear = nonlinear;
+    let result = calc(&project);
+    let feeder = &result.panels[0].feeder;
+    match &feeder.run {
+        Some(run) => Ok(run.current_carrying_conductors),
+        None => Err(feeder.checks[0].detail.clone()),
+    }
+}
+
+/// (2): dos fases y neutro de un 3F-4H en estrella: el neutro cuenta.
+/// (1): de un 1F-3H solo lleva el desequilibrio: no cuenta.
+#[test]
+fn t5_dos_fases_y_neutro_segun_la_topologia() {
+    assert_eq!(
+        feeder_carrying(System::WYE_220_127, CircuitKind::LineToLine, None),
+        Ok(3)
+    );
+    assert_eq!(
+        feeder_carrying(System::SPLIT_240_120, CircuitKind::LineToLine, None),
+        Ok(2)
+    );
+    let undeclared = System {
+        topology: None,
+        ..System::SPLIT_240_120
+    };
+    let why = feeder_carrying(undeclared, CircuitKind::LineToLine, None).unwrap_err();
+    assert!(why.starts_with("falta declarar la topología"), "{why}");
+}
+
+/// (3): tres fases y neutro en estrella con carga mayormente no lineal: el
+/// neutro cuenta; con carga lineal, (1), no; sin capturar, «Sin evaluar».
+#[test]
+fn t5_tres_fases_y_neutro_segun_la_carga_no_lineal() {
+    let wye = System::WYE_220_127;
+    assert_eq!(
+        feeder_carrying(wye, CircuitKind::ThreePhase, Some(true)),
+        Ok(4)
+    );
+    assert_eq!(
+        feeder_carrying(wye, CircuitKind::ThreePhase, Some(false)),
+        Ok(3)
+    );
+    let why = feeder_carrying(wye, CircuitKind::ThreePhase, None).unwrap_err();
+    assert_eq!(
+        why,
+        "falta indicar si la carga es mayormente no lineal para saber si el neutro cuenta como conductor portador (310-15(b)(5)(3))"
+    );
+    // Un faltante no es un dato inválido (decisión 0027).
+    assert!(!why.contains("dato inválido"));
+}
+
+/// Sin topología declarada no hay tres fases: el circuito no se calcula y
+/// dice qué falta. Con tres fases declaradas se admite aunque la relación
+/// no corresponda (T-4).
+#[test]
+fn t4_tres_fases_solo_si_se_declaran() {
+    let undeclared = System {
+        topology: None,
+        ..System::WYE_220_127
+    };
+    let why = feeder_carrying(undeclared, CircuitKind::ThreePhase, Some(false)).unwrap_err();
+    assert!(why.starts_with("falta declarar la topología"), "{why}");
+    let odd = System {
+        line_to_line_v: Some(226.0),
+        line_to_neutral_v: Some(120.0),
+        topology: Some(Topology::ThreePhaseWye),
+    };
+    assert_eq!(
+        feeder_carrying(odd, CircuitKind::ThreePhase, Some(false)),
+        Ok(3)
     );
 }
 
@@ -650,13 +847,22 @@ fn n1_impedancia_arriba_del_maximo_no_concluye() {
 #[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-1)"]
 fn n1_impedancia_abajo_del_minimo_solo_avisa() {
     let mut project = casos::h05_impedancia_30();
-    project.source.substation.as_mut().unwrap().impedance_percent = Some(1.0);
+    project
+        .source
+        .substation
+        .as_mut()
+        .unwrap()
+        .impedance_percent = Some(1.0);
     let result = calc(&project);
     let g = group(&result, Some("TG"));
     assert!(warned(&result, g, &["impedancia"]), "N-1: hoy {}", state(g));
     let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
     // 112.5 kVA en 220 V: 295.24 A; con 1 % reducido 10 %, 32.80 kA.
-    close(bus.base_ka, 112_500.0 / (3f64.sqrt() * 220.0) / 0.009 / 1000.0, 1e-3);
+    close(
+        bus.base_ka,
+        112_500.0 / (3f64.sqrt() * 220.0) / 0.009 / 1000.0,
+        1e-3,
+    );
 }
 
 /// N-2. Nota 3: un monofásico tipo subestación de 167 kVA, 13.2 kV, toma el
@@ -686,7 +892,11 @@ fn n3_banco_de_monofasicos_usa_el_renglon_de_cada_unidad() {
     project.source.substation = Some(casos::substation(150.0, None, Connection::DeltaWye));
     let result = calc(&project);
     let bus = result.fault.as_ref().unwrap().source.as_ref().unwrap();
-    close(bus.base_ka, 150_000.0 / (3f64.sqrt() * 220.0) / 0.015 / 1000.0, 1e-3);
+    close(
+        bus.base_ka,
+        150_000.0 / (3f64.sqrt() * 220.0) / 0.015 / 1000.0,
+        1e-3,
+    );
 }
 
 // --------------------------------------- H-06 transformador de la acometida

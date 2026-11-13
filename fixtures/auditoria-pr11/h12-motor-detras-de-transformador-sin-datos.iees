@@ -1,5 +1,5 @@
 {
-  "format_version": 4,
+  "format_version": 5,
   "name": "Caso de auditoría",
   "profile": "nom-001-sede-2012",
   "info": {
@@ -31,7 +31,8 @@
     "name": "Acometida",
     "system": {
       "line_to_line_v": 480.0,
-      "line_to_neutral_v": 277.0
+      "line_to_neutral_v": 277.0,
+      "topology": "ThreePhaseWye"
     },
     "supplier": "CFE",
     "meter": true,
@@ -189,7 +190,8 @@
         "impedance_percent": 3.0,
         "secondary": {
           "line_to_line_v": 220.0,
-          "line_to_neutral_v": 127.0
+          "line_to_neutral_v": 127.0,
+          "topology": "ThreePhaseWye"
         },
         "secondary_protection": true,
         "secondary_length_m": 3.0,

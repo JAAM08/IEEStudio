@@ -392,6 +392,7 @@ impl Profile {
                 fault_motor_multiplier: number("fault_motor_multiplier"),
                 fault_impedance_tolerance: number("fault_impedance_tolerance"),
                 fault_line_to_neutral_factor: number("fault_line_to_neutral_factor"),
+                system_voltage_ratio_tolerance: number("system_voltage_ratio_tolerance"),
             };
             let motor_row = |columns: &'static [&'static str]| {
                 move |r: &csv::Row| MotorCurrentRow {
@@ -999,6 +1000,8 @@ mod tests {
         assert_eq!(profile.parameters.fault_impedance_tolerance, 0.10);
         // Máximo teórico del método punto a punto (decisión 0029).
         assert_eq!(profile.parameters.fault_line_to_neutral_factor, 1.67);
+        // Relación de tensiones contra la topología declarada (decisión 0030).
+        assert_eq!(profile.parameters.system_voltage_ratio_tolerance, 0.01);
         // Tabla 11 de la NMX-J-116-ANCE.
         assert_eq!(
             profile.impedance_limits("pole_three_phase", 112.5, 13.2),

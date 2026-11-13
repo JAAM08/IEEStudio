@@ -16,7 +16,7 @@ use ieestudio_electrical::voltage_drop::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::calc::{is_wye, poles};
+use crate::calc::{neutral_counts, poles};
 use crate::model::MotorLoad;
 use crate::motors::{motor_parts, MotorCircuit};
 use crate::procedure::{
@@ -50,6 +50,9 @@ pub struct QuickInput {
     pub insulation: Insulation,
     /// Lleva neutro además de las fases. Un circuito de una fase siempre lo lleva.
     pub has_neutral: bool,
+    /// Carga mayormente no lineal; `None` sin capturar (decisión 0030, T-6).
+    #[serde(default)]
+    pub nonlinear: Option<bool>,
     pub conduit: ConduitType,
     /// Temperatura ambiente, en °C.
     pub ambient_c: f64,
@@ -80,6 +83,7 @@ impl Default for QuickInput {
             material: Material::Copper,
             insulation: Insulation::Thw,
             has_neutral: false,
+            nonlinear: None,
             conduit: ConduitType::Emt,
             ambient_c: 30.0,
             limit_percent: 3.0,
@@ -183,15 +187,12 @@ fn drop_input(input: &QuickInput, current_a: f64) -> VoltageDropInput {
 
 /// Conductores portadores de corriente en cada tubo. Con conductores en
 /// paralelo cada juego lleva su tubo, así que se cuenta un juego. El neutro
-/// cuenta en un circuito de una fase y en uno de dos fases de un sistema en
-/// estrella; en uno de tres fases con carga lineal no cuenta.
-fn current_carrying(input: &QuickInput, _n: u32) -> u32 {
-    let neutral_counts = match input.kind {
-        CircuitKind::LineToNeutral => true,
-        CircuitKind::LineToLine => input.has_neutral && is_wye(&input.system),
-        CircuitKind::ThreePhase => false,
-    };
-    poles(input.kind) + u32::from(neutral_counts)
+/// sigue el mismo criterio que el proyecto (310-15(b)(5), decisión 0030).
+fn current_carrying(input: &QuickInput, _n: u32) -> Result<u32, ieestudio_core::Error> {
+    let has_neutral = input.kind == CircuitKind::LineToNeutral
+        || (input.has_neutral && input.system.line_to_neutral_v.is_some());
+    let counts = neutral_counts(&input.system, input.kind, has_neutral, input.nonlinear)?;
+    Ok(poles(input.kind) + u32::from(counts))
 }
 
 /// Datos para evaluar ampacidad y protección con `n` conductores por fase.
@@ -216,7 +217,8 @@ fn sizing_input(
         insulation: input.insulation,
         wet_location: false,
         ambient_c: input.ambient_c,
-        current_carrying_conductors: current_carrying(input, n),
+        // `quick_circuit` ya revisó que se puede contar.
+        current_carrying_conductors: current_carrying(input, n).unwrap_or(0),
         nipple: false,
         conductors_per_phase: n,
         terminal_rating: None,
@@ -371,6 +373,12 @@ pub fn quick_circuit(profile: &Profile, input: &QuickInput) -> Result<QuickResul
     if !(input.limit_percent.is_finite() && input.limit_percent > 0.0) {
         return Err("el límite de caída debe ser mayor que cero".into());
     }
+    input
+        .kind
+        .reference_voltage(&input.system)
+        .map_err(|e| e.to_string())?;
+    // Sin saber si el neutro es portador no hay ampacidad (decisión 0030).
+    current_carrying(input, 1).map_err(|e| e.to_string())?;
     let motor = match &input.motor {
         Some(data) => Some(
             motor_parts(profile, false, input.kind, &input.system, data, None)

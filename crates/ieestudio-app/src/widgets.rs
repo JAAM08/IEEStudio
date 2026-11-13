@@ -17,6 +17,68 @@ pub const SYSTEMS: [(&str, System); 6] = [
     ("3F-3H 440 V", System::DELTA_440),
 ];
 
+/// Carga mayormente no lineal (310-15(b)(5)(3), decisión 0030): tres estados.
+pub const NONLINEAR: [(&str, Option<bool>); 3] = [
+    ("Sin capturar", None),
+    ("Sí, mayormente no lineal", Some(true)),
+    ("No, lineal", Some(false)),
+];
+
+pub const NONLINEAR_HELP: &str = "En un circuito de tres fases con neutro de un sistema en estrella, con carga mayormente no lineal el neutro cuenta como conductor portador (310-15(b)(5)(3)). Sin capturar, ese conductor no se evalúa.";
+
+/// Topología de un sistema que no es de la lista (de un archivo anterior o
+/// importado): se declara aquí y dice por qué no se puede usar si es el caso
+/// (decisión 0030). Los sistemas de la lista ya la traen y no muestran nada.
+pub fn topology_row(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    system: &mut System,
+    tolerance: f64,
+) -> bool {
+    if System::OFFERED.contains(system) {
+        return false;
+    }
+    let mut changed = false;
+    let mut options: Vec<(&'static str, Option<ieestudio_core::Topology>)> =
+        vec![("Sin declarar", None)];
+    options.extend(
+        system
+            .candidate_topologies()
+            .into_iter()
+            .map(|t| (t.label(), Some(t))),
+    );
+    property(ui, p, "Topología", |ui| {
+        changed |= combo(ui, id, &mut system.topology, &options);
+    })
+    .on_hover_text(
+        "Fases, hilos y conexión del sistema. No se deduce de las tensiones: sin declararla, lo que dependa de ella queda sin evaluar.",
+    );
+    if let Err(issue) = system.check(tolerance) {
+        ui.add(
+            egui::Label::new(
+                RichText::new(format!(
+                    "{} {}",
+                    icon::WARNING,
+                    sentence_case(&issue.reason)
+                ))
+                .color(if issue.invalid { p.bad } else { p.warn })
+                .size(11.5),
+            )
+            .wrap(),
+        );
+    }
+    changed
+}
+
+fn sentence_case(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(c) => c.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
 pub const KINDS: [(&str, CircuitKind); 3] = [
     ("1 fase", CircuitKind::LineToNeutral),
     ("2 fases", CircuitKind::LineToLine),

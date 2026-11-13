@@ -177,16 +177,12 @@ fn voltage_label(system: &System) -> String {
     }
 }
 
-/// Fases e hilos de un sistema de suministro: `3F-4H`, `1F-3H`…
+/// Fases e hilos de un sistema de suministro: `3F-4H`, `1F-3H`… Es la
+/// topología declarada; nunca se deduce de las tensiones (decisión 0030).
 fn system_wires(system: &System) -> &'static str {
-    match (system.line_to_line_v, system.line_to_neutral_v) {
-        (None, Some(_)) => "1F-2H",
-        (Some(_), None) => "3F-3H",
-        // Monofásico de tres hilos: la tensión entre fases es el doble.
-        (Some(ll), Some(ln)) if (ll / ln - 2.0).abs() < 0.1 => "1F-3H",
-        (Some(_), Some(_)) => "3F-4H",
-        (None, None) => "",
-    }
+    system
+        .topology
+        .map_or("TOPOLOGÍA SIN DECLARAR", |t| t.code())
 }
 
 /// Fases e hilos de una conexión, sin contar el de puesta a tierra.

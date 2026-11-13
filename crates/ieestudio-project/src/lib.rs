@@ -21,7 +21,7 @@ pub mod verdict;
 
 pub use calc::{
     calculate, Check, ConduitChoice, ElectrodeConductor, PanelResult, ProjectResult, Run,
-    RunResult, Status, TransformerResult,
+    RunResult, Status, TransformerResult, MISSING_NONLINEAR,
 };
 pub use demand::DemandLine;
 pub use model::{

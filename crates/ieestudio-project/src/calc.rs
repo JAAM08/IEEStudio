@@ -315,10 +315,75 @@ pub(crate) fn poles(kind: CircuitKind) -> u32 {
     }
 }
 
-/// Un sistema en estrella: trifásico y con neutro. Trifásico es lo que dice
-/// `System::has_three_phases`, el mismo criterio de todo el programa (H-04).
-pub(crate) fn is_wye(system: &System) -> bool {
-    system.line_to_neutral_v.is_some() && system.has_three_phases()
+/// Avisos de los sistemas que no se pueden usar tal como están declarados
+/// (decisión 0030): el de suministro y el de cada secundario. Salen aunque
+/// la falla no los use, para que Revisar, la memoria y la línea de comandos
+/// digan lo mismo.
+fn system_warnings(profile: &Profile, project: &Project) -> Vec<String> {
+    let tolerance = profile.parameters.system_voltage_ratio_tolerance;
+    let mut systems = vec![("Sistema de suministro".to_string(), project.source.system)];
+    for panel in &project.panels {
+        if let Some(t) = &panel.transformer {
+            systems.push((
+                format!("{}, secundario del transformador", panel.name),
+                t.secondary,
+            ));
+        }
+    }
+    systems
+        .into_iter()
+        .filter_map(|(place, system)| {
+            let issue = system.check(tolerance).err()?;
+            Some(if issue.invalid {
+                format!(
+                    "{place}: {}. Lo que depende de esa relación no se concluye hasta corregir las tensiones o la topología",
+                    issue.reason
+                )
+            } else {
+                format!(
+                    "{place}: {}; lo que dependa de ella queda sin evaluar",
+                    issue.reason
+                )
+            })
+        })
+        .collect()
+}
+
+/// Inicio del motivo cuando falta la carga no lineal: la interfaz lo usa
+/// para ofrecer las dos respuestas (decisión 0030, T-6).
+pub const MISSING_NONLINEAR: &str = "falta indicar si la carga es mayormente no lineal";
+
+/// Si el neutro cuenta como conductor portador de corriente, 310-15(b)(5),
+/// con la topología declarada y la carga no lineal capturada (decisión 0030,
+/// T-5). Sin uno de los dos datos que hacen falta, el tramo no se evalúa.
+pub(crate) fn neutral_counts(
+    system: &System,
+    kind: CircuitKind,
+    has_neutral: bool,
+    nonlinear: Option<bool>,
+) -> Result<bool, Error> {
+    if !has_neutral {
+        return Ok(false);
+    }
+    match kind {
+        // Ida y vuelta de la misma corriente.
+        CircuitKind::LineToNeutral => Ok(true),
+        // (2): dos fases y neutro de un 3F-4H en estrella; (1): de un 1F-3H
+        // solo lleva el desequilibrio.
+        CircuitKind::LineToLine => match system.topology {
+            Some(t) => Ok(t == ieestudio_core::Topology::ThreePhaseWye),
+            None => Err(Error::MissingData(
+                "falta declarar la topología del sistema para saber si el neutro de un circuito de dos fases cuenta como conductor portador (310-15(b)(5))".into(),
+            )),
+        },
+        // (3): en estrella con carga mayormente no lineal; (1) con lineal.
+        CircuitKind::ThreePhase if system.is_wye() => nonlinear.ok_or_else(|| {
+            Error::MissingData(format!(
+                "{MISSING_NONLINEAR} para saber si el neutro cuenta como conductor portador (310-15(b)(5)(3))"
+            ))
+        }),
+        CircuitKind::ThreePhase => Ok(false),
+    }
 }
 
 /// √3 en tres fases; 1 en una o dos fases.
@@ -407,9 +472,13 @@ fn size_run(
     system: &System,
     spec: &RunSpec,
 ) -> Result<(Run, Vec<Check>), Error> {
-    // La conexión debe existir en el sistema antes de calcular nada.
+    // La conexión debe existir en el sistema antes de calcular nada, y debe
+    // saberse si el neutro es portador: sin eso no hay ampacidad.
     spec.kind.reference_voltage(system)?;
     let ov = spec.overrides;
+    let has_neutral = spec.kind == CircuitKind::LineToNeutral
+        || (spec.has_neutral && system.line_to_neutral_v.is_some());
+    neutral_counts(system, spec.kind, has_neutral, ov.nonlinear)?;
     if ov.conductors_per_phase.is_some() || ov.size.is_some() {
         let n = ov.conductors_per_phase.unwrap_or(1);
         return size_run_n(profile, settings, system, spec, n, None);
@@ -482,12 +551,7 @@ fn size_run_n(
     // Un sistema sin neutro no lo lleva, diga lo que diga el dato guardado.
     let has_neutral = spec.kind == CircuitKind::LineToNeutral
         || (spec.has_neutral && system.line_to_neutral_v.is_some());
-    let neutral_counts = has_neutral
-        && match spec.kind {
-            CircuitKind::LineToNeutral => true,
-            CircuitKind::LineToLine => is_wye(system),
-            CircuitKind::ThreePhase => ov.nonlinear,
-        };
+    let neutral_counts = neutral_counts(system, spec.kind, has_neutral, ov.nonlinear)?;
     let phase_conductors = poles(spec.kind) * sets_per_raceway;
     let neutral_conductors = if has_neutral { sets_per_raceway } else { 0 };
     let current_carrying_conductors = phase_conductors
@@ -1345,7 +1409,9 @@ impl<'a> Context<'a> {
                         status: Status::NotEvaluated,
                         // Un dato que falta no es un dato inválido (0027).
                         detail: match &e {
-                            Error::InvalidInput(msg) if msg.starts_with("falta") => {
+                            Error::InvalidInput(msg) | Error::MissingData(msg)
+                                if msg.starts_with("falta") =>
+                            {
                                 format!("{msg}; se calculó como carga general")
                             }
                             other => format!("{other}; se calculó como carga general"),
@@ -1536,7 +1602,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         motors,
         loads: vec![PanelLoad::default(); count],
         results: vec![None; count],
-        warnings: Vec::new(),
+        warnings: system_warnings(profile, project),
         systems,
     };
     for &root in &roots {
@@ -1555,7 +1621,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
                 .map(|m| {
                     m.as_ref().map(|r| match r {
                         Ok(m) => Ok(m.current_a),
-                        Err(Error::InvalidInput(msg)) => Err(msg.clone()),
+                        Err(Error::InvalidInput(msg) | Error::MissingData(msg)) => Err(msg.clone()),
                         Err(e) => Err(e.to_string()),
                     })
                 })

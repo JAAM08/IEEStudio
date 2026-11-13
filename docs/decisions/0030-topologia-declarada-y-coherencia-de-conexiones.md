@@ -4,6 +4,9 @@
 decidió al revisar la etapa 1D del plan (`../plan-1.0.md`). Aclara la 0026
 (fuente única y topología) y la 0029; no las sustituye.
 
+**Implementado en la etapa 1D:** T-1 a T-7, C-1 y C-2. N-1 a N-3 esperan la
+tabla y la nota 3 de la NMX-J-116-ANCE-2017.
+
 ## Contexto
 
 El programa deducía la topología del sistema (cuántas fases, si hay neutro,

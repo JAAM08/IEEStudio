@@ -35,8 +35,8 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 | H-01 | Crítico | **Corregido** (etapa 1A, decisión 0029) | `h01_*` (7) y `h01_*` de salidas (2) | Antes: «Cumple» con 3.858 kA y «Conforme». Ahora: 6.44 kA de fase a neutro, «No concluyente» |
 | H-02 | Alto | **Corregido** (etapa 1B, decisión 0029) | `h02_*` (7) y `h02_*` de salidas (2) | Antes: 5 kA sin tensión «Cumple» con 10 kA y 50 kA sin aviso. Ahora: sin ubicación «Sin evaluar»; en 13.2 kV, 22.92 kA; 50 kA en baja tensión, «Dato inválido» |
 | H-03 | Alto | **Corregido** (etapa 1C, decisión 0029) | `h03_*` (5) y `h03_*` de salidas (2) | Antes: aviso «parece motor» y aun así «Cumple». Ahora: «No concluyente» hasta confirmar; «Es otra carga» se guarda en el archivo |
-| H-04 | Medio | Pendiente | `h04_un_solo_criterio_de_trifasico` | 226/120 V: 2.365 kA en vez de 4.097 kA |
-| H-05 | Medio | Pendiente | `h05_*` (2) | «Monofásico» en 220Y/127 V: 13.12 kA sin aviso; Z = 30 %: 1.09 kA sin aviso |
+| H-04 | Medio | **Corregido** (etapa 1D, decisión 0030) | `h04_*` (5), `t4_*`, `t5_*` | Antes: 226/120 V daba 2.365 kA como trifásico y «Cumple». Ahora la topología se declara; 226/120 V es «Dato inválido» en la capacidad interruptiva |
+| H-05 | Medio | **Conexión corregida** (etapa 1D, C-1); **impedancia pendiente** (N-1, NMX-J-116-ANCE-2017) | `h05_*` (4); `n1_*` (2, ignoradas) | «Monofásico» en 220Y/127 V: antes 13.12 kA sin aviso, ahora «Dato inválido». Z = 30 %: sigue 1.09 kA sin aviso hasta tener la tabla 2017 |
 | H-06 | Medio | Decisión D-5 | `h06_*` | 300 kW en 75 kVA: «Conforme» |
 | H-07 | Medio | Decisión D-6 | `h07_el_dictamen_dice_en_lo_evaluado` | «Conforme con NOM-001-SEDE-2012: todo cumple y nada quedó sin evaluar» |
 | H-08 | Medio | Pendiente | Lectura de `state.rs` (interfaz) | Circuito nuevo con 1000 W y 10 m; alimentador nuevo con 10 m |
