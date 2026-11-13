@@ -137,6 +137,22 @@ pub(crate) struct Segment {
     pub label: String,
     /// El tramo calculado; `None` si no se pudo calcular.
     pub run: Option<crate::calc::Run>,
+    /// Por qué no se calculó, para decirlo en el procedimiento.
+    pub why: Option<String>,
+}
+
+impl Segment {
+    fn of(label: String, result: &crate::RunResult) -> Segment {
+        Segment {
+            label,
+            run: result.run.clone(),
+            why: result
+                .run
+                .is_none()
+                .then(|| result.checks.first().map(|c| c.detail.clone()))
+                .flatten(),
+        }
+    }
 }
 
 /// Falla de fase a neutro en el secundario de un transformador monofásico
@@ -1018,7 +1034,10 @@ fn feeder_drop(
     let (mut counted, mut skipped, mut lines) = (Vec::new(), Vec::new(), Vec::new());
     for segment in segments {
         let Some(run) = &segment.run else {
-            skipped.push(format!("{}: no se calculó", segment.label));
+            skipped.push(match &segment.why {
+                Some(why) => format!("{}: no se calculó ({why})", segment.label),
+                None => format!("{}: no se calculó", segment.label),
+            });
             continue;
         };
         if !(run.length_m.is_finite() && run.length_m > 0.0) {
@@ -1237,9 +1256,12 @@ impl<'a> Topology<'a> {
                         &crate::connection::feeder_system(project, i),
                     )
                     .map_err(|e| reason(&e))?;
+                    // El secundario con su propia conexión (pendiente 17).
+                    let secondary_kind =
+                        crate::connection::secondary_kind(t, panel.kind).map_err(|e| reason(&e))?;
                     let secondary = crate::transformer::rating(
                         t.kva,
-                        panel.kind,
+                        secondary_kind,
                         &crate::connection::bus_system(project, i),
                     )
                     .map_err(|e| reason(&e))?;
@@ -1455,21 +1477,18 @@ impl<'a> Topology<'a> {
             &secondary_system,
             &format!("el secundario del transformador de {id}"),
         )?;
-        // Una conexión que el secundario no tiene es inconsistente, no un
-        // dato que falta.
-        if transformer.kva.is_some() && panel.kind.reference_voltage(&secondary_system).is_err() {
-            return Err(invalid(format!(
-                "el secundario no admite la conexión del tablero ({})",
-                crate::connection::kind_phrase(panel.kind)
-            )));
-        }
+        // La conexión del secundario sale de su topología (pendiente 17); si
+        // el transformador no puede darla, es un dato inválido, no un
+        // faltante.
+        let secondary_kind =
+            crate::connection::secondary_kind(transformer, panel.kind).map_err(|e| match e {
+                Error::InvalidInput(_) => invalid(reason(&e)),
+                _ => incomplete(reason(&e)),
+            })?;
         // El secundario no depende del primario: basta su corriente nominal.
-        let secondary = crate::transformer::rating(
-            transformer.kva,
-            panel.kind,
-            &crate::connection::bus_system(self.project, t),
-        )
-        .map_err(|e| incomplete(reason(&e)))?;
+        let secondary =
+            crate::transformer::rating(transformer.kva, secondary_kind, &secondary_system)
+                .map_err(|e| incomplete(reason(&e)))?;
         let impedance = transformer
             .impedance_percent
             .ok_or_else(|| incomplete("falta la impedancia".into()))?;
@@ -1983,38 +2002,32 @@ pub(crate) fn study(
     // Falla en las barras de cada tablero: la de su zona, descontando los
     // conductores que hay entre la fuente de la zona y el tablero (punto a
     // punto, decisión 0031).
-    let runs: HashMap<&str, (Option<crate::Run>, Option<Option<crate::Run>>)> = panels
+    let runs: HashMap<&str, (&crate::RunResult, Option<&crate::RunResult>)> = panels
         .iter()
-        .map(|r| {
-            (
-                r.id.as_str(),
-                (
-                    r.feeder.run.clone(),
-                    r.secondary.as_ref().map(|s| s.run.clone()),
-                ),
-            )
-        })
+        .map(|r| (r.id.as_str(), (&r.feeder, r.secondary.as_ref())))
         .collect();
     let segments = |i: usize| -> Vec<Segment> {
         let mut out = Vec::new();
         let mut at = i;
         for _ in 0..=n {
             let id = &project.panels[at].id;
-            let (feeder, secondary) = runs.get(id.as_str()).cloned().unwrap_or((None, None));
+            let (feeder, secondary) = runs.get(id.as_str()).copied().unzip();
             if topology.zone[i] == Some(at) {
                 // Del transformador al tablero: los conductores del
                 // secundario, si los hay.
-                if let Some(run) = secondary {
-                    out.push(Segment {
-                        label: format!("secundario de {id}"),
-                        run,
-                    });
+                if let Some(result) = secondary.flatten() {
+                    out.push(Segment::of(format!("secundario de {id}"), result));
                 }
                 break;
             }
-            out.push(Segment {
-                label: format!("alimentador de {id}"),
-                run: feeder,
+            let label = format!("alimentador de {id}");
+            out.push(match feeder {
+                Some(result) => Segment::of(label, result),
+                None => Segment {
+                    label,
+                    run: None,
+                    why: None,
+                },
             });
             match topology.parent[at] {
                 Some(p) => at = p,

@@ -24,7 +24,7 @@ fn circuit(
         kind,
         phases: phases.to_vec(),
         load: Load {
-            power_w,
+            power_w: Some(power_w),
             power_factor: 0.9,
             continuous,
             kind: load_kind,
@@ -33,7 +33,7 @@ fn circuit(
             compressor: None,
             confirmed_general: false,
         },
-        length_m,
+        length_m: Some(length_m),
         has_neutral: false,
         overrides: Overrides::default(),
     }
@@ -116,7 +116,7 @@ pub fn house() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 interrupting_ka: Default::default(),
-                length_m: 12.0,
+                length_m: Some(12.0),
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: true,

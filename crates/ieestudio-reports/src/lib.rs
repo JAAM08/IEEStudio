@@ -277,7 +277,7 @@ fn verdict_table(out: &mut String, verdict: &Verdict, code: &str) {
 
 /// Carga del alimentador por grupo, según el artículo 220.
 fn demand_table(out: &mut String, panel: &ieestudio_project::PanelResult) {
-    if panel.demand.is_empty() {
+    if panel.demand.is_empty() || panel.load_unknown.is_some() {
         return;
     }
     out.push_str("#table(columns: (4.4cm, 2.1cm, 1fr, 2.1cm), stroke: (x, y) => (bottom: 0.5pt + linea), inset: (x: 0pt, y: 4pt), align: (left, right, left, right),\n");
@@ -315,7 +315,7 @@ fn schedule_row(out: &mut String, id: &str, item: &RunResult) {
                 run.size.0.clone()
             };
             vec![
-                format!("{:.0}", item.load_w),
+                load_cell(item.load_w),
                 format!("{:.2}", run.nominal_a),
                 format!("{:.1}", run.length_m),
                 size,
@@ -329,7 +329,7 @@ fn schedule_row(out: &mut String, id: &str, item: &RunResult) {
             ]
         }
         None => {
-            let mut cells = vec![format!("{:.0}", item.load_w)];
+            let mut cells = vec![load_cell(item.load_w)];
             cells.extend(std::iter::repeat_n("—".to_string(), 8));
             cells
         }
@@ -525,6 +525,9 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                     t.primary_a.map_or("—".into(), |a| format!("{a:.2} A")),
                     t.secondary_a.map_or("—".into(), |a| format!("{a:.2} A")),
                 )),
+                (Some(kva), None) => transformer.push_str(&format!(
+                    " Se alimenta por un transformador intermedio de {kva} kVA; su carga no se conoce."
+                )),
                 _ => transformer.push_str(
                     " Se alimenta por un transformador intermedio sin potencia capturada: sus dos lados quedan sin calcular.",
                 ),
@@ -536,13 +539,18 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
             ),
             None => String::new(),
         };
+        // Una suma parcial no es la carga del tablero (pendiente 19).
+        let load = match &panel.load_unknown {
+            None => format!(
+                "Carga conectada de {:.0} W y carga calculada del alimentador de {:.0} VA ({:.0} W, factor resultante {:.2}), factor de potencia {:.2}.{balance}",
+                panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
+            ),
+            Some(why) => format!("La carga del tablero no se conoce: {why}."),
+        };
         let _ = writeln!(
             out,
             "#text(fill: gris, {})",
-            q(&format!(
-                "Carga conectada de {:.0} W y carga calculada del alimentador de {:.0} VA ({:.0} W, factor resultante {:.2}), factor de potencia {:.2}.{balance}{transformer}",
-                panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
-            ))
+            q(&format!("{load}{transformer}"))
         );
         demand_table(&mut out, panel);
         out.push_str("#cuadro(\n");
@@ -756,7 +764,9 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                 "\n#block(breakable: false)[\n== #{};\n#estado({}) #h(6pt) #text(fill: gris, {})\n]",
                 q(&title),
                 q(item.status.label()),
-                q(&format!("Carga de {:.0} W", item.load_w))
+                q(&item
+                    .load_w
+                    .map_or_else(|| "Sin potencia".to_string(), |w| format!("Carga de {w:.0} W")))
             );
             match &item.run {
                 Some(run) => steps(&mut out, &run.steps),
@@ -1026,4 +1036,9 @@ fn interrupting_label(group: &ieestudio_project::fault::InterruptingGroup) -> &'
 /// El resumen sin el «no concluyente» inicial, que ya va como etiqueta.
 fn interrupting_detail(summary: &str) -> &str {
     summary.strip_prefix("no concluyente: ").unwrap_or(summary)
+}
+
+/// Carga en watts, o «—» si no se conoce (pendiente 19).
+fn load_cell(load_w: Option<f64>) -> String {
+    load_w.map_or_else(|| "—".to_string(), |w| format!("{w:.0}"))
 }

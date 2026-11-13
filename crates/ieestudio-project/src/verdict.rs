@@ -392,7 +392,7 @@ impl Verdict {
 }
 
 /// `a`, `a y b`, `a, b y c`.
-fn join_list(parts: &[String]) -> String {
+pub(crate) fn join_list(parts: &[String]) -> String {
     match parts {
         [] => String::new(),
         [one] => one.clone(),

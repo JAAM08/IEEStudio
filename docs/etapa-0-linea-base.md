@@ -39,7 +39,7 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 | H-05 | Medio | **Conexión corregida** (etapa 1D, C-1); **impedancia pendiente** (N-1, NMX-J-116-ANCE-2017) | `h05_*` (4); `n1_*` (2, ignoradas) | «Monofásico» en 220Y/127 V: antes 13.12 kA sin aviso, ahora «Dato inválido». Z = 30 %: sigue 1.09 kA sin aviso hasta tener la tabla 2017 |
 | H-06 | Medio | Decisión D-5 | `h06_*` | 300 kW en 75 kVA: «Conforme» |
 | H-07 | Medio | **Corregido** (etapa 1E, D-6) | `h07_*` (5) y de salidas (1) | Antes: «Conforme con NOM-001-SEDE-2012: todo cumple…». Ahora cuatro encabezados en orden de prioridad, siempre «en lo evaluado»; «Pendiente» solo para la aprobación profesional |
-| H-08 | Medio | Pendiente | Lectura de `state.rs` (interfaz) | Circuito nuevo con 1000 W y 10 m; alimentador nuevo con 10 m |
+| H-08 | Medio | **Corregido** (etapa 2C, con el pendiente 19) | `p19_*`, `format_6_keeps_saved_values_and_missing_ones` | Circuito y alimentador nuevos nacen sin potencia ni longitud |
 | H-09 | Medio | **Corregido hacia adelante** (etapa 1B, formato 4) | `tools/auditoria.sh anterior` y pruebas de `model.rs` | Ningún archivo nuevo abre a medias en una versión anterior: dice «formato 4, más nuevo», salvo 4 que fallan antes con «missing field» porque esa versión no revisaba el formato primero; desde esta versión se revisa primero |
 | H-10 | Medio | **Corregido** (etapa 1E) | `h10_*` (3) | La nota dice el método real de cada zona; sin falla, «Icc SIN ESTIMAR (DATO INVÁLIDO)» o «(FALTA UN DATO)» en el tablero |
 | H-11 | Medio | **Corregido** (etapa 1E) | `h11_*` (2) | Un dato inválido se llama así en Revisar, la ficha del tablero, la memoria y la línea de comandos; seis faltantes («falta la potencia…») ya no se presentaban como «dato inválido» |
@@ -55,10 +55,10 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 
 | # | Estado | Prueba | Lo que muestra hoy |
 |---|---|---|---|
-| 17 | Pendiente | `p17_el_secundario_tiene_su_propia_conexion` | Elevador 127 → 240/120 V: rechaza un circuito de 240 V |
+| 17 | **Corregido** (etapa 2A, decisión 0033) | `p17_*` (2) | La conexión del secundario sale de su topología: el elevador 127 → 240/120 V acepta el circuito de 240 V. Un secundario trifásico de un transformador de una o dos fases es «dato inválido» |
 | 18 | Corregido con H-01 | — | Etapa 1A |
-| 19 | Decisión (plan 2C) | `p19_*` y H-08 | Circuito de 0 m: «Cumple» |
-| 20 | Pendiente | Ver N-1 | Las verificaciones de tramos no distinguen faltante, inválido y no concluyente |
+| 19 | **Corregido** (etapa 2C, decisión 0033, formato 6) | `p19_*` (2) y de `project_cases` | Circuitos y alimentadores nuevos nacen sin potencia ni longitud: «Sin evaluar». 0 m es «dato inválido». La carga de un tablero no se suma a medias |
+| 20 | **Diferido al rediseño** (decisión 0033) | — | El dictamen y cada tramo ya distinguen faltante e inválido (etapa 1E); falta presentar cada verificación con cuatro estados |
 
 Las 16 correcciones de Opus que Fable confirmó no se volvieron a auditar una
 por una; las pruebas existentes (175) siguen pasando y los casos nuevos no
@@ -68,7 +68,7 @@ contradicen ninguna.
 
 | ID | Gravedad | Qué | Dónde |
 |---|---|---|---|
-| N-1 | Medio | Un transformador intermedio sin potencia deja en sus tramos «dato inválido: falta la potencia del transformador». Es un dato que **falta**, no uno inválido (mismo tipo que el hallazgo 16 de Opus, en otro lugar) | `h09-transformador-sin-potencia.iees`, verificaciones del alimentador de TF-1. Entra en el pendiente 20 |
+| N-1 | Medio | Un transformador intermedio sin potencia deja en sus tramos «dato inválido: falta la potencia del transformador». Es un dato que **falta**, no uno inválido (mismo tipo que el hallazgo 16 de Opus, en otro lugar) | `h09-transformador-sin-potencia.iees`, verificaciones del alimentador de TF-1. **Corregido** en la etapa 1E (H-11): ahora dice «Sin evaluar: falta la potencia del transformador» |
 | N-2 | Medio | H-09 alcanza más que lo reportado: una acometida con «impedancia de tabla» tampoco abre en la versión anterior | `fixtures/compatibilidad/README.md` |
 | N-3 | Alto (entrega) | Las imágenes del unifilar en ieestudio.com (inicio, funciones y guía, paso 7) son de la versión del 14 de octubre, anterior a la decisión 0022 | `website/imagenes/app-unifilar.webp`, `website/imagenes/guia/paso-7.webp` |
 | N-4 | Alto (entrega) | El service worker sirve siempre lo guardado primero; la versión nueva solo aparece en la siguiente apertura completa, y no hay forma de ver qué versión corre | `crates/ieestudio-app/web/sw.js` |

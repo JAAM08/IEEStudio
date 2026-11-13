@@ -75,13 +75,15 @@ agentes de IA y no requiere migraciones de base de datos. Los cambios de
 formato suben `format_version`, y un programa rechaza archivos de una versión
 más nueva que la suya; revisa el número antes de leer lo demás, para que el
 error diga que el archivo es más nuevo. Ver `decisions/0003-archivo-json.md`.
-El formato actual es el 4 (decisión 0029, D-7).
+El formato actual es el 6: el 5 agregó la topología declarada (decisión
+0030) y el 6 deja la potencia y la longitud sin capturar hasta que se
+escriben (decisión 0033).
 
 En el navegador, el proyecto abierto se guarda en el almacenamiento local con
-una clave por formato (`ieestudio-proyecto-web-4`). La del formato 3 se lee si
-la nueva está vacía y nunca se escribe: una versión anterior que siga en la
-caché del navegador no podría leer el formato 4 y pondría un proyecto vacío
-en su lugar. Un proyecto guardado que no se puede leer se copia a
+una clave por formato (`ieestudio-proyecto-web-6`). Las de formatos anteriores
+se leen si la nueva está vacía y nunca se escriben: una versión anterior que
+siga en la caché del navegador no podría leer el formato nuevo y pondría un
+proyecto vacío en su lugar. Un proyecto guardado que no se puede leer se copia a
 `ieestudio-proyecto-web-no-leido` antes de guardar otro.
 
 ## Interfaz

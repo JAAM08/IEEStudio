@@ -26,6 +26,59 @@ pub fn bus_system(project: &Project, panel: usize) -> System {
     project.source.system
 }
 
+/// Conexión del secundario de un transformador: todas las fases de su
+/// topología declarada (pendiente 17): 3F-4H y 3F-3H dan tres fases, 1F-3H
+/// dos fases con neutro y 1F-2H una fase. No se deduce de las tensiones ni
+/// se hereda del primario. Es un dato inválido si el transformador no puede
+/// darla: uno monofásico, o uno alimentado con una o dos fases, no da un
+/// secundario trifásico. Nunca se corrige sola.
+pub fn secondary_kind(
+    transformer: &crate::model::Transformer,
+    feed: CircuitKind,
+) -> Result<CircuitKind, Error> {
+    use ieestudio_core::Topology;
+    let secondary = &transformer.secondary;
+    let topology = secondary.topology.ok_or_else(|| {
+        Error::MissingData(
+            "falta declarar la topología del secundario del transformador para saber su conexión"
+                .into(),
+        )
+    })?;
+    let kind = match topology {
+        Topology::ThreePhaseWye | Topology::ThreePhaseDelta => CircuitKind::ThreePhase,
+        Topology::SinglePhaseThreeWire => CircuitKind::LineToLine,
+        Topology::SinglePhaseTwoWire if secondary.line_to_neutral_v.is_some() => {
+            CircuitKind::LineToNeutral
+        }
+        Topology::SinglePhaseTwoWire => CircuitKind::LineToLine,
+    };
+    if kind == CircuitKind::ThreePhase {
+        let single = transformer.connection == Some(crate::model::Connection::SinglePhase);
+        if single || feed != CircuitKind::ThreePhase {
+            return Err(Error::InvalidInput(format!(
+                "un transformador {} no puede dar un secundario {}",
+                if single {
+                    "monofásico".to_string()
+                } else {
+                    format!("alimentado con {}", kind_phrase(feed))
+                },
+                topology.code()
+            )));
+        }
+    }
+    Ok(kind)
+}
+
+/// Conexión de las barras de un tablero: la de su alimentador o, si tiene
+/// transformador, la de su secundario (pendiente 17).
+pub fn bars_kind(project: &Project, panel: usize) -> Result<CircuitKind, Error> {
+    let p = &project.panels[panel];
+    match &p.transformer {
+        Some(t) => secondary_kind(t, p.kind),
+        None => Ok(p.kind),
+    }
+}
+
 /// Sistema del que sale el alimentador de un tablero: las barras del tablero
 /// que lo alimenta o la fuente.
 pub fn feeder_system(project: &Project, panel: usize) -> System {
@@ -44,7 +97,8 @@ fn parent_of(project: &Project, panel: usize) -> Option<usize> {
 /// del que sale, sin más fases que el tablero que lo alimenta y, si lleva
 /// transformador, que también existan en su secundario.
 pub fn feeder_kinds(project: &Project, panel: usize) -> Vec<CircuitKind> {
-    let upstream = parent_of(project, panel).map(|parent| project.panels[parent].kind);
+    let upstream = parent_of(project, panel)
+        .map(|parent| bars_kind(project, parent).unwrap_or(project.panels[parent].kind));
     let secondary = project.panels[panel]
         .transformer
         .as_ref()
@@ -60,7 +114,7 @@ pub fn feeder_kinds(project: &Project, panel: usize) -> Vec<CircuitKind> {
 /// Conexiones posibles para un circuito de un tablero: las del sistema de
 /// sus barras, sin más fases que el tablero.
 pub fn circuit_kinds(project: &Project, panel: usize) -> Vec<CircuitKind> {
-    let own = project.panels[panel].kind;
+    let own = bars_kind(project, panel).unwrap_or(project.panels[panel].kind);
     bus_system(project, panel)
         .kinds()
         .into_iter()
@@ -195,9 +249,12 @@ pub fn fix(project: &mut Project) -> usize {
         }
     }
     // Fases: las que ya no corresponden a la conexión pasan a la primera
-    // forma válida; balancear las reparte después.
-    for panel in &mut project.panels {
-        let own = panel.kind;
+    // forma válida; balancear las reparte después. Las barras de un tablero
+    // con transformador tienen las fases de su secundario.
+    let bars: Vec<CircuitKind> = (0..project.panels.len())
+        .map(|i| bars_kind(project, i).unwrap_or(project.panels[i].kind))
+        .collect();
+    for (panel, own) in project.panels.iter_mut().zip(bars) {
         for circuit in &mut panel.circuits {
             let choices = phase_choices(own, circuit.kind);
             let valid = choices.iter().any(|choice| {

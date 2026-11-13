@@ -34,8 +34,8 @@ fn export_and_import_round_trip() {
         assert_eq!(x.phases, y.phases);
         assert_eq!(x.load.kind, y.load.kind);
         assert_eq!(x.load.continuous, y.load.continuous);
-        assert!((x.load.power_w - y.load.power_w).abs() < 1e-9);
-        assert!((x.length_m - y.length_m).abs() < 1e-9);
+        assert_eq!(x.load.power_w, y.load.power_w);
+        assert_eq!(x.length_m, y.length_m);
         assert_eq!(x.load.motor, y.load.motor);
         assert_eq!(x.load.compressor, y.load.compressor);
         assert_eq!(x.overrides.size, y.overrides.size);
@@ -87,7 +87,7 @@ fn a_hand_written_sheet_is_imported_with_its_errors() {
     assert!(report.errors[2].contains("Motor hp"));
     let panel = &project.panels[0];
     assert_eq!(panel.circuits[0].load.kind, LoadKind::Lighting);
-    assert_eq!(panel.circuits[0].load.power_w, 1500.0);
+    assert_eq!(panel.circuits[0].load.power_w, Some(1500.0));
     assert_eq!(panel.circuits[1].load.kind, LoadKind::Motor);
     assert_eq!(panel.circuits[1].load.motor.as_ref().unwrap().hp, "7-1/2");
     assert!(report.summary().contains("2 circuitos nuevos"));

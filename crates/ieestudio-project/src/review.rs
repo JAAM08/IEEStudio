@@ -181,9 +181,10 @@ pub fn duplicate_flags(project: &Project) -> Vec<DuplicateFlag> {
         // aislamiento de 127 a 127 V que sale de un tablero 220Y/127 V (H-16).
         let same_system = primary.line_to_line_v == t.secondary.line_to_line_v
             && primary.line_to_neutral_v == t.secondary.line_to_neutral_v;
+        let secondary_kind = crate::connection::secondary_kind(t, panel.kind).unwrap_or(panel.kind);
         let same_connection = match (
             panel.kind.reference_voltage(&primary),
-            panel.kind.reference_voltage(&t.secondary),
+            secondary_kind.reference_voltage(&t.secondary),
         ) {
             (Ok(v1), Ok(v2)) => v1 == v2,
             _ => false,

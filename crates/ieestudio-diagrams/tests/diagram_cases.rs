@@ -20,7 +20,7 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 interrupting_ka: Default::default(),
-                length_m: 40.0,
+                length_m: Some(40.0),
                 demand: ieestudio_project::Demand::Custom(0.8),
                 demand_factor: None,
                 has_neutral: true,
@@ -43,7 +43,7 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 interrupting_ka: Default::default(),
-                length_m: 60.0,
+                length_m: Some(60.0),
                 demand: ieestudio_project::Demand::Article220,
                 demand_factor: None,
                 has_neutral: false,
@@ -61,7 +61,7 @@ fn industrial() -> Project {
                 kind: CircuitKind::ThreePhase,
                 phases: vec![],
                 load: Load {
-                    power_w: 90_000.0,
+                    power_w: Some(90_000.0),
                     power_factor: 1.0,
                     continuous: true,
                     kind: LoadKind::General,
@@ -70,7 +70,7 @@ fn industrial() -> Project {
                     compressor: None,
                     confirmed_general: false,
                 },
-                length_m: 25.0,
+                length_m: Some(25.0),
                 has_neutral: false,
                 overrides: Overrides {
                     // Dato declarado del caso: carga lineal (decisión 0030, T-6).

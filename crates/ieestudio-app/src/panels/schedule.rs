@@ -251,7 +251,7 @@ fn cell(col: Col, row: &Row) -> String {
         Col::Kind => row.kind.to_string(),
         Col::Connection => row.connection.to_string(),
         Col::Phases => row.phases.clone(),
-        Col::Load => format!("{:.0}", row.item.load_w),
+        Col::Load => row.item.load_w.map_or_else(dash, |w| format!("{w:.0}")),
         Col::PowerFactor => row.power_factor.map_or_else(dash, |f| format!("{f:.2}")),
         Col::Current => run.map_or_else(dash, |r| format!("{:.2}", r.nominal_a)),
         Col::Design => run.map_or_else(dash, |r| format!("{:.2}", r.design_a)),
@@ -523,7 +523,11 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                 None => "Secundario del transformador".to_string(),
             },
             kind: "Transformador",
-            connection: label_of(&KINDS, panel.kind),
+            // El secundario tiene la conexión de su topología (pendiente 17).
+            connection: label_of(
+                &KINDS,
+                ieestudio_project::connection::secondary_kind(t, panel.kind).unwrap_or(panel.kind),
+            ),
             phases: "—".to_string(),
             power_factor: Some(result.power_factor),
             forced: t.secondary_overrides.size.is_some(),
@@ -714,12 +718,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     match action {
         Some(Action::Add) => shared.choose_load = Some(panel_index),
         Some(Action::Balance) => {
-            shared.done = Some(match doc.balance_phases(panel_index) {
-                Some((before, after)) => {
-                    format!("Fases balanceadas: desbalance de {before:.1} % a {after:.1} %")
-                }
-                None => "Fases asignadas; el tablero no se pudo calcular".to_string(),
-            });
+            shared.done = Some(doc.balance_phases(panel_index));
         }
         None => {}
     }
@@ -904,8 +903,17 @@ fn summary_strip(
             })
             .response
         };
-        figure(ui, "CONECTADA", format!("{:.0}", r.connected_w), "W", p.ink)
-            .on_hover_text("Suma de las cargas de este tablero y sus subtableros");
+        // Una suma parcial no es la carga del tablero (pendiente 19).
+        let known = |value: f64| match r.load_unknown {
+            None => format!("{value:.0}"),
+            Some(_) => "—".to_string(),
+        };
+        figure(ui, "CONECTADA", known(r.connected_w), "W", p.ink).on_hover_text(
+            match &r.load_unknown {
+                None => "Suma de las cargas de este tablero y sus subtableros".to_string(),
+                Some(why) => format!("Sin conocer: {why}"),
+            },
+        );
         divider(ui);
         let detail = r
             .demand
@@ -918,14 +926,7 @@ fn summary_strip(
             })
             .collect::<Vec<_>>()
             .join("\n");
-        figure(
-            ui,
-            "CALCULADA",
-            format!("{:.0}", r.demanded_va),
-            "VA",
-            p.ink,
-        )
-        .on_hover_text(format!(
+        figure(ui, "CALCULADA", known(r.demanded_va), "VA", p.ink).on_hover_text(format!(
             "Carga del alimentador según el artículo 220 (factor resultante {:.2}):\n{detail}",
             r.demand_factor
         ));

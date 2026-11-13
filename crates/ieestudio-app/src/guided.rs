@@ -892,8 +892,8 @@ fn tree(
     });
     let area: f64 = panel.areas.iter().map(|a| a.m2).sum();
     let mut sub = format!(
-        "Alimentador de {} m · {}",
-        panel.feeder.length_m,
+        "Alimentador {} · {}",
+        length_phrase(panel.feeder.length_m),
         label_of(&KINDS, panel.kind)
     );
     if area > 0.0 {
@@ -907,7 +907,10 @@ fn tree(
     }
     // Lo que el tablero pide y lo que aguanta, sin abrir su ficha.
     if let Some(r) = doc.panel_result(i) {
-        sub.push_str(&format!("\n{} VA", thousands(r.demanded_va)));
+        sub.push_str(&match r.load_unknown {
+            None => format!("\n{} VA", thousands(r.demanded_va)),
+            Some(_) => "\ncarga sin conocer".to_string(),
+        });
         if let Some(run) = &r.feeder.run {
             sub.push_str(&format!(" · {:.1} A", run.nominal_a));
         }
@@ -1041,7 +1044,10 @@ fn circuits_step(
                 {
                     if let Some(r) = &result {
                         ui.horizontal_wrapped(|ui| {
-                            let mut line = format!("{} VA calculados", thousands(r.demanded_va));
+                            let mut line = match &r.load_unknown {
+                                None => format!("{} VA calculados", thousands(r.demanded_va)),
+                                Some(why) => format!("Carga sin conocer: {why}"),
+                            };
                             if let Some(run) = &r.feeder.run {
                                 line.push_str(&format!(" · {:.1} A en el alimentador", run.nominal_a));
                             }
@@ -1107,9 +1113,7 @@ fn circuits_step(
                 shared.choose_load = Some(panel_index);
             }
             if balance {
-                shared.done = doc.balance_phases(panel_index).map(|(before, after)| {
-                    format!("Fases balanceadas: desbalance de {before:.1} % a {after:.1} %")
-                });
+                shared.done = Some(doc.balance_phases(panel_index));
             }
         });
     go
@@ -1166,9 +1170,9 @@ fn subpanel_list(
                     }
                     let n = panel.circuits.len();
                     let text = format!(
-                        "{} · alimentador de {} m · {n} {}",
+                        "{} · alimentador {} · {n} {}",
                         panel.name,
-                        panel.feeder.length_m,
+                        length_phrase(panel.feeder.length_m),
                         if n == 1 { "circuito" } else { "circuitos" }
                     );
                     // El texto ocupa lo que dejan los botones y se recorta;
@@ -1332,7 +1336,10 @@ fn circuit_table(
                                 (Some(m), LoadKind::Motor) => {
                                     format!("{} hp", ieestudio_project::hp_label(&m.hp))
                                 }
-                                _ => format!("{} W", thousands(item.load_w)),
+                                _ => item.load_w.map_or_else(
+                                    || "—".to_string(),
+                                    |w| format!("{} W", thousands(w)),
+                                ),
                             };
                             ui.label(RichText::new(load).monospace());
                         });
@@ -1347,7 +1354,12 @@ fn circuit_table(
                             });
                             row.col(|ui| {
                                 ui.label(
-                                    RichText::new(format!("{} m", circuit.length_m)).monospace(),
+                                    RichText::new(
+                                        circuit
+                                            .length_m
+                                            .map_or_else(|| "—".to_string(), |l| format!("{l} m")),
+                                    )
+                                    .monospace(),
                                 );
                             });
                         }
@@ -2164,7 +2176,10 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                 .spacing([16.0, 5.0])
                                 .show(ui, |ui| {
                                     ui.label(muted(p, "Carga calculada"));
-                                    ui.label(RichText::new(format!("{} VA", thousands(panel.demanded_va))).monospace());
+                                    ui.label(RichText::new(match panel.load_unknown {
+                                        None => format!("{} VA", thousands(panel.demanded_va)),
+                                        Some(_) => "sin conocer".to_string(),
+                                    }).monospace());
                                     ui.end_row();
                                     if let Some(run) = &panel.feeder.run {
                                         ui.label(muted(p, "Corriente"));
@@ -2453,9 +2468,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                     let name = warning.split(':').next().unwrap_or_default();
                                     if let Some(i) = doc.project.panels.iter().position(|x| x.name == name) {
                                         if ui.button("Balancear fases").clicked() {
-                                            shared.done = doc.balance_phases(i).map(|(before, after)| {
-                                                format!("Fases balanceadas: desbalance de {before:.1} % a {after:.1} %")
-                                            });
+                                            shared.done = Some(doc.balance_phases(i));
                                         }
                                     }
                                 }
@@ -2717,10 +2730,13 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> 
                     ui.label(RichText::new(icon::QUESTION).color(p.warn).size(16.0));
                     ui.add(
                         egui::Label::new(strong(format!(
-                            "{} «{}» está como «Otra carga» ({} W)",
+                            "{} «{}» está como «Otra carga» ({})",
                             circuit.id,
                             circuit.name,
-                            thousands(circuit.load.power_w)
+                            circuit
+                                .load
+                                .power_w
+                                .map_or_else(|| "sin potencia".to_string(), |w| format!("{} W", thousands(w)))
                         )))
                         .wrap(),
                     );
@@ -2898,6 +2914,11 @@ fn report_step(
             }
         });
     request
+}
+
+/// «de 12 m» o «sin longitud»: la longitud nunca se supone (pendiente 19).
+fn length_phrase(length_m: Option<f64>) -> String {
+    length_m.map_or_else(|| "sin longitud".to_string(), |l| format!("de {l} m"))
 }
 
 #[cfg(test)]

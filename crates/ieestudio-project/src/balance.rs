@@ -23,9 +23,14 @@ fn slot(phase: Phase) -> usize {
     }
 }
 
-/// Fases disponibles en un tablero según la conexión de su alimentador.
+/// Fases disponibles en las barras de un tablero: las de su alimentador o,
+/// con transformador, las de su secundario (pendiente 17).
 fn available(panel: &Panel) -> &'static [Phase] {
-    match panel.kind {
+    let kind = match &panel.transformer {
+        Some(t) => crate::connection::secondary_kind(t, panel.kind).unwrap_or(panel.kind),
+        None => panel.kind,
+    };
+    match kind {
         CircuitKind::LineToNeutral => &ALL[..1],
         CircuitKind::LineToLine => &ALL[..2],
         CircuitKind::ThreePhase => &ALL,
@@ -262,7 +267,7 @@ mod tests {
             .circuits
             .iter()
             .zip(&result.panels[0].circuits)
-            .map(|(c, r)| r.load_w / c.load.power_factor)
+            .map(|(c, r)| r.load_w.unwrap() / c.load.power_factor)
             .collect();
         let phases = balance(panel, &va);
         let mut balanced = project.clone();

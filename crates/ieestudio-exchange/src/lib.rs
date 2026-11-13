@@ -205,7 +205,7 @@ fn build(project: &Project, result: Option<&ProjectResult>) -> Result<Vec<u8>, X
         text(sheet, r, 1, &panel.name)?;
         text(sheet, r, 2, panel.parent.as_deref().unwrap_or(""))?;
         text(sheet, r, 3, kind_label(panel.kind))?;
-        number(sheet, r, 4, Some(panel.feeder.length_m))?;
+        number(sheet, r, 4, panel.feeder.length_m)?;
         let area: f64 = panel.areas.iter().map(|a| a.m2).sum();
         number(sheet, r, 5, (area > 0.0).then_some(area))?;
     }
@@ -225,11 +225,11 @@ fn build(project: &Project, result: Option<&ProjectResult>) -> Result<Vec<u8>, X
             text(sheet, r, 3, load.kind.label())?;
             text(sheet, r, 4, kind_label(c.kind))?;
             text(sheet, r, 5, &phases_label(&c.phases))?;
-            number(sheet, r, 6, Some(load.power_w))?;
+            number(sheet, r, 6, load.power_w)?;
             number(sheet, r, 7, Some(load.power_factor))?;
             text(sheet, r, 8, yes_no(load.continuous))?;
             number(sheet, r, 9, load.outlets.map(f64::from))?;
-            number(sheet, r, 10, Some(c.length_m))?;
+            number(sheet, r, 10, c.length_m)?;
             if let (LoadKind::Motor, Some(m)) = (load.kind, &load.motor) {
                 text(sheet, r, 11, &m.hp)?;
                 number(sheet, r, 12, m.nameplate_a)?;
@@ -270,7 +270,7 @@ fn build(project: &Project, result: Option<&ProjectResult>) -> Result<Vec<u8>, X
                 text(sheet, r, 0, &panel.id)?;
                 text(sheet, r, 1, &id)?;
                 text(sheet, r, 2, &item.name)?;
-                number(sheet, r, 3, Some(item.load_w.round()))?;
+                number(sheet, r, 3, item.load_w.map(f64::round))?;
                 if let Some(run) = &item.run {
                     number(sheet, r, 4, Some((run.nominal_a * 100.0).round() / 100.0))?;
                     number(sheet, r, 5, Some((run.design_a * 100.0).round() / 100.0))?;
@@ -497,7 +497,7 @@ fn new_panel(id: &str) -> Panel {
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
             interrupting_ka: Default::default(),
-            length_m: 10.0,
+            length_m: None,
             demand: Demand::Article220,
             demand_factor: None,
             has_neutral: true,
@@ -565,7 +565,7 @@ fn import_panels(project: &mut Project, sheet: &Sheet, report: &mut ImportReport
             panel.kind = kind;
         }
         if let Some(Some(length)) = length {
-            panel.feeder.length_m = length;
+            panel.feeder.length_m = Some(length);
         }
         if let Some(area) = area {
             let total: f64 = panel.areas.iter().map(|a| a.m2).sum();
@@ -634,7 +634,7 @@ fn import_circuits(
                 kind: CircuitKind::LineToNeutral,
                 phases: vec![],
                 load: Load {
-                    power_w: 0.0,
+                    power_w: None,
                     power_factor: 0.9,
                     continuous: false,
                     kind: LoadKind::General,
@@ -643,7 +643,7 @@ fn import_circuits(
                     compressor: None,
                     confirmed_general: false,
                 },
-                length_m: 10.0,
+                length_m: None,
                 has_neutral: false,
                 overrides: Overrides::default(),
             },
@@ -702,7 +702,7 @@ fn apply_row(
         if w < 0.0 {
             return Err("la potencia no puede ser negativa".into());
         }
-        c.load.power_w = w;
+        c.load.power_w = Some(w);
     }
     if let Some(Some(pf)) =
         optional_number(sheet.get(row, "Factor de potencia"), "factor de potencia")?
@@ -723,7 +723,7 @@ fn apply_row(
         if l < 0.0 {
             return Err("la longitud no puede ser negativa".into());
         }
-        c.length_m = l;
+        c.length_m = Some(l);
     }
     match c.load.kind {
         LoadKind::Motor => {

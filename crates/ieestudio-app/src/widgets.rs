@@ -252,7 +252,7 @@ pub fn optional_number(
     suffix: &str,
 ) -> bool {
     let id = ui.next_auto_id();
-    blank_number_at(ui, id, value, suffix)
+    blank_number_at(ui, id, value, suffix, false)
 }
 
 /// Dato de placa que empieza vacío: nunca se propone un valor. Mientras no
@@ -263,10 +263,41 @@ pub fn blank_number(
     value: &mut Option<f64>,
     suffix: &str,
 ) -> bool {
-    blank_number_at(ui, egui::Id::new(("dato-de-placa", id)), value, suffix)
+    blank_number_at(
+        ui,
+        egui::Id::new(("dato-de-placa", id)),
+        value,
+        suffix,
+        false,
+    )
 }
 
-fn blank_number_at(ui: &mut egui::Ui, id: egui::Id, value: &mut Option<f64>, suffix: &str) -> bool {
+/// Como [`blank_number`], pero acepta cero: una potencia de 0 W es un dato,
+/// no una falta (pendiente 19).
+pub fn blank_number_or_zero(
+    ui: &mut egui::Ui,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    value: &mut Option<f64>,
+    suffix: &str,
+) -> bool {
+    blank_number_at(
+        ui,
+        egui::Id::new(("dato-de-placa", id)),
+        value,
+        suffix,
+        true,
+    )
+}
+
+fn blank_number_at(
+    ui: &mut egui::Ui,
+    id: egui::Id,
+    value: &mut Option<f64>,
+    suffix: &str,
+    zero: bool,
+) -> bool {
+    let parse = |text: &str| parse_number(text, zero);
+    let rejected = |text: &str| rejected_number(text, zero);
     let shown = |v: &Option<f64>| v.map_or(String::new(), |x| format!("{x}"));
     let mut text = ui
         .data_mut(|d| d.get_temp::<String>(id))
@@ -285,7 +316,7 @@ fn blank_number_at(ui: &mut egui::Ui, id: egui::Id, value: &mut Option<f64>, suf
         let response = ui.add(edit);
         ui.label(suffix.trim());
         if response.changed() {
-            if let Some(new) = parse_positive(&text) {
+            if let Some(new) = parse(&text) {
                 if new != *value {
                     *value = new;
                     changed = true;
@@ -319,9 +350,10 @@ fn blank_number_at(ui: &mut egui::Ui, id: egui::Id, value: &mut Option<f64>, suf
     changed
 }
 
-/// Lo escrito como número positivo: `Some(None)` si está vacío, `None` si no
-/// se puede guardar. Acepta coma decimal.
-fn parse_positive(text: &str) -> Option<Option<f64>> {
+/// Lo escrito como número mayor que cero, o mayor o igual si `zero`:
+/// `Some(None)` si está vacío, `None` si no se puede guardar. Acepta coma
+/// decimal.
+fn parse_number(text: &str, zero: bool) -> Option<Option<f64>> {
     let trimmed = text.trim().replace(',', ".");
     if trimmed.is_empty() {
         return Some(None);
@@ -329,17 +361,18 @@ fn parse_positive(text: &str) -> Option<Option<f64>> {
     trimmed
         .parse::<f64>()
         .ok()
-        .filter(|x| x.is_finite() && *x > 0.0)
+        .filter(|x| x.is_finite() && (*x > 0.0 || (zero && *x == 0.0)))
         .map(Some)
 }
 
 /// Por qué no se guarda lo escrito, o `None` si se puede guardar.
-fn rejected(text: &str) -> Option<&'static str> {
-    if parse_positive(text).is_some() {
+fn rejected_number(text: &str, zero: bool) -> Option<&'static str> {
+    if parse_number(text, zero).is_some() {
         return None;
     }
     let trimmed = text.trim().replace(',', ".");
     Some(match trimmed.parse::<f64>() {
+        Ok(x) if x.is_finite() && zero => "no puede ser negativo",
         Ok(x) if x.is_finite() => "debe ser mayor que cero",
         _ => "no es un número",
     })
@@ -835,6 +868,14 @@ pub fn trace_ui(
 mod tests {
     use super::*;
 
+    fn parse_positive(text: &str) -> Option<Option<f64>> {
+        parse_number(text, false)
+    }
+
+    fn rejected(text: &str) -> Option<&'static str> {
+        rejected_number(text, false)
+    }
+
     /// H-17: lo que no se guarda dice por qué.
     #[test]
     fn rejected_values_say_why() {
@@ -846,5 +887,14 @@ mod tests {
         assert_eq!(parse_positive("2,5"), Some(Some(2.5)));
         assert_eq!(parse_positive(" "), Some(None));
         assert_eq!(parse_positive("0"), None);
+    }
+
+    #[test]
+    fn a_power_can_be_zero_but_not_negative() {
+        assert_eq!(parse_number("0", true), Some(Some(0.0)));
+        assert_eq!(parse_number("", true), Some(None));
+        assert_eq!(rejected_number("0", true), None);
+        assert_eq!(rejected_number("-5", true), Some("no puede ser negativo"));
+        assert_eq!(rejected_number("0", false), Some("debe ser mayor que cero"));
     }
 }

@@ -240,22 +240,29 @@ fn print_report(result: &ProjectResult) {
 
 fn print_panel(panel: &PanelResult) {
     println!("\n{}", panel.name);
-    println!(
-        "  Carga conectada {:.0} W, calculada {:.0} VA = {:.0} W (factor resultante {:.2}), fp {:.2}",
-        panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
-    );
-    for line in &panel.demand {
+    // Sin la potencia de algún circuito la suma sería parcial: no se da.
+    if let Some(why) = &panel.load_unknown {
+        println!("  Carga: sin conocer ({why})");
+    } else {
         println!(
-            "    {:<30} {:>10.0} VA → {:>10.0} VA  {}",
-            line.label, line.connected_va, line.demanded_va, line.detail
+            "  Carga conectada {:.0} W, calculada {:.0} VA = {:.0} W (factor resultante {:.2}), fp {:.2}",
+            panel.connected_w, panel.demanded_va, panel.demanded_w, panel.demand_factor, panel.power_factor
         );
-    }
-    let [a, b, c] = panel.phase_va;
-    match panel.imbalance_percent {
-        Some(imbalance) => {
-            println!("  Fases: A {a:.0} VA, B {b:.0} VA, C {c:.0} VA, desbalance {imbalance:.1} %")
+        for line in &panel.demand {
+            println!(
+                "    {:<30} {:>10.0} VA → {:>10.0} VA  {}",
+                line.label, line.connected_va, line.demanded_va, line.detail
+            );
         }
-        None => println!("  Fases: sin asignar en todos los circuitos"),
+        let [a, b, c] = panel.phase_va;
+        match panel.imbalance_percent {
+            Some(imbalance) => {
+                println!(
+                    "  Fases: A {a:.0} VA, B {b:.0} VA, C {c:.0} VA, desbalance {imbalance:.1} %"
+                )
+            }
+            None => println!("  Fases: sin asignar en todos los circuitos"),
+        }
     }
     println!("\n  ID     Descripción                      W     I A   L m  Calibre Tierra Tubo   ITM          e %   Σe %  Estado");
     print_row(&panel.feeder, "ALIM");
@@ -306,10 +313,10 @@ fn print_row(item: &RunResult, id: &str) {
                 .as_ref()
                 .map_or("-".to_string(), |c| c.short_label());
             println!(
-                "  {:<7}{:<26}{:>8.0}{:>8.2}{:>6.0}  {:<8}{:<7}{:<7}{:<9}{:>7.2}{:>7.2}  {}",
+                "  {:<7}{:<26}{:>8}{:>8.2}{:>6.0}  {:<8}{:<7}{:<7}{:<9}{:>7.2}{:>7.2}  {}",
                 id,
                 name,
-                item.load_w,
+                load_cell(item.load_w),
                 run.nominal_a,
                 run.length_m,
                 size,
@@ -322,11 +329,16 @@ fn print_row(item: &RunResult, id: &str) {
             );
         }
         None => println!(
-            "  {:<7}{:<26}{:>8.0}  {}",
+            "  {:<7}{:<26}{:>8}  {}",
             id,
             name,
-            item.load_w,
+            load_cell(item.load_w),
             item.status.label()
         ),
     }
+}
+
+/// Carga en watts, o «-» si no se conoce (pendiente 19).
+fn load_cell(load_w: Option<f64>) -> String {
+    load_w.map_or_else(|| "-".to_string(), |w| format!("{w:.0}"))
 }

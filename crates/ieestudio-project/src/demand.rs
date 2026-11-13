@@ -606,12 +606,10 @@ pub(crate) fn outlet_check(
     }
     let unit = profile.parameters.receptacle_outlet_va;
     let minimum = unit * f64::from(outlets);
+    // Sin potencia el circuito ya queda sin evaluar por ese dato.
+    let power_w = circuit.load.power_w?;
     let pf = circuit.load.power_factor;
-    let load_va = if pf > 0.0 {
-        circuit.load.power_w / pf
-    } else {
-        0.0
-    };
+    let load_va = if pf > 0.0 { power_w / pf } else { 0.0 };
     let references = refs(profile, &[Rule::ReceptacleOutletLoad]);
     if building.is_none() {
         return Some(Check {

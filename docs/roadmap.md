@@ -88,9 +88,11 @@
   de la impedancia de su transformador; estudio por partes; avisos de
   transformador capturado dos veces con confirmación. Informe en
   `auditoria-modelo-y-falla.md`.
-- Pendiente de esa auditoría: llevar los cuatro estados a los demás tramos
-  (conductor, protección, caída, tierra), conexión propia del secundario de
-  un transformador, longitudes de 0 m y valores iniciales de circuitos nuevos.
+- Pendientes de esa auditoría (decisión 0033): la conexión del secundario
+  sale de su topología declarada (17); circuitos y alimentadores nuevos
+  nacen sin potencia ni longitud y 0 m es dato inválido, formato 6 (19). Los
+  cuatro estados en cada verificación de los tramos (20) quedan para el
+  rediseño de interfaz.
 - Auditoría independiente de Fable (`auditoria-fable-pr11.md`): aprobado con
   observaciones H-01 a H-18. Plan de trabajo hacia la 1.0 en `plan-1.0.md`.
 - Etapa 0 del plan: cada hallazgo de las dos auditorías tiene un caso
@@ -105,7 +107,8 @@ El orden y el detalle están en `plan-1.0.md`. En resumen:
 
 - Etapa 1: cerrar los riesgos de cálculo y de dictamen (H-01 a H-07, H-10 y
   H-11) con los criterios de la decisión 0029.
-- Etapa 2: pendientes 17 a 20 de Opus y hallazgos menores H-12 a H-18.
+- Etapa 2: hecha (H-12 a H-18 y pendientes 17 y 19); el 20 se diferió al
+  rediseño (decisión 0033).
 - Etapa 4: unifilar en el navegador y cadena de publicación (versión
   visible, actualización del service worker, imágenes del sitio).
 - Etapa 5: rendimiento, incluido el tamaño del `.wasm` (50.7 MB).
