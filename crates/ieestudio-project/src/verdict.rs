@@ -205,6 +205,19 @@ impl Verdict {
         self
     }
 
+    /// El usuario apagó el cálculo de cortocircuito del proyecto: la
+    /// capacidad interruptiva queda fuera de alcance y se dice por qué.
+    pub fn with_fault_study_off(mut self, profile: &Profile) -> Self {
+        self.out_of_scope = vec![OutOfScope {
+            name: "Capacidad interruptiva".into(),
+            resolve_with:
+                "no se revisó en este proyecto porque el cálculo de cortocircuito está apagado; requiere estudio de cortocircuito"
+                    .into(),
+            references: vec![profile.reference(Rule::InterruptingRating)],
+        }];
+        self
+    }
+
     /// Agrega las verificaciones fuera del alcance del programa.
     pub fn with_out_of_scope(mut self, profile: &Profile) -> Self {
         self.out_of_scope = out_of_scope(profile);

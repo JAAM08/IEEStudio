@@ -37,6 +37,7 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0029 | [Alcance y criterios de la revisión de capacidad interruptiva (D-1 a D-8)](0029-alcance-y-criterios-de-la-capacidad-interruptiva.md) | Aceptada; se implementa en la etapa 1 |
 | 0030 | [Topología declarada y coherencia de conexiones (H-04, H-05)](0030-topologia-declarada-y-coherencia-de-conexiones.md) | Aceptada; N-1 a N-3 en pausa |
 | 0031 | [Falla en cada tablero descontando los conductores (punto a punto)](0031-falla-en-cada-tablero-punto-a-punto.md) | Aceptada; implementada en la etapa 1F |
+| 0032 | [Cálculo de cortocircuito opcional por proyecto](0032-calculo-de-cortocircuito-opcional.md) | Aceptada |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`. Las auditorías del
 PR #11 están en `../auditoria-modelo-y-falla.md` (Opus) y

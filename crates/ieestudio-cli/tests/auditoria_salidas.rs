@@ -348,3 +348,38 @@ fn p31_las_salidas_dicen_la_falla_de_cada_tablero() {
     assert!(!out.contains("barras de TA"), "{out}");
     assert!(!out.contains("barras de TB"), "{out}");
 }
+
+// ------------------------------- Cálculo de cortocircuito opcional (12 nov.)
+
+/// Apagado, las tres salidas lo dicen y ninguna da una Icc.
+#[test]
+fn cortocircuito_apagado_las_salidas_lo_dicen() {
+    let mut project = load("p31-punto-a-punto.iees");
+    project.settings.fault_study = false;
+    let result = calculate(&project).unwrap();
+    let svg = ieestudio_diagrams::plan(&project, &result).to_svg();
+    assert!(!svg.contains("Icc ="), "{:?}", lines_with(&svg, "Icc"));
+    let source = ieestudio_reports::project_source(&project, &result);
+    assert!(source
+        .contains("no se revisó en este proyecto porque el cálculo de cortocircuito está apagado"));
+    assert!(!source.contains("= Corriente de falla y capacidad interruptiva"));
+
+    let dir = std::env::temp_dir().join(format!("iees-corto-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("apagado.iees");
+    std::fs::write(&file, project.to_json()).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ieestudio"))
+        .arg("calcular")
+        .arg(&file)
+        .output()
+        .unwrap();
+    let out = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.contains(
+            "no se revisó en este proyecto porque el cálculo de cortocircuito está apagado"
+        ),
+        "{out}"
+    );
+    assert!(!out.contains("Capacidad interruptiva ("), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}

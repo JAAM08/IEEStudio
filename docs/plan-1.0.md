@@ -150,9 +150,9 @@ El informe Fable demuestra que el programa puede mostrar 3.86 kA y «Cumple» pa
 > - **Nueva etapa 1F: falla en cada tablero descontando los conductores**
 >   (método punto a punto, decisión 0031, aceptada e implementada). No pide
 >   datos nuevos y es la parte que más ayuda a elegir interruptores.
-> - **Cálculo de cortocircuito opcional por proyecto** (pedido del dueño, 12
->   de noviembre): encendido por omisión; apagado, la capacidad
->   interruptiva queda «fuera de alcance» y la memoria lo anota.
+> - **Cálculo de cortocircuito opcional por proyecto** (decisión 0032):
+>   encendido por omisión; apagado, la capacidad interruptiva queda «fuera
+>   de alcance» y la memoria lo anota. Implementado.
 > - **El alcance de cortocircuito se congela después de 1F.** Un caso que no
 >   cubra queda «No concluyente: requiere estudio de cortocircuito».
 > - **En el rediseño de interfaz:** la captura del cortocircuito se reduce a

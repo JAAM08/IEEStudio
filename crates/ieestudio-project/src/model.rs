@@ -100,6 +100,15 @@ pub struct Settings {
     /// Calibre mayor que el programa propone para un solo conductor por fase;
     /// arriba de él propone conductores en paralelo.
     pub largest_single_size: Size,
+    /// Revisar la capacidad interruptiva con la corriente de falla estimada.
+    /// Apagado, queda fuera de alcance y la memoria lo dice. Encendido por
+    /// omisión; solo se escribe apagado.
+    #[serde(skip_serializing_if = "is_yes")]
+    pub fault_study: bool,
+}
+
+fn is_yes(value: &bool) -> bool {
+    *value
 }
 
 impl Default for Settings {
@@ -118,6 +127,7 @@ impl Default for Settings {
             include_iec_ratings: false,
             imbalance_warning_percent: 5.0,
             largest_single_size: Size::new("500"),
+            fault_study: true,
         }
     }
 }

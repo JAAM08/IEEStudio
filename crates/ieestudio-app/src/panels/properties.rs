@@ -173,6 +173,7 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     changed |=
         crate::widgets::topology_row(ui, p, "topologia", &mut project.source.system, tolerance);
     section(ui, p, "Acometida y cortocircuito");
+    changed |= fault_study_toggle(ui, &mut project.settings.fault_study);
     changed |= source_inputs(ui, p, &mut project.source, study.as_ref());
 
     section(ui, p, "Criterios de diseño");
@@ -182,6 +183,16 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
 
 /// Criterios de diseño del proyecto: límites de caída, ambiente, conductor,
 /// canalización y tablas opcionales.
+/// Encender o apagar el cálculo de cortocircuito del proyecto. Apagado, la
+/// capacidad interruptiva queda fuera de alcance y la memoria lo anota.
+pub(crate) fn fault_study_toggle(ui: &mut egui::Ui, on: &mut bool) -> bool {
+    ui.checkbox(on, "Revisar la capacidad interruptiva (cálculo de cortocircuito)")
+        .on_hover_text(
+            "Estima la corriente de falla en cada tablero y la compara con los kA de sus interruptores. Apagado, la capacidad interruptiva queda fuera de alcance: la memoria, Revisar y la línea de comandos lo dicen y requiere un estudio de cortocircuito.",
+        )
+        .changed()
+}
+
 /// Tolerancia de la relación de tensiones del perfil del proyecto.
 pub(crate) fn ratio_tolerance(profile: &str) -> f64 {
     Profile::by_id(profile)

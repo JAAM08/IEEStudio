@@ -78,18 +78,29 @@ pub struct KindHint {
     /// `TG-1 · C-06 Bomba de agua`.
     pub label: String,
     pub suggested: LoadKind,
+    /// El proyecto revisa la capacidad interruptiva: la carga sin confirmar
+    /// la deja no concluyente. Con el cálculo de cortocircuito apagado solo
+    /// importa para su protección.
+    pub affects_fault: bool,
 }
 
 impl KindHint {
     pub fn text(&self) -> String {
-        format!(
-            "{} se capturó como «Otra carga» pero su nombre parece de {}: si lo es, cámbialo de tipo para calcular su protección y su aportación a la falla; si no, confirma que es otra carga. Mientras no se resuelva, la capacidad interruptiva de su zona queda no concluyente",
-            self.label,
-            match self.suggested {
-                LoadKind::AirConditioning => "un equipo de aire acondicionado",
-                _ => "un motor",
-            }
-        )
+        let what = match self.suggested {
+            LoadKind::AirConditioning => "un equipo de aire acondicionado",
+            _ => "un motor",
+        };
+        if self.affects_fault {
+            format!(
+                "{} se capturó como «Otra carga» pero su nombre parece de {what}: si lo es, cámbialo de tipo para calcular su protección y su aportación a la falla; si no, confirma que es otra carga. Mientras no se resuelva, la capacidad interruptiva de su zona queda no concluyente",
+                self.label
+            )
+        } else {
+            format!(
+                "{} se capturó como «Otra carga» pero su nombre parece de {what}: si lo es, cámbialo de tipo para calcular su protección; si no, confirma que es otra carga",
+                self.label
+            )
+        }
     }
 }
 
@@ -108,6 +119,7 @@ pub fn kind_hints(project: &Project) -> Vec<KindHint> {
                     circuit: c,
                     label: format!("{} · {} {}", panel.id, circuit.id, circuit.name),
                     suggested,
+                    affects_fault: project.settings.fault_study,
                 });
             }
         }

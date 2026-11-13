@@ -1640,7 +1640,13 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
         })
         .collect();
     let mut panels: Vec<PanelResult> = ctx.results.into_iter().flatten().collect();
-    let fault = crate::fault::study(profile, project, &mut panels, &motor_data);
+    // Con el cálculo de cortocircuito apagado no hay estudio de falla: la
+    // capacidad interruptiva queda fuera de alcance, anotada.
+    let fault = if project.settings.fault_study {
+        crate::fault::study(profile, project, &mut panels, &motor_data)
+    } else {
+        None
+    };
     let runs: Vec<&RunResult> = panels.iter().flat_map(PanelResult::runs).collect();
     let statuses: Vec<Status> = runs.iter().map(|r| r.status).collect();
     let tally = |s: Status| statuses.iter().filter(|&&x| x == s).count();
@@ -1677,6 +1683,7 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
                 verdict.with_out_of_scope_at(profile, &f.out_of_scope)
             }
         }
+        None if !project.settings.fault_study => verdict.with_fault_study_off(profile),
         None => verdict.with_out_of_scope(profile),
     };
     Ok(ProjectResult {
