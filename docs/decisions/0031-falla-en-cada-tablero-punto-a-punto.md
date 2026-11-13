@@ -1,8 +1,9 @@
 # 0031. Falla en cada tablero descontando los conductores (punto a punto)
 
-**Estado:** propuesta (12 de noviembre de 2026). No se implementa hasta que
-el dueño del proyecto apruebe los puntos P-1 a P-6. Si se aprueba, modifica
-la 0029 en un solo punto: «no descuenta la impedancia de los conductores».
+**Estado:** aceptada (12 de noviembre de 2026). El dueño del proyecto aprobó
+los puntos P-1 a P-6 tal como están. Se implementa en la etapa 1F del plan
+(`../plan-1.0.md`). Modifica la 0029 en un solo punto: «no descuenta la
+impedancia de los conductores».
 
 ## Contexto
 
