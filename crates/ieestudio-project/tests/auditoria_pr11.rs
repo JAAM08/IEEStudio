@@ -937,15 +937,93 @@ fn h07_el_caso_cumple_todo() {
     assert_eq!(group(&result, Some("TG")).label(), "Cumple");
 }
 
-/// H-07 (medio). Con falla estimada el dictamen dice «Conforme con
-/// NOM-001-SEDE-2012: todo cumple y nada quedó sin evaluar», sin el «en lo
-/// evaluado» que el programa usa en los demás casos (D-6).
+/// H-07 (medio, etapa 1E, decisión 0029 D-6). Con falla estimada el
+/// dictamen decía «Conforme con NOM-001-SEDE-2012: todo cumple…», sin el «en
+/// lo evaluado». Ahora siempre lo lleva.
 #[test]
-#[ignore = "H-07 abierto (D-6)"]
 fn h07_el_dictamen_dice_en_lo_evaluado() {
     let result = calc(&casos::h07_todo_cumple(false));
     let text = compliance_text(&result);
-    assert!(text.contains("en lo evaluado"), "H-07: hoy «{text}»");
+    assert_eq!(
+        text,
+        "Conforme en lo evaluado con NOM-001-SEDE-2012: lo que el programa verifica cumple y nada quedó sin evaluar. La capacidad interruptiva se verificó con un método conservador: la falla estimada es una cota superior."
+    );
+}
+
+/// D-6: ningún dictamen afirma conformidad sin «en lo evaluado», y
+/// «Pendiente» queda solo para la aprobación profesional.
+#[test]
+fn h07_ningun_dictamen_dice_conforme_a_secas_ni_pendiente() {
+    let dir =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/auditoria-pr11");
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "iees") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let result = calc(&Project::from_json(&text).unwrap());
+        let [calculation, compliance, approval] = result.verdict.lines("NOM-001-SEDE-2012");
+        let name = path.display();
+        assert!(
+            !compliance.2.contains("Conforme con"),
+            "{name}: {}",
+            compliance.2
+        );
+        assert!(
+            !compliance.2.contains("Pendiente"),
+            "{name}: {}",
+            compliance.2
+        );
+        assert!(!calculation.2.contains("Pendiente"), "{name}");
+        assert!(approval.2.starts_with("Pendiente"));
+        assert!(compliance
+            .2
+            .starts_with(result.verdict.compliance.heading()));
+    }
+}
+
+/// D-6: un encabezado en orden de prioridad, con el conteo de lo demás.
+#[test]
+fn h07_los_cuatro_encabezados_en_orden_de_prioridad() {
+    use ieestudio_project::verdict::{Outcome, Verdict};
+    use Outcome::*;
+    let text = |v: Verdict| v.lines("NOM-001-SEDE-2012")[1].2.clone();
+    // No conforme gana aunque haya inválidos y faltantes.
+    let v = Verdict::new(5, 1, 0, [Fails, Invalid, Invalid, Incomplete, Complies]);
+    assert_eq!(v.compliance, Compliance::DoesNotConform);
+    assert_eq!(
+        text(v),
+        "No conforme en lo evaluado con NOM-001-SEDE-2012: 1 verificación no cumple · además 2 evaluaciones con dato inválido, 1 tramo sin calcular y 1 verificación sin evaluar o no concluyente."
+    );
+    // Datos inválidos gana a lo incompleto; un tramo de dato inválido no se
+    // cuenta dos veces.
+    let v = Verdict::new(3, 2, 1, [Invalid, Incomplete]);
+    assert_eq!(v.compliance, Compliance::InvalidData);
+    assert_eq!(
+        text(v),
+        "Datos inválidos: requiere corrección: 2 evaluaciones con dato inválido · además 1 tramo sin calcular y 1 verificación sin evaluar o no concluyente."
+    );
+    let v = Verdict::new(3, 1, 0, [Incomplete, Incomplete, Complies]);
+    assert_eq!(v.compliance, Compliance::Incomplete);
+    assert_eq!(
+        text(v),
+        "Evaluación incompleta: 1 tramo sin calcular y 2 verificaciones sin evaluar o no concluyentes; no se puede declarar conforme."
+    );
+    let v = Verdict::new(2, 0, 0, [Complies, Complies]);
+    assert_eq!(v.compliance, Compliance::Conforms);
+    assert!(text(v).starts_with("Conforme en lo evaluado con NOM-001-SEDE-2012"));
+}
+
+/// D-6 en un caso: el dato de 0 kA es «Datos inválidos», no «sin evaluar».
+#[test]
+fn h07_un_dato_invalido_encabeza_como_dato_invalido() {
+    let result = calc(&casos::h11_dato_invalido());
+    assert_eq!(result.verdict.compliance, Compliance::InvalidData);
+    assert_eq!(
+        compliance_text(&result),
+        "Datos inválidos: requiere corrección: 2 evaluaciones con dato inválido."
+    );
 }
 
 // ------------------------------------------------ H-12 conteo de motores

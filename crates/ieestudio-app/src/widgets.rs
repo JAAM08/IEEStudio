@@ -578,11 +578,11 @@ pub fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
             Calculation::Incomplete => "Cálculo incompleto",
         },
         match verdict.compliance {
-            // Con verificaciones fuera de alcance nunca es conforme a secas.
-            Compliance::Conforms if verdict.out_of_scope.is_empty() => "Conforme",
+            // Siempre «en lo evaluado» (decisión 0029, D-6).
             Compliance::Conforms => "Conforme en lo evaluado",
-            Compliance::DoesNotConform => "No conforme",
-            Compliance::Pending => "Verificación pendiente",
+            Compliance::DoesNotConform => "No conforme en lo evaluado",
+            Compliance::InvalidData => "Datos inválidos",
+            Compliance::Incomplete => "Evaluación incompleta",
         },
         "Aprobación profesional pendiente",
     ];

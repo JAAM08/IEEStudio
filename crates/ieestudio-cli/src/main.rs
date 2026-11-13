@@ -170,10 +170,16 @@ fn print_report(result: &ProjectResult) {
     // La falla y la capacidad interruptiva, una vez por lugar.
     if let Some(study) = &result.fault {
         if let Some(issue) = &study.source_issue {
-            println!(
-                "Falla en el punto de conexión sin estimar: {}",
-                issue.reason
-            );
+            match issue.kind {
+                ieestudio_project::fault::IssueKind::Invalid => println!(
+                    "Falla en el punto de conexión, dato inválido: {}",
+                    issue.reason
+                ),
+                _ => println!(
+                    "Falla en el punto de conexión sin estimar: {}",
+                    issue.reason
+                ),
+            }
         }
         for motor in &study.incomplete_motors {
             println!(
@@ -185,11 +191,21 @@ fn print_report(result: &ProjectResult) {
     for group in result.fault.iter().flat_map(|f| &f.groups) {
         if group.status != ieestudio_project::Status::Complies {
             let summary = group.summary();
-            println!(
-                "Capacidad interruptiva ({}): {}",
-                group.label().to_lowercase(),
-                summary.strip_prefix("no concluyente: ").unwrap_or(&summary)
-            );
+            // El estado ya va entre paréntesis: no se repite al inicio.
+            let label = group.label().to_lowercase();
+            let without_estimate = ["dato inválido en ", "sin evaluar en "]
+                .iter()
+                .find_map(|prefix| summary.strip_prefix(prefix))
+                .and_then(|rest| rest.split_once(": "));
+            match without_estimate {
+                Some((place, why)) => {
+                    println!("Capacidad interruptiva en {place} ({label}): {why}")
+                }
+                None => println!(
+                    "Capacidad interruptiva ({label}): {}",
+                    summary.strip_prefix("no concluyente: ").unwrap_or(&summary)
+                ),
+            }
             for item in &group.trace.missing {
                 println!("  Falta: {item}");
             }

@@ -252,7 +252,7 @@ pub fn compressor_branch(
                 from_equipment_nameplate: mca.is_some() || mop.is_some(),
             })
         }
-        _ => Err(Error::InvalidInput(
+        _ => Err(Error::MissingData(
             "falta la corriente de carga nominal del compresor o la ampacidad mínima y la protección máxima de la placa"
                 .into(),
         )),

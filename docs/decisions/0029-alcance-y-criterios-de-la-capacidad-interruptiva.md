@@ -11,7 +11,9 @@ perfil.
 etapa 1B: el dato de la suministradora dice dónde está y el archivo pasa al
 formato 4. D-3 en la etapa 1C: una «Otra carga» con nombre de motor sin
 confirmar deja su zona no concluyente, y «Es otra carga» se guarda en el
-circuito (`confirmed_general`). La impedancia de media bobina queda pendiente.
+circuito (`confirmed_general`). D-6 en la etapa 1E: el dictamen tiene los
+cuatro encabezados y lo inválido se cuenta aparte de lo que falta. La
+impedancia de media bobina queda pendiente.
 
 **Precisión de la etapa 1B.** En un secundario 1F-3H con el dato en media
 tensión, la combinación de la red con la media bobina no está definida aquí:

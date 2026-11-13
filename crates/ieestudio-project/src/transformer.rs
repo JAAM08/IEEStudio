@@ -37,7 +37,7 @@ pub(crate) fn rating(
             ))
         }
         None => {
-            return Err(Error::InvalidInput(
+            return Err(Error::MissingData(
                 "falta la potencia del transformador".into(),
             ))
         }

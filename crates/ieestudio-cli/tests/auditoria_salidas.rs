@@ -57,73 +57,115 @@ fn lines_with<'a>(text: &'a str, needle: &str) -> Vec<&'a str> {
 
 // -------------------------------------------------------------- H-10
 
-/// H-10. Con el dato de la suministradora inválido (0 kA) no hay ninguna
-/// falla estimada, pero la nota del plano dice «Icc: corriente de falla con
-/// el dato de la suministradora…».
+/// H-10 (etapa 1E). Con el dato de la suministradora inválido (0 kA) no hay
+/// ninguna falla estimada: la nota ya no dice «con el dato de la
+/// suministradora…» sino que la falla está sin estimar.
 #[test]
-#[ignore = "H-10 abierto"]
 fn h10_sin_falla_no_hay_nota_de_suministradora() {
     let svg = plan_svg("h11-dato-invalido.iees");
     let wrong = lines_with(&svg, "con el dato de la suministradora");
-    assert!(wrong.is_empty(), "H-10: hoy {wrong:?}");
+    assert!(wrong.is_empty(), "H-10: {wrong:?}");
+    assert!(svg.contains("Icc SIN ESTIMAR: falta un dato o hay un dato inválido"));
+    assert!(!svg.contains("cota superior"));
 }
 
-/// H-10. Con la impedancia mínima de la tabla, la nota dice que se redujo
-/// la de placa un 10 %, cosa que no se hizo.
+/// H-10. Con la impedancia mínima de la tabla, la nota ya no dice que se
+/// redujo la de placa un 10 %: dice que la de norma ya incluye la tolerancia.
 #[test]
-#[ignore = "H-10 abierto"]
 fn h10_con_impedancia_de_tabla_no_dice_reducida() {
     let svg = plan_svg("h07-todo-cumple-tabla.iees");
     let wrong = lines_with(&svg, "reducida");
-    assert!(wrong.is_empty(), "H-10: hoy {wrong:?}");
+    assert!(wrong.is_empty(), "H-10: {wrong:?}");
+    assert!(
+        svg.contains("que ya incluye la tolerancia"),
+        "{:?}",
+        lines_with(&svg, "Icc")
+    );
+    // Con impedancia de placa sí se dice.
+    assert!(plan_svg("h07-todo-cumple.iees").contains("reducida 10 %"));
 }
 
-/// H-10. Un tablero sin falla estimada no lleva nada en el plano: debe
-/// decir «Icc SIN ESTIMAR» (con su causa). TF-1 no tiene potencia.
+/// H-10. Un tablero sin falla estimada dice «Icc SIN ESTIMAR» con el tipo de
+/// causa: TF-1 no tiene potencia (falta un dato); el dato de 0 kA es inválido.
 #[test]
-#[ignore = "H-10 abierto"]
 fn h10_un_tablero_sin_falla_dice_sin_estimar() {
-    for case in [
-        "h09-transformador-sin-potencia.iees",
-        "h11-dato-invalido.iees",
-    ] {
-        let svg = plan_svg(case);
-        assert!(
-            svg.contains("SIN ESTIMAR"),
-            "H-10 ({case}): hoy {:?}",
-            lines_with(&svg, "Icc")
-        );
-    }
+    let svg = plan_svg("h09-transformador-sin-potencia.iees");
+    assert!(
+        svg.contains("Icc SIN ESTIMAR (FALTA UN DATO)"),
+        "{:?}",
+        lines_with(&svg, "Icc")
+    );
+    let svg = plan_svg("h11-dato-invalido.iees");
+    assert!(
+        svg.contains("Icc SIN ESTIMAR (DATO INVÁLIDO)"),
+        "{:?}",
+        lines_with(&svg, "Icc")
+    );
 }
 
 // -------------------------------------------------------------- H-11
 
-/// H-11. En la memoria, el dato inválido aparece con su estado pero la
-/// frase dice «sin evaluar en…», y el renglón «Barras de…» solo se escribe
-/// para datos faltantes.
+/// H-11 (etapa 1E). En la memoria, el dato inválido se llama así y ningún
+/// renglón lo mezcla con «sin evaluar».
 #[test]
-#[ignore = "H-11 abierto"]
 fn h11_la_memoria_no_llama_sin_evaluar_a_un_dato_invalido() {
     let source = report("h11-dato-invalido.iees");
     let mixed: Vec<&str> = source
         .lines()
         .filter(|l| l.contains("Dato inválido") && l.to_lowercase().contains("sin evaluar"))
         .collect();
-    assert!(mixed.is_empty(), "H-11: hoy {mixed:?}");
+    assert!(mixed.is_empty(), "H-11: {mixed:?}");
+    assert!(source.contains("Dato inválido, sin falla estimada: la corriente de falla de la suministradora debe ser mayor que cero."));
+    assert!(source.contains("Datos inválidos: requiere corrección"));
 }
 
-/// H-11. La línea de comandos imprime «Capacidad interruptiva (dato
+/// H-11. La línea de comandos decía «Capacidad interruptiva (dato
 /// inválido): sin evaluar en…».
 #[test]
-#[ignore = "H-11 abierto"]
 fn h11_la_linea_de_comandos_no_llama_sin_evaluar_a_un_dato_invalido() {
     let out = cli("h11-dato-invalido.iees");
-    assert!(out.contains("dato inválido"), "el estado ya se imprime");
     let mixed: Vec<&str> = out
         .lines()
         .filter(|l| l.contains("dato inválido") && l.contains("sin evaluar"))
         .collect();
-    assert!(mixed.is_empty(), "H-11: hoy {mixed:?}");
+    assert!(mixed.is_empty(), "H-11: {mixed:?}");
+    assert!(out.contains("Capacidad interruptiva en el punto de conexión (dato inválido): no se pudo estimar la falla porque la corriente de falla de la suministradora debe ser mayor que cero"), "{out}");
+    assert!(out.contains("Falla en el punto de conexión, dato inválido:"));
+    // Un dato que falta sigue diciendo «sin evaluar».
+    let out = cli("h09-transformador-sin-potencia.iees");
+    assert!(
+        out.contains("Capacidad interruptiva en las barras de TF-1 (sin evaluar)"),
+        "{out}"
+    );
+}
+
+// -------------------------------------------------------------- H-07
+
+/// H-07 (etapa 1E, D-6). El encabezado del dictamen es el mismo en la
+/// memoria y en la línea de comandos, y nunca dice «Conforme con» sin «en lo
+/// evaluado».
+#[test]
+fn h07_el_dictamen_es_el_mismo_en_las_salidas() {
+    for (case, heading) in [
+        ("h07-todo-cumple.iees", "Conforme en lo evaluado"),
+        (
+            "h11-dato-invalido.iees",
+            "Datos inválidos: requiere corrección",
+        ),
+        (
+            "h09-transformador-sin-potencia.iees",
+            "Evaluación incompleta",
+        ),
+    ] {
+        let out = cli(case);
+        assert!(
+            out.contains(&format!("Verificación normativa: {heading}")),
+            "{case}: {}",
+            lines_with(&out, "Verificación normativa").join(" | ")
+        );
+        assert!(report(case).contains(heading), "{case}");
+        assert!(!out.contains("Conforme con"), "{case}");
+    }
 }
 
 /// Lo que ya está bien: las tres salidas reciben el mismo caso y la línea

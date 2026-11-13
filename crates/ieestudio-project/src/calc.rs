@@ -19,7 +19,7 @@ use crate::motors::{motor_circuit, MotorCircuit};
 use crate::procedure::{
     conductor_steps, conduit_step, cumulative_step, current_step, drop_steps, ConductorData, Step,
 };
-use crate::verdict::Verdict;
+use crate::verdict::{Outcome, Verdict};
 use ieestudio_rules::{Profile, Rule, RuleReference};
 
 /// Resultado de una comprobación o de un elemento completo.
@@ -169,6 +169,10 @@ pub struct RunResult {
     /// el tramo no se calculó. Se resume por tablero en
     /// [`crate::fault::FaultStudy::groups`].
     pub interrupting: Option<Check>,
+    /// No se calculó porque un dato es inválido (no porque falte): cuenta
+    /// como «dato inválido» en el dictamen (decisión 0029, D-6).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub invalid_data: bool,
 }
 
 impl RunResult {
@@ -880,6 +884,7 @@ fn run_result(
     outcome: Result<(Run, Vec<Check>), Error>,
     extra: Vec<Check>,
 ) -> RunResult {
+    let invalid_data = matches!(outcome, Err(Error::InvalidInput(_)));
     let (run, mut checks) = match outcome {
         Ok((run, checks)) => (Some(run), checks),
         Err(e) => (
@@ -901,6 +906,7 @@ fn run_result(
         run,
         checks,
         interrupting: None,
+        invalid_data,
     }
 }
 
@@ -1256,9 +1262,7 @@ impl<'a> Context<'a> {
             });
             let mut outcome = if has_load {
                 let length = t.secondary_length_m.ok_or_else(|| {
-                    Error::InvalidInput(
-                        "falta la longitud de los conductores del secundario".into(),
-                    )
+                    Error::MissingData("falta la longitud de los conductores del secundario".into())
                 });
                 let given_s = sec_rating.clone().and_then(|r| {
                     motors_given(&bus_system).and_then(|motors| {
@@ -1636,13 +1640,19 @@ pub fn calculate(project: &Project) -> Result<ProjectResult, String> {
     let verdict = Verdict::new(
         runs.len(),
         runs.iter().filter(|r| r.run.is_none()).count(),
+        runs.iter().filter(|r| r.invalid_data).count(),
         // Las verificaciones de un tramo sin calcular ya cuentan como «sin calcular».
         // La capacidad interruptiva cuenta una vez por tablero, no una por
-        // interruptor.
+        // interruptor, con su estado de cuatro valores.
         runs.iter()
             .filter(|r| r.run.is_some())
-            .flat_map(|r| r.checks.iter().map(|c| c.status))
-            .chain(fault.iter().flat_map(|f| f.groups.iter().map(|g| g.status))),
+            .flat_map(|r| r.checks.iter().map(|c| Outcome::from(c.status)))
+            .chain(fault.iter().flat_map(|f| {
+                f.groups.iter().map(|g| match g.evaluation {
+                    crate::evaluation::Evaluation::Invalid => Outcome::Invalid,
+                    _ => Outcome::from(g.status),
+                })
+            })),
     );
     // Lo que tiene falla estimada se verifica por un método conservador; lo
     // que depende de una fuente sin datos queda fuera de alcance (decisiones

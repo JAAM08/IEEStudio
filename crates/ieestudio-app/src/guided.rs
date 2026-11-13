@@ -79,7 +79,12 @@ fn problem_counts(doc: &Doc) -> (usize, usize) {
         return (0, 0);
     };
     let v = &result.verdict;
-    (v.failed_checks, v.pending_checks + v.uncalculated)
+    // Los datos inválidos también quedan por resolver; un tramo inválido ya
+    // está entre los sin calcular.
+    (
+        v.failed_checks,
+        v.pending_checks + v.uncalculated + v.invalid_data - v.invalid_runs,
+    )
 }
 
 /// Si el paso ya tiene lo mínimo, para marcarlo con ✓.
@@ -2236,7 +2241,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         ui.spacing_mut().item_spacing.x = 12.0;
                         for (k, (level, status, detail)) in lines.iter().enumerate() {
                             let color = if k == 2 { p.ink2 } else { status_color(p, *status) };
-                            let (head, rest) = detail.split_once(": ").unwrap_or((detail.as_str(), ""));
+                            let (head, rest) = result.verdict.split_line(detail);
                             egui::Frame::new()
                                 .fill(p.panel)
                                 .stroke(egui::Stroke::new(1.0, if *status == Status::Fails { p.bad.gamma_multiply(0.6) } else { p.line }))
@@ -2248,7 +2253,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                         label_caps(ui, p, level);
                                         let glyph = if k == 2 { icon::SEAL_QUESTION } else { status_icon(*status) };
                                         ui.add(egui::Label::new(RichText::new(format!("{glyph} {head}")).color(color).size(16.0).family(semibold())).wrap());
-                                        ui.add(egui::Label::new(muted(p, sentence(rest)).size(12.0)).wrap());
+                                        ui.add(egui::Label::new(muted(p, sentence(&rest)).size(12.0)).wrap());
                                     });
                                 });
                         }
@@ -2930,6 +2935,14 @@ mod tests {
         let with_fault = Doc::new(project, None);
         assert_eq!(listed(&with_fault), counted(&with_fault));
         assert_eq!(counted(&with_fault), counted(&doc) + 2);
+        // Con un dato inválido (0 kA de la suministradora): también cuenta
+        // (decisión 0029, D-6).
+        let mut project = house.clone();
+        project.source.fault.available_ka = Some(0.0);
+        project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
+        let invalid = Doc::new(project, None);
+        assert_eq!(listed(&invalid), counted(&invalid));
+        assert!(counted(&invalid) > counted(&doc));
         // Con tramos que no se pudieron calcular: cada uno cuenta una vez.
         let mut project = house;
         project.source.system = ieestudio_core::System::SPLIT_240_120;
