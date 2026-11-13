@@ -375,11 +375,20 @@ impl InterruptingGroup {
     /// Una frase con lo que falta: para Revisar y la memoria.
     pub fn summary(&self) -> String {
         let Some(fault_ka) = self.fault_ka else {
-            return format!(
-                "sin evaluar en {}: no se pudo estimar la falla porque {}",
-                self.place,
-                self.issue.as_deref().unwrap_or("faltan datos")
-            );
+            // Un dato inválido no es un dato que falta (H-11).
+            return if self.evaluation == Evaluation::Invalid {
+                format!(
+                    "dato inválido en {}: no se pudo estimar la falla porque {}",
+                    self.place,
+                    self.issue.as_deref().unwrap_or("un dato es inválido")
+                )
+            } else {
+                format!(
+                    "sin evaluar en {}: no se pudo estimar la falla porque {}",
+                    self.place,
+                    self.issue.as_deref().unwrap_or("faltan datos")
+                )
+            };
         };
         let n = self.breakers.len();
         let (missing, short) = (self.missing(), self.short());

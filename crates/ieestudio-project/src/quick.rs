@@ -145,7 +145,8 @@ impl QuickResult {
         let mut verdict = Verdict::new(
             1,
             usize::from(self.protection.is_err()),
-            [protection, self.status],
+            0,
+            [protection, self.status].map(crate::verdict::Outcome::from),
         );
         verdict.out_of_scope = self.out_of_scope.clone();
         verdict

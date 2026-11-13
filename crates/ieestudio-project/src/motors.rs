@@ -86,13 +86,13 @@ pub(crate) fn motor_circuit(
     match circuit.load.kind {
         LoadKind::Motor => Some(match &circuit.load.motor {
             Some(_) => motor(profile, settings, system, circuit),
-            None => Err(Error::InvalidInput(
+            None => Err(Error::MissingData(
                 "falta la potencia del motor en hp".into(),
             )),
         }),
         LoadKind::AirConditioning => Some(match &circuit.load.compressor {
             Some(_) => compressor(profile, settings, system, circuit),
-            None => Err(Error::InvalidInput(
+            None => Err(Error::MissingData(
                 "faltan los datos de placa del equipo: corriente de carga nominal, o ampacidad mínima y protección máxima".into(),
             )),
         }),
@@ -128,7 +128,7 @@ pub(crate) fn motor_parts(
     forced_breaker: Option<f64>,
 ) -> Result<MotorCircuit, Error> {
     if data.hp.trim().is_empty() {
-        return Err(Error::InvalidInput(
+        return Err(Error::MissingData(
             "falta la potencia del motor en hp".into(),
         ));
     }

@@ -28,10 +28,10 @@ normativo nuevo ni un caso de referencia firmado (`reviewed_by`).
 | `h05-conexion-contradictoria.iees` | H-05 | «Monofásico» en 220Y/127 V. Antes 13.12 kA sin aviso; desde la etapa 1D, «Dato inválido» |
 | `h05-impedancia-30.iees` | H-05 | Impedancia de 30 %: 1.09 kA y «Cumple» sin aviso. Pendiente de la NMX-J-116-ANCE-2017 (decisión 0030, N-1) |
 | `h06-acometida-sobrecargada.iees` | H-06 | 300 kW en 75 kVA: «Conforme» |
-| `h07-todo-cumple.iees` | H-07 | Dictamen «Conforme con NOM-001-SEDE-2012» sin «en lo evaluado» |
-| `h07-todo-cumple-tabla.iees` | H-07, H-09, H-10 | Impedancia de tabla: el plano dice «reducida 10 %»; la versión anterior no lo abre |
-| `h09-transformador-sin-potencia.iees` | H-09, H-10 | La versión anterior no lo abre; TF-1 sin «Icc SIN ESTIMAR» en el plano |
-| `h11-dato-invalido.iees` | H-10, H-11 | 0 kA: nota de «dato de la suministradora» en el plano y «dato inválido: sin evaluar» |
+| `h07-todo-cumple.iees` | H-07 | Antes: dictamen «Conforme con NOM-001-SEDE-2012» sin «en lo evaluado»; desde la etapa 1E, «Conforme en lo evaluado» |
+| `h07-todo-cumple-tabla.iees` | H-07, H-09, H-10 | Impedancia de tabla. Antes el plano decía «reducida 10 %»; desde la etapa 1E dice que la mínima de norma ya incluye la tolerancia |
+| `h09-transformador-sin-potencia.iees` | H-09, H-10 | TF-1 sin potencia: desde la etapa 1E, «Icc SIN ESTIMAR (FALTA UN DATO)» en el plano y «Evaluación incompleta» |
+| `h11-dato-invalido.iees` | H-10, H-11 | 0 kA. Antes, nota de «dato de la suministradora» en el plano y «dato inválido: sin evaluar»; desde la etapa 1E, «Datos inválidos: requiere corrección» e «Icc SIN ESTIMAR (DATO INVÁLIDO)» |
 | `h12-motor-detras-de-transformador-sin-datos.iees` | H-12 | El lugar cuenta 1 motor sin datos; la lista del estudio, 0 |
 | `h16-aislamiento-127.iees` | H-16 | Transformador 127 → 127 V sin aviso de relación 1:1 |
 | `p17-secundario-con-otra-conexion.iees` | 17 | Elevador 127 → 240/120 V que rechaza un circuito de 240 V |

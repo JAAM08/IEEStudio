@@ -2,8 +2,10 @@
 //!
 //! 1. **Cálculo matemático**: si cada tramo se pudo calcular con los datos y
 //!    las tablas disponibles.
-//! 2. **Verificación normativa**: si todo lo calculado cumple el perfil. Solo
-//!    es «conforme» cuando todo cumple y no queda nada sin evaluar.
+//! 2. **Verificación normativa**: un encabezado, en este orden de prioridad
+//!    (decisión 0029, D-6): «No conforme en lo evaluado», «Datos inválidos:
+//!    requiere corrección», «Evaluación incompleta» y «Conforme en lo
+//!    evaluado», con el conteo de lo demás debajo.
 //! 3. **Aprobación profesional**: siempre pendiente. La otorga quien firma el
 //!    proyecto; el programa nunca la emite.
 //!
@@ -58,15 +60,55 @@ pub enum Calculation {
     Incomplete,
 }
 
+/// Resultado de una verificación para el dictamen: el estado de tres
+/// valores más el dato inválido (decisión 0029, D-6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    Complies,
+    Fails,
+    /// Falta un dato o el resultado no es concluyente.
+    Incomplete,
+    /// Un dato inconsistente impide evaluar.
+    Invalid,
+}
+
+impl From<Status> for Outcome {
+    fn from(status: Status) -> Self {
+        match status {
+            Status::Complies => Outcome::Complies,
+            Status::Fails => Outcome::Fails,
+            Status::NotEvaluated => Outcome::Incomplete,
+        }
+    }
+}
+
+/// Encabezado del dictamen, en orden de prioridad (decisión 0029, D-6). La
+/// conformidad siempre es en lo evaluado; «pendiente» queda solo para la
+/// aprobación profesional.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Compliance {
-    /// Todas las verificaciones que hace el programa cumplen y ninguna quedó
-    /// sin evaluar. Las que están fuera de su alcance no cuentan.
+    /// Todo lo que el programa verifica cumple y nada quedó sin evaluar. Las
+    /// verificaciones fuera de su alcance no cuentan.
     Conforms,
     /// Al menos una verificación no cumple.
     DoesNotConform,
-    /// Nada incumple, pero hay verificaciones sin evaluar.
-    Pending,
+    /// Nada incumple, pero hay datos inválidos que impiden evaluar.
+    InvalidData,
+    /// Nada incumple ni es inválido, pero faltan datos o hay resultados no
+    /// concluyentes.
+    Incomplete,
+}
+
+impl Compliance {
+    /// El encabezado tal como lo muestran todas las salidas.
+    pub fn heading(self) -> &'static str {
+        match self {
+            Compliance::DoesNotConform => "No conforme en lo evaluado",
+            Compliance::InvalidData => "Datos inválidos: requiere corrección",
+            Compliance::Incomplete => "Evaluación incompleta",
+            Compliance::Conforms => "Conforme en lo evaluado",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -75,12 +117,16 @@ pub struct Verdict {
     pub compliance: Compliance,
     /// Siempre `false`: el programa no aprueba proyectos.
     pub professionally_approved: bool,
-    /// Tramos sin calcular.
+    /// Tramos sin calcular, incluidos los de dato inválido.
     pub uncalculated: usize,
     /// Verificaciones que no cumplen.
     pub failed_checks: usize,
-    /// Verificaciones sin evaluar.
+    /// Verificaciones sin evaluar o no concluyentes.
     pub pending_checks: usize,
+    /// Tramos y verificaciones que no se evaluaron por un dato inválido.
+    pub invalid_data: usize,
+    /// De los tramos sin calcular, los que son por un dato inválido.
+    pub invalid_runs: usize,
     /// Verificaciones de la norma que el programa no hace.
     pub out_of_scope: Vec<OutOfScope>,
     /// La capacidad interruptiva se verificó con la corriente de falla
@@ -89,15 +135,21 @@ pub struct Verdict {
 }
 
 impl Verdict {
-    /// Veredicto a partir de cuántos tramos se calcularon y del estado de
-    /// cada verificación.
-    pub fn new(runs: usize, uncalculated: usize, checks: impl IntoIterator<Item = Status>) -> Self {
-        let (mut failed, mut pending) = (0, 0);
-        for status in checks {
-            match status {
-                Status::Fails => failed += 1,
-                Status::NotEvaluated => pending += 1,
-                Status::Complies => {}
+    /// Veredicto a partir de cuántos tramos se calcularon (y cuántos de los
+    /// que no, por un dato inválido) y del resultado de cada verificación.
+    pub fn new(
+        runs: usize,
+        uncalculated: usize,
+        invalid_runs: usize,
+        checks: impl IntoIterator<Item = Outcome>,
+    ) -> Self {
+        let (mut failed, mut pending, mut invalid) = (0, 0, invalid_runs);
+        for outcome in checks {
+            match outcome {
+                Outcome::Fails => failed += 1,
+                Outcome::Incomplete => pending += 1,
+                Outcome::Invalid => invalid += 1,
+                Outcome::Complies => {}
             }
         }
         let calculation = if runs > 0 && uncalculated == 0 {
@@ -107,8 +159,10 @@ impl Verdict {
         };
         let compliance = if failed > 0 {
             Compliance::DoesNotConform
+        } else if invalid > 0 {
+            Compliance::InvalidData
         } else if pending > 0 || calculation == Calculation::Incomplete {
-            Compliance::Pending
+            Compliance::Incomplete
         } else {
             Compliance::Conforms
         };
@@ -119,6 +173,8 @@ impl Verdict {
             uncalculated,
             failed_checks: failed,
             pending_checks: pending,
+            invalid_data: invalid,
+            invalid_runs,
             out_of_scope: Vec::new(),
             conservative_fault: false,
         }
@@ -188,59 +244,54 @@ impl Verdict {
                 ),
             ),
         };
+        let heading = self.compliance.heading();
         let compliance = match self.compliance {
             Compliance::Conforms => (
                 Status::Complies,
                 match self.out_of_scope_text() {
                     Some(note) => format!(
-                        "Conforme en lo evaluado con {profile_code}: lo que el programa verifica cumple y nada quedó sin evaluar. {note}"
+                        "{heading} con {profile_code}: lo que el programa verifica cumple y nada quedó sin evaluar. {note}"
                     ),
                     None if self.conservative_fault => format!(
-                        "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar. La capacidad interruptiva se verificó con un método conservador: la falla estimada es una cota superior."
+                        "{heading} con {profile_code}: lo que el programa verifica cumple y nada quedó sin evaluar. La capacidad interruptiva se verificó con un método conservador: la falla estimada es una cota superior."
                     ),
                     None => format!(
-                        "Conforme con {profile_code}: todo cumple y nada quedó sin evaluar."
+                        "{heading} con {profile_code}: lo que el programa verifica cumple y nada quedó sin evaluar."
                     ),
                 },
             ),
             Compliance::DoesNotConform => (
                 Status::Fails,
                 format!(
-                    "No conforme: {} no {}.",
+                    "{heading} con {profile_code}: {} no {}{}.",
                     count(self.failed_checks, "verificación", "verificaciones"),
                     if self.failed_checks == 1 {
                         "cumple"
                     } else {
                         "cumplen"
-                    }
+                    },
+                    self.also(true, true)
                 ),
             ),
-            Compliance::Pending if self.pending_checks == 0 && self.uncalculated == 0 => (
+            Compliance::InvalidData => (
                 Status::NotEvaluated,
-                "Pendiente: no hay nada calculado que verificar.".to_string(),
+                format!(
+                    "{heading}: {} con dato inválido{}.",
+                    count(self.invalid_data, "evaluación", "evaluaciones"),
+                    self.also(false, true)
+                ),
             ),
-            Compliance::Pending => {
-                let mut parts = Vec::new();
-                if self.uncalculated > 0 {
-                    parts.push(format!(
-                        "{} sin calcular",
-                        count(self.uncalculated, "tramo", "tramos")
-                    ));
-                }
-                if self.pending_checks > 0 {
-                    parts.push(format!(
-                        "{} sin evaluar",
-                        count(self.pending_checks, "verificación", "verificaciones")
-                    ));
-                }
-                (
-                    Status::NotEvaluated,
-                    format!(
-                        "Pendiente: {}; no se puede declarar conforme.",
-                        parts.join(" y ")
-                    ),
-                )
-            }
+            Compliance::Incomplete if self.incomplete() == 0 => (
+                Status::NotEvaluated,
+                format!("{heading}: no hay nada calculado que verificar."),
+            ),
+            Compliance::Incomplete => (
+                Status::NotEvaluated,
+                format!(
+                    "{heading}: {}; no se puede declarar conforme.",
+                    join_list(&self.incomplete_parts())
+                ),
+            ),
         };
         [
             ("Cálculo matemático", calculation.0, calculation.1),
@@ -252,6 +303,87 @@ impl Verdict {
                     .to_string(),
             ),
         ]
+    }
+}
+
+impl Verdict {
+    /// Encabezado y explicación de una línea de [`Verdict::lines`], para
+    /// mostrarlos por separado. El encabezado del dictamen puede llevar dos
+    /// puntos («Datos inválidos: requiere corrección») y se toma completo; la
+    /// norma pasa al inicio de la explicación: «Con NOM-…: lo que…».
+    pub fn split_line(&self, detail: &str) -> (String, String) {
+        let heading = self.compliance.heading();
+        let (head, rest) = match detail.strip_prefix(heading) {
+            Some(rest) => (heading.to_string(), rest),
+            None => match detail.split_once(": ") {
+                Some((head, rest)) => return (head.to_string(), rest.to_string()),
+                None => return (detail.to_string(), String::new()),
+            },
+        };
+        let explanation = match rest.strip_prefix(" con ") {
+            Some(with_code) => format!("Con {with_code}"),
+            None => rest.trim_start_matches(':').trim_start().to_string(),
+        };
+        (head, explanation)
+    }
+
+    /// Tramos sin calcular y verificaciones sin evaluar, sin los de dato
+    /// inválido.
+    fn incomplete(&self) -> usize {
+        self.uncalculated - self.invalid_runs + self.pending_checks
+    }
+
+    /// `2 tramos sin calcular`, `3 verificaciones sin evaluar o no concluyentes`.
+    fn incomplete_parts(&self) -> Vec<String> {
+        let mut parts = Vec::new();
+        let uncalculated = self.uncalculated - self.invalid_runs;
+        if uncalculated > 0 {
+            parts.push(format!(
+                "{} sin calcular",
+                count(uncalculated, "tramo", "tramos")
+            ));
+        }
+        if self.pending_checks > 0 {
+            parts.push(format!(
+                "{} sin evaluar o no {}",
+                count(self.pending_checks, "verificación", "verificaciones"),
+                if self.pending_checks == 1 {
+                    "concluyente"
+                } else {
+                    "concluyentes"
+                }
+            ));
+        }
+        parts
+    }
+
+    /// ` · además 2 evaluaciones con dato inválido y 1 tramo sin calcular`: lo que hay
+    /// debajo del encabezado.
+    fn also(&self, invalid: bool, incomplete: bool) -> String {
+        let mut parts = Vec::new();
+        if invalid && self.invalid_data > 0 {
+            parts.push(format!(
+                "{} con dato inválido",
+                count(self.invalid_data, "evaluación", "evaluaciones")
+            ));
+        }
+        if incomplete {
+            parts.extend(self.incomplete_parts());
+        }
+        if parts.is_empty() {
+            String::new()
+        } else {
+            format!(" · además {}", join_list(&parts))
+        }
+    }
+}
+
+/// `a`, `a y b`, `a, b y c`.
+fn join_list(parts: &[String]) -> String {
+    match parts {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} y {last}", rest.join(", ")),
     }
 }
 

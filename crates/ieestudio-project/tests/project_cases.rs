@@ -348,7 +348,7 @@ fn verdict_keeps_three_levels_apart() {
     let mut project = example::house();
     project.panels[0].circuits.retain(|c| c.id != "C-04");
     let pending = calculate(&project).unwrap().verdict;
-    assert_eq!(pending.compliance, Compliance::Pending);
+    assert_eq!(pending.compliance, Compliance::Incomplete);
     assert_eq!(pending.pending_checks, 1);
 
     // Con la corriente de placa de la bomba todo cumple, pero la aprobación

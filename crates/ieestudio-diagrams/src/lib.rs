@@ -19,7 +19,7 @@
 use std::fmt::Write as _;
 
 use ieestudio_core::{CircuitKind, Insulation, Material, System};
-use ieestudio_project::fault::FaultOrigin;
+use ieestudio_project::fault::{FaultOrigin, IssueKind};
 use ieestudio_project::positions::panel_positions;
 use ieestudio_project::{
     insulation_name, size_label, BreakerData, LoadKind, Overrides, PanelResult, Project,
@@ -713,6 +713,20 @@ fn panel_header(project: &Project, panel: usize, result: &PanelResult) -> Vec<(S
             Ink::Text,
         )
     }))
+    // Un tablero sin falla estimada lo dice, con el tipo de causa (H-10). Lo
+    // que está fuera de alcance ya lo dice la memoria.
+    .chain(
+        result
+            .fault_issue
+            .as_ref()
+            .filter(|_| result.fault.is_none())
+            .and_then(|issue| match issue.kind {
+                IssueKind::Invalid => Some("Icc SIN ESTIMAR (DATO INVÁLIDO)"),
+                IssueKind::Incomplete => Some("Icc SIN ESTIMAR (FALTA UN DATO)"),
+                IssueKind::OutOfScope => None,
+            })
+            .map(|text| (text.to_string(), Font::Regular, Ink::Text)),
+    )
     .collect()
 }
 
@@ -1427,12 +1441,39 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
                     .any(|g| g.fault_ka.is_some() && g.origin.as_ref() == Some(&o))
             };
             let any_primary = with_origin(FaultOrigin::SupplierPrimary);
+            // La impedancia de placa se reduce por la tolerancia; la mínima de
+            // norma ya la incluye y no se reduce (H-10).
+            let table = project
+                .source
+                .substation
+                .as_ref()
+                .is_some_and(|s| s.impedance_from_table);
+            let estimated = |g: &&ieestudio_project::fault::InterruptingGroup| {
+                g.fault_ka.is_some() && g.infinite_bus
+            };
+            let nameplate = study.groups.iter().filter(estimated).any(|g| match &g.origin {
+                Some(FaultOrigin::Substation) => !table,
+                Some(FaultOrigin::Transformer { .. }) => true,
+                _ => false,
+            });
+            let from_table = table
+                && study
+                    .groups
+                    .iter()
+                    .filter(estimated)
+                    .any(|g| g.origin == Some(FaultOrigin::Substation));
             let mut parts = Vec::new();
             if any_infinite {
-                parts.push(format!(
-                    "la de BUS INFINITO toma la red sin impedancia, con la impedancia de placa del transformador reducida {:.0} %",
-                    study.impedance_tolerance * 100.0
-                ));
+                let tolerance = study.impedance_tolerance * 100.0;
+                parts.push(match (nameplate, from_table) {
+                    (true, true) => format!(
+                        "la de BUS INFINITO toma la red sin impedancia, con la impedancia de placa del transformador reducida {tolerance:.0} % o la mínima de norma, que ya incluye la tolerancia"
+                    ),
+                    (false, true) => "la de BUS INFINITO toma la red sin impedancia, con la impedancia mínima de norma del transformador, que ya incluye la tolerancia".to_string(),
+                    _ => format!(
+                        "la de BUS INFINITO toma la red sin impedancia, con la impedancia de placa del transformador reducida {tolerance:.0} %"
+                    ),
+                });
             }
             if any_primary {
                 parts.push("la de DATO EN MEDIA TENSIÓN Y TRANSFORMADOR combina en cuadratura la impedancia de la red con la del transformador".to_string());
@@ -1440,7 +1481,11 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
             if (any_infinite || any_primary) && with_origin(FaultOrigin::Supplier) {
                 parts.push("la de DATO DE LA SUMINISTRADORA se usa tal cual".to_string());
             }
-            let mut note = if parts.is_empty() {
+            let any_estimate = study.groups.iter().any(|g| g.fault_ka.is_some());
+            let mut note = if !any_estimate {
+                // Sin ninguna falla estimada no hay método que explicar (H-10).
+                "Icc SIN ESTIMAR: falta un dato o hay un dato inválido; la causa de cada tablero está en la memoria".to_string()
+            } else if parts.is_empty() {
                 "Icc: corriente de falla con el dato de la suministradora, sin descontar los alimentadores".to_string()
             } else {
                 format!("Icc: corriente de falla estimada; {}", parts.join("; "))
@@ -1463,7 +1508,10 @@ pub fn single_line_with(project: &Project, result: &ProjectResult, options: Opti
                     study.line_to_neutral_factor
                 );
             }
-            note.push_str("; es una cota superior. kA: capacidad interruptiva de catálogo");
+            if any_estimate {
+                note.push_str("; es una cota superior");
+            }
+            note.push_str(". kA: capacidad interruptiva de catálogo");
             notes.push(note);
             if !study.incomplete_motors.is_empty() {
                 notes.push(format!(

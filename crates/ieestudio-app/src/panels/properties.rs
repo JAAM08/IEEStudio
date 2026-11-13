@@ -373,18 +373,23 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
     changed |= board_inputs(ui, p, &mut panel.board);
     if let Some(issue) = fault_issue
         .as_ref()
-        .filter(|i| i.kind == ieestudio_project::fault::IssueKind::Incomplete)
+        .filter(|i| i.kind != ieestudio_project::fault::IssueKind::OutOfScope)
     {
+        // Un dato inválido se dice como tal, no como un faltante (H-11).
+        let (what, color) = match issue.kind {
+            ieestudio_project::fault::IssueKind::Invalid => ("Dato inválido", p.bad),
+            _ => ("Sin falla", p.warn),
+        };
         ui.add_space(4.0);
         ui.add(
             egui::Label::new(
                 RichText::new(format!(
-                    "{} Sin falla en las barras de {}: {}.",
+                    "{} {what} en las barras de {}: {}.",
                     icon::WARNING,
                     panel.id,
                     issue.reason
                 ))
-                .color(p.warn)
+                .color(color)
                 .size(11.5),
             )
             .wrap(),

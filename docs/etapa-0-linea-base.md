@@ -38,11 +38,11 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 | H-04 | Medio | **Corregido** (etapa 1D, decisión 0030) | `h04_*` (5), `t4_*`, `t5_*` | Antes: 226/120 V daba 2.365 kA como trifásico y «Cumple». Ahora la topología se declara; 226/120 V es «Dato inválido» en la capacidad interruptiva |
 | H-05 | Medio | **Conexión corregida** (etapa 1D, C-1); **impedancia pendiente** (N-1, NMX-J-116-ANCE-2017) | `h05_*` (4); `n1_*` (2, ignoradas) | «Monofásico» en 220Y/127 V: antes 13.12 kA sin aviso, ahora «Dato inválido». Z = 30 %: sigue 1.09 kA sin aviso hasta tener la tabla 2017 |
 | H-06 | Medio | Decisión D-5 | `h06_*` | 300 kW en 75 kVA: «Conforme» |
-| H-07 | Medio | Decisión D-6 | `h07_el_dictamen_dice_en_lo_evaluado` | «Conforme con NOM-001-SEDE-2012: todo cumple y nada quedó sin evaluar» |
+| H-07 | Medio | **Corregido** (etapa 1E, D-6) | `h07_*` (5) y de salidas (1) | Antes: «Conforme con NOM-001-SEDE-2012: todo cumple…». Ahora cuatro encabezados en orden de prioridad, siempre «en lo evaluado»; «Pendiente» solo para la aprobación profesional |
 | H-08 | Medio | Pendiente | Lectura de `state.rs` (interfaz) | Circuito nuevo con 1000 W y 10 m; alimentador nuevo con 10 m |
 | H-09 | Medio | **Corregido hacia adelante** (etapa 1B, formato 4) | `tools/auditoria.sh anterior` y pruebas de `model.rs` | Ningún archivo nuevo abre a medias en una versión anterior: dice «formato 4, más nuevo», salvo 4 que fallan antes con «missing field» porque esa versión no revisaba el formato primero; desde esta versión se revisa primero |
-| H-10 | Medio | Pendiente | `h10_*` (3) | Nota «con el dato de la suministradora» sin falla; «reducida 10 %» con impedancia de tabla; sin «Icc SIN ESTIMAR» |
-| H-11 | Medio | Pendiente | `h11_*` (2) | Memoria y línea de comandos: «Dato inválido … sin evaluar en …» |
+| H-10 | Medio | **Corregido** (etapa 1E) | `h10_*` (3) | La nota dice el método real de cada zona; sin falla, «Icc SIN ESTIMAR (DATO INVÁLIDO)» o «(FALTA UN DATO)» en el tablero |
+| H-11 | Medio | **Corregido** (etapa 1E) | `h11_*` (2) | Un dato inválido se llama así en Revisar, la ficha del tablero, la memoria y la línea de comandos; seis faltantes («falta la potencia…») ya no se presentaban como «dato inválido» |
 | H-12 | Bajo | Pendiente | `h12_*` | El lugar cuenta 1 motor sin datos; el estudio, 0 |
 | H-13 | Bajo | Pendiente | `h13_*` | `references.csv` dice «en cada tablero» |
 | H-14 | Bajo | Pendiente | `fixtures/engineering-cases/` | Sin casos de referencia de la 0028; `reviewed_by` vacío |

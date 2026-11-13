@@ -243,6 +243,14 @@ fn signatures(out: &mut String, info: Option<&ProjectInfo>) {
     );
 }
 
+/// `Sin falla estimada` o `Dato inválido, sin falla estimada`.
+fn issue_heading(kind: ieestudio_project::fault::IssueKind) -> &'static str {
+    match kind {
+        ieestudio_project::fault::IssueKind::Invalid => "Dato inválido, sin falla estimada",
+        _ => "Sin falla estimada",
+    }
+}
+
 /// Cálculo, verificación normativa y aprobación profesional, en tres filas.
 fn verdict_table(out: &mut String, verdict: &Verdict, code: &str) {
     out.push_str("#table(columns: (4.2cm, 2.6cm, 1fr), stroke: (x, y) => (bottom: 0.5pt + linea), inset: (x: 0pt, y: 5pt),\n");
@@ -252,16 +260,8 @@ fn verdict_table(out: &mut String, verdict: &Verdict, code: &str) {
             Status::Fails => "No cumple",
             Status::NotEvaluated => "Pendiente",
         };
-        let label = detail.split(':').next().unwrap_or_default().to_string();
-        let explanation = detail
-            .split_once(": ")
-            .map_or(String::new(), |(_, e)| e.to_string());
-        // «Conforme en lo evaluado con NOM-…» no cabe en la columna del
-        // estado: la norma pasa al inicio de la explicación.
-        let (label, explanation) = match label.split_once(" con ") {
-            Some((state, code)) => (state.to_string(), format!("Con {code}: {explanation}")),
-            None => (label, explanation),
-        };
+        // El encabezado no cabe con la norma en la columna del estado.
+        let (label, explanation) = verdict.split_line(&detail);
         let _ = writeln!(
             out,
             "  text(fill: gris, {}), text(font: \"IBM Plex Sans SmBld\", fill: if {} == \"Cumple\" {{ bien }} else if {} == \"No cumple\" {{ mal }} else {{ duda }}, {}), {},",
@@ -643,7 +643,7 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                 let _ = writeln!(
                     out,
                     "#text(fill: duda)[#{};]",
-                    q(&format!("Sin falla estimada: {}.", issue.reason))
+                    q(&format!("{}: {}.", issue_heading(issue.kind), issue.reason))
                 );
             }
             (None, None) => {}
@@ -657,14 +657,16 @@ pub fn project_source(project: &Project, result: &ProjectResult) -> String {
                         motor_table(&mut out, bus);
                     }
                 }
+                // Lo que falta y lo que es inválido se escriben los dos, cada
+                // uno con su nombre (H-11).
                 (None, Some(issue))
-                    if issue.kind == ieestudio_project::fault::IssueKind::Incomplete =>
+                    if issue.kind != ieestudio_project::fault::IssueKind::OutOfScope =>
                 {
                     let _ = writeln!(out, "\n== Barras de #{};", q(&panel.name));
                     let _ = writeln!(
                         out,
                         "#text(fill: duda)[#{};]",
-                        q(&format!("Sin falla estimada: {}.", issue.reason))
+                        q(&format!("{}: {}.", issue_heading(issue.kind), issue.reason))
                     );
                 }
                 _ => {}
