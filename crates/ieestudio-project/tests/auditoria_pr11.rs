@@ -823,8 +823,9 @@ fn t4_tres_fases_solo_si_se_declaran() {
 
 // ------------------------- Pendientes de la NMX-J-116-ANCE-2017 (decisión 0030)
 //
-// N-1 a N-3 están decididos pero esperan la tabla y la nota 3 de la edición
-// 2017. Al implementar N-1 faltan además: arriba del máximo con la placa
+// N-1 a N-3 están decididos pero en pausa (ajuste del plan del 12 de
+// noviembre): atienden casos poco comunes y además esperan la tabla y la
+// nota 3 de la edición 2017. Al implementar N-1 faltan además: arriba del máximo con la placa
 // confirmada (cumple con aviso) y la confirmación que se pierde al cambiar
 // la impedancia, la potencia, la tensión del primario o el montaje.
 
@@ -833,7 +834,7 @@ fn t4_tres_fases_solo_si_se_declaran() {
 /// Hoy da 1.09 kA y «Cumple» sin aviso; debe quedar «No concluyente» hasta
 /// confirmar la placa.
 #[test]
-#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-1)"]
+#[ignore = "en pausa: ajuste del plan del 12 de noviembre (decisión 0030, N-1)"]
 fn n1_impedancia_arriba_del_maximo_no_concluye() {
     let result = calc(&casos::h05_impedancia_30());
     let g = group(&result, Some("TG"));
@@ -844,7 +845,7 @@ fn n1_impedancia_arriba_del_maximo_no_concluye() {
 /// N-1. Impedancia de 1 % en el mismo transformador: abajo del mínimo. Se
 /// calcula con ella (la falla sale mayor) y solo se avisa.
 #[test]
-#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-1)"]
+#[ignore = "en pausa: ajuste del plan del 12 de noviembre (decisión 0030, N-1)"]
 fn n1_impedancia_abajo_del_minimo_solo_avisa() {
     let mut project = casos::h05_impedancia_30();
     project
@@ -869,7 +870,7 @@ fn n1_impedancia_abajo_del_minimo_solo_avisa() {
 /// mínimo del trifásico tipo subestación de su clase (2.50 %), no el del
 /// monofásico tipo poste (1.50 %), aunque sea de menos de 225 kVA.
 #[test]
-#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-2)"]
+#[ignore = "en pausa: ajuste del plan del 12 de noviembre (decisión 0030, N-2)"]
 fn n2_monofasico_tipo_subestacion_usa_la_columna_de_subestacion() {
     let mut project = casos::single_board(System::SPLIT_240_120, CircuitKind::LineToLine);
     let mut sub = casos::substation(167.0, None, Connection::SinglePhase);
@@ -886,7 +887,7 @@ fn n2_monofasico_tipo_subestacion_usa_la_columna_de_subestacion() {
 /// (1.50 %), no el trifásico tipo poste de 150 kVA (2.00 %). Hoy da 19.68 kA;
 /// debe dar 26.24 kA. Al implementar N-3 se marca aquí la casilla del banco.
 #[test]
-#[ignore = "pendiente NMX-J-116-ANCE-2017 (decisión 0030, N-3)"]
+#[ignore = "en pausa: ajuste del plan del 12 de noviembre (decisión 0030, N-3)"]
 fn n3_banco_de_monofasicos_usa_el_renglon_de_cada_unidad() {
     let mut project = casos::single_board(System::WYE_220_127, CircuitKind::ThreePhase);
     project.source.substation = Some(casos::substation(150.0, None, Connection::DeltaWye));
