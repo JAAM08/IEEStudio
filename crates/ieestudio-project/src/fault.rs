@@ -1374,10 +1374,13 @@ impl<'a> Topology<'a> {
                             contribution_a,
                         });
                     }
-                    Err(why) => incomplete.push(format!(
-                        "los motores detrás del transformador de {} ({why})",
-                        self.project.panels[t].id
-                    )),
+                    // Uno por motor, como en la lista del estudio (H-12).
+                    Err(why) => incomplete.extend(self.motors_behind(t).into_iter().map(|m| {
+                        format!(
+                            "{m}, detrás del transformador de {} ({why})",
+                            self.project.panels[t].id
+                        )
+                    })),
                 }
             }
         }
@@ -1389,6 +1392,32 @@ impl<'a> Topology<'a> {
                 total_a,
             });
         (contribution, incomplete)
+    }
+
+    /// Motores con datos cuya aportación pasa por el transformador del
+    /// tablero `t`: los de su zona y los de las zonas que cuelgan de ella.
+    fn motors_behind(&self, t: usize) -> Vec<String> {
+        let mut out = Vec::new();
+        for (i, row) in self.motors.iter().enumerate() {
+            let mut zone = self.zone[i];
+            // Sube por los transformadores hasta encontrar `t` o la fuente.
+            for _ in 0..=self.project.panels.len() {
+                match zone {
+                    Some(z) if z == t => {
+                        out.extend(
+                            row.iter()
+                                .enumerate()
+                                .filter(|(_, d)| matches!(d, Some(Ok(_))))
+                                .map(|(k, _)| self.label(i, k)),
+                        );
+                        break;
+                    }
+                    Some(z) => zone = self.upstream_zone(z),
+                    None => break,
+                }
+            }
+        }
+        out
     }
 
     /// Falla base de una zona, sin motores.
@@ -1774,9 +1803,9 @@ impl<'a> Topology<'a> {
             };
             steps.push(Step {
                 title: format!("Aportación a través del transformador de {}", t.panel),
-                formula: Some("Im = Ib₁ / (Zt + Ib₂ / Im₂)".into()),
+                formula: Some("Im = Ib₁ / √(Zt² + (Ib₂ / Im₂)²)".into()),
                 substitution: format!(
-                    "Im = {:.2} A / ({:.5} + {:.2} A / {:.1} A) = {:.1} A",
+                    "Im = {:.2} A / √({:.5}² + ({:.2} A / {:.1} A)²) = {:.1} A",
                     data.primary.rated_a,
                     data.z_pu,
                     data.secondary.rated_a,
@@ -1784,7 +1813,7 @@ impl<'a> Topology<'a> {
                     t.contribution_a
                 ),
                 note: Some(format!(
-                    "Los motores del secundario ({:.1} A a {:.0} V) llegan a estas barras a través de la impedancia del transformador ({} % reducida por la tolerancia), referidos a {:.0} V. Ib₁ e Ib₂ son sus corrientes nominales de cada lado.",
+                    "Los motores del secundario ({:.1} A a {:.0} V) llegan a estas barras a través de la impedancia del transformador ({} % reducida por la tolerancia), referidos a {:.0} V. Ib₁ e Ib₂ son sus corrientes nominales de cada lado. Las dos impedancias se combinan en cuadratura porque no se conoce su relación X/R: nunca da más impedancia que la real, así que la aportación es una cota superior (decisión 0029, D-4).",
                     t.downstream_a, data.secondary.volts, data.impedance_percent, data.primary.volts
                 )),
                 references: vec![
@@ -1812,11 +1841,18 @@ impl<'a> Topology<'a> {
 /// la impedancia `Ib₂ / Im₂` (en por unidad de la base del transformador) y
 /// la del transformador queda en serie. Sin la impedancia del transformador
 /// sería `Im₂ · V₂ / V₁`; con una aportación infinita, su bus infinito.
+///
+/// Las dos impedancias se combinan en cuadratura, `√(z² + (Ib₂/Im₂)²)`, como
+/// el dato en media tensión (decisión 0029, D-2 y D-4): sin su relación X/R
+/// nunca da más impedancia que la real, así que la aportación es una cota
+/// superior. La suma de magnitudes que se usaba antes la subestimaba un poco
+/// (H-18).
 fn transfer(data: &TransformerData, downstream_a: f64) -> f64 {
     if downstream_a <= 0.0 {
         return 0.0;
     }
-    data.primary.rated_a / (data.z_pu + data.secondary.rated_a / downstream_a)
+    let motors_pu = data.secondary.rated_a / downstream_a;
+    data.primary.rated_a / data.z_pu.hypot(motors_pu)
 }
 
 /// Compara el interruptor de un tramo con la falla de las barras de donde
@@ -2223,6 +2259,39 @@ pub(crate) fn study(
             }
         }
     }
+    // Los que tienen datos pero aportan a través de un transformador sin
+    // ellos: también quedan fuera de la falla de arriba (H-12).
+    let mut failed: Vec<usize> = topology
+        .transformers
+        .iter()
+        .filter(|(_, d)| d.is_err())
+        .map(|(&t, _)| t)
+        .collect();
+    failed.sort_unstable();
+    for t in failed {
+        let Err(why) = &topology.transformers[&t] else {
+            continue;
+        };
+        for (i, row) in motors.iter().enumerate() {
+            for (k, datum) in row.iter().enumerate() {
+                let label = topology.label(i, k);
+                if matches!(datum, Some(Ok(_)))
+                    && topology.motors_behind(t).contains(&label)
+                    && !incomplete_motors.iter().any(|m| m.label == label)
+                {
+                    incomplete_motors.push(IncompleteMotor {
+                        panel: project.panels[i].id.clone(),
+                        circuit: project.panels[i].circuits[k].id.clone(),
+                        label,
+                        missing: format!(
+                            "su aportación pasa por el transformador de {}, que no tiene datos: {why}",
+                            project.panels[t].id
+                        ),
+                    });
+                }
+            }
+        }
+    }
     let source_trace = topology.trace(None, source, "el punto de conexión");
     Some(FaultStudy {
         source: source_bus,
@@ -2257,6 +2326,88 @@ mod tests {
         }
     }
 
+    /// Casos de referencia de la corriente nominal con conexión de una, dos
+    /// o tres fases y de la aportación a través del transformador (H-14):
+    /// `fixtures/engineering-cases/nom-001-sede-2012/fault_transfer.csv`.
+    /// Calculados a mano; `reviewed_by` queda vacío hasta una revisión real.
+    #[test]
+    fn transfer_reference_cases() {
+        use ieestudio_core::{CircuitKind, System};
+        let text = include_str!(
+            "../../../fixtures/engineering-cases/nom-001-sede-2012/fault_transfer.csv"
+        );
+        // Campos separados por comas, con comillas dobles en los textos.
+        let split = |line: &str| -> Vec<String> {
+            let (mut out, mut field, mut quoted) = (Vec::new(), String::new(), false);
+            for c in line.chars() {
+                match c {
+                    '"' => quoted = !quoted,
+                    ',' if !quoted => out.push(std::mem::take(&mut field)),
+                    _ => field.push(c),
+                }
+            }
+            out.push(field);
+            out
+        };
+        let mut lines = text.lines();
+        let header = split(lines.next().unwrap());
+        let col = |name: &str| header.iter().position(|h| h == name).unwrap();
+        let system = |code: &str| match code {
+            "480Y/277" => System::WYE_480_277,
+            "220Y/127" => System::WYE_220_127,
+            "240/120" => System::SPLIT_240_120,
+            "127" => System::SINGLE_127,
+            other => panic!("sistema {other}"),
+        };
+        let mut n = 0;
+        for line in lines.filter(|l| !l.trim().is_empty()) {
+            let r = split(line);
+            let num = |name: &str| r[col(name)].parse::<f64>().unwrap();
+            let id = &r[col("id")];
+            assert!(
+                r[col("reviewed_by")].is_empty(),
+                "{id}: no se inventa una firma"
+            );
+            let kind = match r[col("connection")].as_str() {
+                "1F" => CircuitKind::LineToNeutral,
+                "2F" => CircuitKind::LineToLine,
+                "3F" => CircuitKind::ThreePhase,
+                other => panic!("conexión {other}"),
+            };
+            let kva = num("kva");
+            let primary =
+                crate::transformer::rating(Some(kva), kind, &system(&r[col("primary_system")]))
+                    .unwrap();
+            let secondary =
+                crate::transformer::rating(Some(kva), kind, &system(&r[col("secondary_system")]))
+                    .unwrap();
+            assert!(
+                (primary.rated_a - num("expected_primary_a")).abs() < 0.01,
+                "{id}: Ib1 {}",
+                primary.rated_a
+            );
+            assert!(
+                (secondary.rated_a - num("expected_secondary_a")).abs() < 0.01,
+                "{id}: Ib2 {}",
+                secondary.rated_a
+            );
+            let z = num("impedance_percent");
+            let data = TransformerData {
+                primary,
+                secondary,
+                impedance_percent: z,
+                z_pu: effective_impedance_pu(z, num("tolerance")).unwrap(),
+            };
+            let up = transfer(&data, num("downstream_motor_a"));
+            assert!(
+                (up - num("expected_transfer_a")).abs() < 0.01,
+                "{id}: Im {up}"
+            );
+            n += 1;
+        }
+        assert_eq!(n, 3);
+    }
+
     /// Sin impedancia del transformador, la aportación se refiere solo con
     /// la relación de tensiones (cuaderno técnico 158).
     #[test]
@@ -2276,14 +2427,17 @@ mod tests {
     }
 
     /// 45 kVA, 480/220 V, Z = 3 % reducida 10 %: Ib₁ = 54.13 A,
-    /// Ib₂ = 118.10 A. Con 4 × 30 A = 120 A de motores en el secundario:
-    /// Im = 54.13 / (0.027 + 118.10 / 120) = 53.53 A en 480 V, menos que los
-    /// 55 A de referirlos solo con la relación.
+    /// Ib₂ = 118.09 A. Con 4 × 30 A = 120 A de motores en el secundario, en
+    /// cuadratura (decisión 0029, D-4):
+    /// Im = 54.13 / √(0.027² + (118.09 / 120)²) = 54.98 A en 480 V; la suma de
+    /// magnitudes daba 53.53 A. Sigue abajo de los 55 A de referirlos solo
+    /// con la relación.
     #[test]
     fn transfer_example() {
         let d = data(45.0, 480.0, 220.0, 0.027);
         let up = transfer(&d, 120.0);
-        assert!((up - 53.534).abs() < 0.01, "{up}");
+        assert!((up - 54.979).abs() < 0.01, "{up}");
+        assert!(up > d.primary.rated_a / (0.027 + d.secondary.rated_a / 120.0));
         assert!(up < 120.0 * 220.0 / 480.0);
         assert_eq!(transfer(&d, 0.0), 0.0);
     }

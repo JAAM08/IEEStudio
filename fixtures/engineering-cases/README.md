@@ -12,6 +12,7 @@ los ejecutan todos.
 | `conduit.csv` | Área de conductores, ocupación permitida y tamaño del tubo |
 | `motors.csv` | Corriente de motores y motocompresores, conductor, interruptor y calibre |
 | `fault_current.csv` | Corriente nominal de un transformador y corriente de falla por bus infinito, con la tolerancia de la impedancia (decisión 0023) |
+| `fault_transfer.csv` | Corriente nominal de un transformador intermedio con conexión de una, dos o tres fases, y aportación de los motores de su secundario a través de él, en cuadratura (decisiones 0028 y 0029, D-4). Los ejecuta `ieestudio-project` (prueba `transfer_reference_cases` de `src/fault.rs`) |
 | `feeder_load.csv` | Carga del alimentador según el artículo 220: mínimas por área y factores de demanda. Las cargas de varios circuitos se separan con `;`. Los ejecuta `ieestudio-project` (`tests/engineering_cases.rs`) |
 
 Columnas comunes:

@@ -43,13 +43,13 @@ aprobación de Antonio antes de corregir), **corregido**, **no reproducido**.
 | H-09 | Medio | **Corregido hacia adelante** (etapa 1B, formato 4) | `tools/auditoria.sh anterior` y pruebas de `model.rs` | Ningún archivo nuevo abre a medias en una versión anterior: dice «formato 4, más nuevo», salvo 4 que fallan antes con «missing field» porque esa versión no revisaba el formato primero; desde esta versión se revisa primero |
 | H-10 | Medio | **Corregido** (etapa 1E) | `h10_*` (3) | La nota dice el método real de cada zona; sin falla, «Icc SIN ESTIMAR (DATO INVÁLIDO)» o «(FALTA UN DATO)» en el tablero |
 | H-11 | Medio | **Corregido** (etapa 1E) | `h11_*` (2) | Un dato inválido se llama así en Revisar, la ficha del tablero, la memoria y la línea de comandos; seis faltantes («falta la potencia…») ya no se presentaban como «dato inválido» |
-| H-12 | Bajo | Pendiente | `h12_*` | El lugar cuenta 1 motor sin datos; el estudio, 0 |
-| H-13 | Bajo | Pendiente | `h13_*` | `references.csv` dice «en cada tablero» |
-| H-14 | Bajo | Pendiente | `fixtures/engineering-cases/` | Sin casos de referencia de la 0028; `reviewed_by` vacío |
-| H-15 | Bajo | Pendiente | `h15_*` | Nota «solo se usa para la caída de tensión y el cuadro de cargas» |
-| H-16 | Bajo | Pendiente | `h16_*` | 127 → 127 V sin aviso de relación 1:1 |
-| H-17 | Bajo | Pendiente | Lectura de `widgets.rs` (interfaz) | Un valor rechazado se ignora sin marcar el campo |
-| H-18 | Bajo | Pendiente (documentar) | Cálculo en D-4 | Suma de magnitudes: hasta 0.6 % (X/R 10 y 3) o 2 % (15 y 2) por debajo |
+| H-12 | Bajo | **Corregido** (etapa 2B) | `h12_*` | Un motor con datos detrás de un transformador sin datos se cuenta uno por uno en el lugar y en la lista del estudio (y en la memoria) |
+| H-13 | Bajo | **Corregido** (etapa 2B) | `h13_*` | La regla dice «en todas las barras de su zona de tensión» (decisión 0028) |
+| H-14 | Bajo | **Casos agregados** (etapa 2B); firma pendiente | `fault_transfer.csv`, `transfer_reference_cases` | Tres casos a mano de 1, 2 y 3 fases y de la aportación por el transformador; `reviewed_by` sigue vacío hasta una revisión real |
+| H-15 | Bajo | **Corregido** (etapa 2B) | `h15_*` | La nota dice que la corriente estimada también entra en la falla |
+| H-16 | Bajo | **Corregido** (etapa 2B) | `h16_*` | Se compara también la tensión de la conexión: 127 → 127 V se marca 1:1 |
+| H-17 | Bajo | **Corregido** (etapa 2B) | `rejected_values_say_why` | El campo se marca en rojo y dice «no es un número» o «debe ser mayor que cero» y qué valor se conserva |
+| H-18 | Bajo | **Corregido** (etapa 2B, decisión 0029 D-4) | `transfer_example`, `transfer_reference_cases` | La aportación por el transformador se combina en cuadratura, que sí es cota superior (antes suma de magnitudes) |
 
 ### Pendientes de la auditoría de Opus
 
