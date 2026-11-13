@@ -1173,7 +1173,14 @@ impl<'a> Context<'a> {
             .as_deref()
             .and_then(|id| project.panels.iter().find(|p| p.id == id))
             .map_or(Ok(()), |parent| {
-                crate::connection::fits_upstream(panel.kind, parent.kind, &parent.id)
+                let k = project
+                    .panels
+                    .iter()
+                    .position(|p| p.id == parent.id)
+                    .unwrap_or(index);
+                crate::connection::bars_kind(project, k).and_then(|parent_kind| {
+                    crate::connection::fits_upstream(panel.kind, parent_kind, &parent.id)
+                })
             });
         let feeder = if has_load {
             let mut outcome = upstream.and(given).and_then(|given| {
@@ -1253,8 +1260,13 @@ impl<'a> Context<'a> {
         // Transformador: del secundario al tablero.
         let mut secondary = None;
         let mut transformer_summary = None;
+        // Las barras del tablero: con transformador, la conexión de su
+        // secundario, que sale de su topología (pendiente 17).
+        let bars = crate::connection::bars_kind(project, index);
         if let Some(t) = transformer {
-            let sec_rating = crate::transformer::rating(t.kva, panel.kind, &bus_system);
+            let sec_rating = bars
+                .clone()
+                .and_then(|kind| crate::transformer::rating(t.kva, kind, &bus_system));
             transformer_summary = Some(TransformerResult {
                 kva: t.kva,
                 primary_a: primary_rating
@@ -1271,11 +1283,12 @@ impl<'a> Context<'a> {
                 let length = t.secondary_length_m.ok_or_else(|| {
                     Error::MissingData("falta la longitud de los conductores del secundario".into())
                 });
+                let secondary_kind = bars.clone();
                 let given_s = sec_rating.clone().and_then(|r| {
                     motors_given(&bus_system).and_then(|motors| {
                         crate::transformer::side_given(
                             self.profile,
-                            panel.kind,
+                            secondary_kind.clone()?,
                             &bus_system,
                             demanded_w,
                             power_factor,
@@ -1294,7 +1307,7 @@ impl<'a> Context<'a> {
                             settings,
                             &bus_system,
                             &RunSpec {
-                                kind: panel.kind,
+                                kind: bars.clone()?,
                                 power_w: demanded_w,
                                 power_factor,
                                 continuous_fraction,
@@ -1392,7 +1405,9 @@ impl<'a> Context<'a> {
                     }),
                     _ => None,
                 };
-                let outcome = crate::connection::fits_upstream(c.kind, panel.kind, &panel.id)
+                let outcome = bars
+                    .clone()
+                    .and_then(|own| crate::connection::fits_upstream(c.kind, own, &panel.id))
                     .and_then(|()| {
                         size_run(
                             self.profile,
@@ -1440,7 +1455,7 @@ impl<'a> Context<'a> {
         let imbalance_percent = (load.phases_assigned && load.connected_w > 0.0).then(|| {
             let mut used = load.phase_va;
             used.sort_by(|a, b| b.total_cmp(a));
-            let count = poles(panel.kind) as usize;
+            let count = poles(bars.clone().unwrap_or(panel.kind)) as usize;
             let (max, min) = (used[0], used[count - 1]);
             if max > 0.0 {
                 (max - min) / max * 100.0

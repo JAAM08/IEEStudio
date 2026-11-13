@@ -729,7 +729,9 @@ pub(crate) fn circuit_form(
         .map(|r| r.load_w);
     // Lo que se necesita para la conexión, antes de tomar el circuito.
     let system = doc.bus_system(i);
-    let panel_kind = doc.project.panels[i].kind;
+    // Las fases de las barras: con transformador, las de su secundario.
+    let panel_kind = ieestudio_project::connection::bars_kind(&doc.project, i)
+        .unwrap_or(doc.project.panels[i].kind);
     let allowed_kinds = ieestudio_project::connection::circuit_kinds(&doc.project, i);
     let has_neutral = system.line_to_neutral_v.is_some();
     let phases_for = |kind| doc.default_phases(i, kind);

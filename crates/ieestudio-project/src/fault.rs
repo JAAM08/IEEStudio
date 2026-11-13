@@ -1237,9 +1237,12 @@ impl<'a> Topology<'a> {
                         &crate::connection::feeder_system(project, i),
                     )
                     .map_err(|e| reason(&e))?;
+                    // El secundario con su propia conexión (pendiente 17).
+                    let secondary_kind =
+                        crate::connection::secondary_kind(t, panel.kind).map_err(|e| reason(&e))?;
                     let secondary = crate::transformer::rating(
                         t.kva,
-                        panel.kind,
+                        secondary_kind,
                         &crate::connection::bus_system(project, i),
                     )
                     .map_err(|e| reason(&e))?;
@@ -1455,21 +1458,18 @@ impl<'a> Topology<'a> {
             &secondary_system,
             &format!("el secundario del transformador de {id}"),
         )?;
-        // Una conexión que el secundario no tiene es inconsistente, no un
-        // dato que falta.
-        if transformer.kva.is_some() && panel.kind.reference_voltage(&secondary_system).is_err() {
-            return Err(invalid(format!(
-                "el secundario no admite la conexión del tablero ({})",
-                crate::connection::kind_phrase(panel.kind)
-            )));
-        }
+        // La conexión del secundario sale de su topología (pendiente 17); si
+        // el transformador no puede darla, es un dato inválido, no un
+        // faltante.
+        let secondary_kind =
+            crate::connection::secondary_kind(transformer, panel.kind).map_err(|e| match e {
+                Error::InvalidInput(_) => invalid(reason(&e)),
+                _ => incomplete(reason(&e)),
+            })?;
         // El secundario no depende del primario: basta su corriente nominal.
-        let secondary = crate::transformer::rating(
-            transformer.kva,
-            panel.kind,
-            &crate::connection::bus_system(self.project, t),
-        )
-        .map_err(|e| incomplete(reason(&e)))?;
+        let secondary =
+            crate::transformer::rating(transformer.kva, secondary_kind, &secondary_system)
+                .map_err(|e| incomplete(reason(&e)))?;
         let impedance = transformer
             .impedance_percent
             .ok_or_else(|| incomplete("falta la impedancia".into()))?;

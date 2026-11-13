@@ -1109,7 +1109,6 @@ fn h16_un_aislamiento_127_se_marca_uno_a_uno() {
 /// elevador de 127 V a 240/120 V deja el tablero en una fase y rechaza un
 /// circuito de 240 V que su secundario sí tiene.
 #[test]
-#[ignore = "Pendiente 17 abierto"]
 fn p17_el_secundario_tiene_su_propia_conexion() {
     let result = calc(&casos::p17_secundario_con_otra_conexion());
     let tf = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
@@ -1118,6 +1117,27 @@ fn p17_el_secundario_tiene_su_propia_conexion() {
         d1.run.is_some(),
         "17: hoy «{}»",
         d1.checks.first().map_or("", |c| c.detail.as_str())
+    );
+}
+
+/// Pendiente 17: un transformador monofásico no da un secundario trifásico,
+/// aunque lo alimenten tres fases. Dato inválido con su motivo.
+#[test]
+fn p17_un_monofasico_no_da_un_secundario_trifasico() {
+    let mut project = casos::h01_intermedio_240_120();
+    let t = project.panels[1].transformer.as_mut().unwrap();
+    t.secondary = System::WYE_220_127;
+    t.connection = Some(Connection::SinglePhase);
+    let result = calc(&project);
+    let tf = result.panels.iter().find(|p| p.id == "TF-1").unwrap();
+    let issue = tf.fault_issue.as_ref().expect("dato inválido");
+    assert_eq!(issue.kind, IssueKind::Invalid);
+    assert!(
+        issue
+            .reason
+            .contains("un transformador monofásico no puede dar un secundario 3F-4H"),
+        "{}",
+        issue.reason
     );
 }
 

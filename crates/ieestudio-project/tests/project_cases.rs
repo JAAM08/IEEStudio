@@ -1331,10 +1331,10 @@ fn a_motor_without_power_makes_the_fault_incomplete() {
     );
 }
 
-/// Un transformador que alimenta dos fases de un secundario trifásico tiene
-/// la corriente de una fase, `S / V`, y no `S / (√3 · V)`: su falla es √3
-/// veces mayor de lo que salía antes. 45 kVA a 220 V: 204.55 A; Z = 0.027:
-/// 7.58 kA.
+/// Un transformador alimentado con dos fases (480 V entre fases) y con un
+/// secundario de una fase a 220 V entre fases tiene la corriente de una
+/// fase, `S / V`, y no `S / (√3 · V)`. 45 kVA a 220 V: 204.55 A; Z = 0.027:
+/// 7.58 kA en sus terminales.
 #[test]
 fn a_two_phase_transformer_uses_its_single_phase_current() {
     let mut project = transformer_project();
@@ -1342,7 +1342,14 @@ fn a_two_phase_transformer_uses_its_single_phase_current() {
     project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
     let tf = &mut project.panels[1];
     tf.kind = CircuitKind::LineToLine;
+    tf.transformer.as_mut().unwrap().secondary = System {
+        line_to_line_v: Some(220.0),
+        line_to_neutral_v: None,
+        topology: Some(ieestudio_core::Topology::SinglePhaseTwoWire),
+    };
+    tf.transformer.as_mut().unwrap().secondary_has_neutral = false;
     tf.circuits[0].kind = CircuitKind::LineToLine;
+    tf.circuits[0].has_neutral = false;
     tf.circuits[0].load.power_w = 5000.0;
     let result = calculate(&project).unwrap();
     let tf = panel(&result, "TF-1");
@@ -1350,7 +1357,37 @@ fn a_two_phase_transformer_uses_its_single_phase_current() {
         tf.transformer.as_ref().unwrap().secondary_a.unwrap(),
         204.55,
     );
-    close(tf.fault.as_ref().unwrap().base_ka, 7.5758);
+    let bus = tf.fault.as_ref().unwrap();
+    close(
+        bus.feeders.as_ref().map_or(bus.base_ka, |f| f.source_ka),
+        7.5758,
+    );
+}
+
+/// Pendiente 17: un transformador alimentado con dos fases no da un
+/// secundario trifásico. Es un dato inválido con su motivo; nunca se
+/// corrige solo.
+#[test]
+fn a_two_phase_transformer_cannot_give_a_three_phase_secondary() {
+    let mut project = transformer_project();
+    project.source.fault.available_ka = Some(25.0);
+    project.source.fault.location = Some(ieestudio_project::FaultLocation::LowVoltage);
+    project.panels[1].kind = CircuitKind::LineToLine;
+    let result = calculate(&project).unwrap();
+    let tf = panel(&result, "TF-1");
+    let issue = tf.fault_issue.as_ref().unwrap();
+    assert_eq!(issue.kind, ieestudio_project::fault::IssueKind::Invalid);
+    assert!(
+        issue
+            .reason
+            .contains("un transformador alimentado con dos fases no puede dar un secundario 3F-4H"),
+        "{}",
+        issue.reason
+    );
+    let secondary = tf.secondary.as_ref().unwrap();
+    assert!(secondary.invalid_data, "{:?}", secondary.checks);
+    // El tablero sigue siendo de dos fases en el primario: no se corrige.
+    assert_eq!(project.panels[1].kind, CircuitKind::LineToLine);
 }
 
 /// El secundario con la misma tensión que el primario delata el

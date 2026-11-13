@@ -523,7 +523,11 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                 None => "Secundario del transformador".to_string(),
             },
             kind: "Transformador",
-            connection: label_of(&KINDS, panel.kind),
+            // El secundario tiene la conexión de su topología (pendiente 17).
+            connection: label_of(
+                &KINDS,
+                ieestudio_project::connection::secondary_kind(t, panel.kind).unwrap_or(panel.kind),
+            ),
             phases: "—".to_string(),
             power_factor: Some(result.power_factor),
             forced: t.secondary_overrides.size.is_some(),

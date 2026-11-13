@@ -87,7 +87,8 @@ pub fn panel_positions(project: &Project, panel: usize) -> (Vec<String>, Vec<Str
         .collect();
     let mut slots = Slots {
         taken: [Vec::new(), Vec::new()],
-        single_phase: p.kind == CircuitKind::LineToNeutral,
+        single_phase: crate::connection::bars_kind(project, panel).unwrap_or(p.kind)
+            == CircuitKind::LineToNeutral,
     };
     // Primero lo que fijó el usuario, para no encimarse.
     for c in &p.circuits {
