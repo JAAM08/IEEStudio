@@ -137,6 +137,22 @@ pub(crate) struct Segment {
     pub label: String,
     /// El tramo calculado; `None` si no se pudo calcular.
     pub run: Option<crate::calc::Run>,
+    /// Por qué no se calculó, para decirlo en el procedimiento.
+    pub why: Option<String>,
+}
+
+impl Segment {
+    fn of(label: String, result: &crate::RunResult) -> Segment {
+        Segment {
+            label,
+            run: result.run.clone(),
+            why: result
+                .run
+                .is_none()
+                .then(|| result.checks.first().map(|c| c.detail.clone()))
+                .flatten(),
+        }
+    }
 }
 
 /// Falla de fase a neutro en el secundario de un transformador monofásico
@@ -1018,7 +1034,10 @@ fn feeder_drop(
     let (mut counted, mut skipped, mut lines) = (Vec::new(), Vec::new(), Vec::new());
     for segment in segments {
         let Some(run) = &segment.run else {
-            skipped.push(format!("{}: no se calculó", segment.label));
+            skipped.push(match &segment.why {
+                Some(why) => format!("{}: no se calculó ({why})", segment.label),
+                None => format!("{}: no se calculó", segment.label),
+            });
             continue;
         };
         if !(run.length_m.is_finite() && run.length_m > 0.0) {
@@ -1983,38 +2002,32 @@ pub(crate) fn study(
     // Falla en las barras de cada tablero: la de su zona, descontando los
     // conductores que hay entre la fuente de la zona y el tablero (punto a
     // punto, decisión 0031).
-    let runs: HashMap<&str, (Option<crate::Run>, Option<Option<crate::Run>>)> = panels
+    let runs: HashMap<&str, (&crate::RunResult, Option<&crate::RunResult>)> = panels
         .iter()
-        .map(|r| {
-            (
-                r.id.as_str(),
-                (
-                    r.feeder.run.clone(),
-                    r.secondary.as_ref().map(|s| s.run.clone()),
-                ),
-            )
-        })
+        .map(|r| (r.id.as_str(), (&r.feeder, r.secondary.as_ref())))
         .collect();
     let segments = |i: usize| -> Vec<Segment> {
         let mut out = Vec::new();
         let mut at = i;
         for _ in 0..=n {
             let id = &project.panels[at].id;
-            let (feeder, secondary) = runs.get(id.as_str()).cloned().unwrap_or((None, None));
+            let (feeder, secondary) = runs.get(id.as_str()).copied().unzip();
             if topology.zone[i] == Some(at) {
                 // Del transformador al tablero: los conductores del
                 // secundario, si los hay.
-                if let Some(run) = secondary {
-                    out.push(Segment {
-                        label: format!("secundario de {id}"),
-                        run,
-                    });
+                if let Some(result) = secondary.flatten() {
+                    out.push(Segment::of(format!("secundario de {id}"), result));
                 }
                 break;
             }
-            out.push(Segment {
-                label: format!("alimentador de {id}"),
-                run: feeder,
+            let label = format!("alimentador de {id}");
+            out.push(match feeder {
+                Some(result) => Segment::of(label, result),
+                None => Segment {
+                    label,
+                    run: None,
+                    why: None,
+                },
             });
             match topology.parent[at] {
                 Some(p) => at = p,

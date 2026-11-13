@@ -23,13 +23,18 @@ use crate::workspace::{self, Tab, Workspace};
 const STORAGE_KEY: &str = "ieestudio-interfaz-1";
 /// En el navegador, el proyecto abierto se guarda solo con esta clave, para
 /// no perder trabajo si se cierra la pestaña. Una clave por formato desde el
-/// 4: el 5 agrega la topología declarada (decisión 0030).
-const WEB_PROJECT_KEY: &str = "ieestudio-proyecto-web-5";
+/// 4: el 5 agrega la topología declarada (decisión 0030) y el 6 deja sin
+/// capturar la potencia y la longitud (decisión 0033).
+const WEB_PROJECT_KEY: &str = "ieestudio-proyecto-web-6";
 /// Donde lo guardaban las versiones anteriores, de la más nueva a la más
 /// vieja. Se leen si la clave nueva está vacía y nunca se escriben: una
 /// versión anterior que siga en la caché del navegador no lee el formato
 /// nuevo y pondría un proyecto vacío en su lugar.
-const WEB_PROJECT_OLD_KEYS: [&str; 2] = ["ieestudio-proyecto-web-4", "ieestudio-proyecto-web"];
+const WEB_PROJECT_OLD_KEYS: [&str; 3] = [
+    "ieestudio-proyecto-web-5",
+    "ieestudio-proyecto-web-4",
+    "ieestudio-proyecto-web",
+];
 /// Copia de un proyecto guardado que esta versión no pudo leer, para no
 /// perderlo al guardar el que se abre en su lugar.
 const WEB_PROJECT_UNREADABLE_KEY: &str = "ieestudio-proyecto-web-no-leido";
@@ -344,9 +349,7 @@ impl App {
             Command::Remove => self.doc.remove_selected(),
             Command::Balance => {
                 if let Some(p) = self.doc.panel_index() {
-                    self.done = self.doc.balance_phases(p).map(|(before, after)| {
-                        format!("Fases balanceadas: desbalance de {before:.1} % a {after:.1} %")
-                    });
+                    self.done = Some(self.doc.balance_phases(p));
                 }
             }
             Command::Quick => {

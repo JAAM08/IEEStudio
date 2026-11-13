@@ -215,7 +215,7 @@ fn quick_circuit_goes_to_the_project() {
     let c = input.to_circuit("C-09", &settings);
     assert_eq!(c.id, "C-09");
     assert_eq!(c.kind, input.kind);
-    close(c.load.power_w, 61_700.0, 1e-9);
+    close(c.load.power_w.unwrap(), 61_700.0, 1e-9);
     assert_eq!(c.overrides.size, Some(Size::new("3/0")));
     assert_eq!(c.overrides.conductors_per_phase, None);
     assert_eq!(c.overrides.material, None);
@@ -227,7 +227,7 @@ fn quick_circuit_goes_to_the_project() {
         ..QuickInput::default()
     };
     let c = amps.to_circuit("C-10", &settings);
-    close(c.load.power_w, 34_294.6, 0.1);
+    close(c.load.power_w.unwrap(), 34_294.6, 0.1);
     assert_eq!(c.overrides.conductors_per_phase, Some(2));
 }
 

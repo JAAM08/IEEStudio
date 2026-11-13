@@ -166,7 +166,9 @@ pub struct RunResult {
     /// caída, tierra y tubería. La capacidad interruptiva de su interruptor
     /// no entra aquí: es una verificación del tablero donde está instalado.
     pub status: Status,
-    pub load_w: f64,
+    /// Carga del tramo, en watts. `None` si no se conoce: falta o es inválida
+    /// la potencia de alguna carga (pendiente 19). Nunca se muestra un cero.
+    pub load_w: Option<f64>,
     pub run: Option<Run>,
     pub checks: Vec<Check>,
     /// Capacidad interruptiva del interruptor contra la falla de las barras
@@ -194,6 +196,12 @@ pub struct PanelResult {
     pub name: String,
     /// Carga conectada, incluidos los tableros que alimenta.
     pub connected_w: f64,
+    /// Por qué no se conoce la carga del tablero: falta o es inválida la
+    /// potencia de algún circuito suyo o de los tableros que alimenta
+    /// (pendiente 19). Con ella, `connected_w`, `demanded_w`, `demanded_va`
+    /// y `demand` son sumas parciales que no se muestran como la carga.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_unknown: Option<String>,
     /// Factor de demanda resultante: carga calculada entre conectada.
     pub demand_factor: f64,
     pub demanded_w: f64,
@@ -239,7 +247,8 @@ pub struct TransformerResult {
     pub kva: Option<f64>,
     pub primary_a: Option<f64>,
     pub secondary_a: Option<f64>,
-    /// Carga calculada en porciento de su capacidad. `None` sin potencia.
+    /// Carga calculada en porciento de su capacidad. `None` sin potencia o
+    /// sin la carga del tablero.
     pub load_percent: Option<f64>,
 }
 
@@ -884,10 +893,50 @@ fn size_run_n(
     Ok((run, checks))
 }
 
+/// Longitud de un tramo (pendiente 19, decisión 0033). Sin capturar falta;
+/// cero o negativa es un dato inválido. Nunca se supone una longitud: el
+/// equipo en el mismo gabinete, si hace falta, será una casilla explícita.
+pub(crate) fn run_length(length_m: Option<f64>, what: &str) -> Result<f64, Error> {
+    match length_m {
+        None => Err(Error::MissingData(format!("falta la longitud {what}"))),
+        Some(l) if l.is_finite() && l > 0.0 => Ok(l),
+        Some(l) => Err(Error::InvalidInput(format!(
+            "la longitud {what} debe ser mayor que cero; tiene {} m",
+            crate::procedure::plain(l)
+        ))),
+    }
+}
+
+/// Potencia capturada de una carga (pendiente 19). Sin capturar falta;
+/// negativa es un dato inválido. Nunca se supone una potencia.
+pub(crate) fn load_power(power_w: Option<f64>) -> Result<f64, Error> {
+    match power_w {
+        None => Err(Error::MissingData("falta la potencia de la carga".into())),
+        Some(p) if p.is_finite() && p >= 0.0 => Ok(p),
+        Some(p) => Err(Error::InvalidInput(format!(
+            "la potencia de la carga no puede ser negativa; tiene {} W",
+            crate::procedure::plain(p)
+        ))),
+    }
+}
+
+/// Junta dos datos que hacen falta para un cálculo. Un dato inválido manda;
+/// si faltan los dos, el mensaje dice los dos.
+fn both<A, B>(a: Result<A, Error>, b: Result<B, Error>) -> Result<(A, B), Error> {
+    match (a, b) {
+        (Ok(a), Ok(b)) => Ok((a, b)),
+        (Err(e @ Error::InvalidInput(_)), _) | (_, Err(e @ Error::InvalidInput(_))) => Err(e),
+        (Err(Error::MissingData(a)), Err(Error::MissingData(b))) => {
+            Err(Error::MissingData(format!("{a}; {b}")))
+        }
+        (Err(e), _) | (_, Err(e)) => Err(e),
+    }
+}
+
 fn run_result(
     id: &str,
     name: &str,
-    load_w: f64,
+    load_w: Option<f64>,
     outcome: Result<(Run, Vec<Check>), Error>,
     extra: Vec<Check>,
 ) -> RunResult {
@@ -937,6 +986,44 @@ struct PanelLoad {
     phase_va: [f64; 3],
     phases_assigned: bool,
     largest_motor: Option<LargestMotor>,
+    /// Circuitos cuya carga no se conoce, de este tablero y de los que
+    /// alimenta: sin ellos la suma no es la carga del tablero (pendiente 19).
+    unknown: Vec<String>,
+    /// Alguno de `unknown` tiene una potencia inválida, no solo faltante.
+    unknown_invalid: Vec<String>,
+}
+
+impl PanelLoad {
+    /// Qué potencia falta o es inválida: «falta la potencia del circuito C-07
+    /// de TG-1». `None` si se conoce la carga de todos los circuitos.
+    fn unknown_reason(&self) -> Option<String> {
+        let circuits = |list: &[String]| match list {
+            [one] => format!("del circuito {one}"),
+            many => format!("de los circuitos {}", crate::verdict::join_list(many)),
+        };
+        if !self.unknown_invalid.is_empty() {
+            Some(format!(
+                "la potencia {} no es válida",
+                circuits(&self.unknown_invalid)
+            ))
+        } else if !self.unknown.is_empty() {
+            Some(format!("falta la potencia {}", circuits(&self.unknown)))
+        } else {
+            None
+        }
+    }
+
+    /// La carga del tablero no se puede sumar: falta o es inválida la de
+    /// algún circuito. Nunca se calcula un alimentador con una carga parcial.
+    fn problem(&self) -> Option<Error> {
+        let reason = self.unknown_reason()?;
+        let msg = format!("{reason}; sin ella no se conoce la carga del tablero");
+        Some(if self.unknown_invalid.is_empty() {
+            Error::MissingData(msg)
+        } else {
+            Error::InvalidInput(msg)
+        })
+    }
 }
 
 /// Potencia de un circuito: la de sus datos de motor o compresor si los
@@ -1010,18 +1097,21 @@ fn validate(project: &Project) -> Result<(), String> {
 }
 
 impl<'a> Context<'a> {
-    fn circuit_load(&self, panel: usize, circuit: usize) -> CircuitLoad {
+    /// Un motor o un compresor con datos incompletos y sin potencia
+    /// capturada da el error de sus propios datos.
+    fn circuit_load(&self, panel: usize, circuit: usize) -> Result<CircuitLoad, Error> {
         let c = &self.project.panels[panel].circuits[circuit];
         let pf = c.load.power_factor;
         match &self.motors[panel][circuit] {
-            Some(Ok(m)) => CircuitLoad {
+            Some(Ok(m)) => Ok(CircuitLoad {
                 power_w: m.va * pf,
                 va: m.va,
-            },
-            _ => CircuitLoad {
-                power_w: c.load.power_w,
-                va: if pf > 0.0 { c.load.power_w / pf } else { 0.0 },
-            },
+            }),
+            Some(Err(e)) if c.load.power_w.is_none() => Err(e.clone()),
+            _ => load_power(c.load.power_w).map(|power_w| CircuitLoad {
+                power_w,
+                va: if pf > 0.0 { power_w / pf } else { 0.0 },
+            }),
         }
     }
 
@@ -1033,7 +1123,17 @@ impl<'a> Context<'a> {
         };
         load.groups.areas = panel.areas.clone();
         for (k, c) in panel.circuits.iter().enumerate() {
-            let CircuitLoad { power_w, va } = self.circuit_load(index, k);
+            let CircuitLoad { power_w, va } = match self.circuit_load(index, k) {
+                Ok(l) => l,
+                Err(e) => {
+                    let label = format!("{} de {}", c.id, panel.id);
+                    if matches!(e, Error::InvalidInput(_)) {
+                        load.unknown_invalid.push(label.clone());
+                    }
+                    load.unknown.push(label);
+                    continue;
+                }
+            };
             load.connected_w += power_w;
             load.apparent_va += va;
             let is_motor = matches!(self.motors[index][k], Some(Ok(_)));
@@ -1082,6 +1182,8 @@ impl<'a> Context<'a> {
                 load.phase_va[i] += sub.phase_va[i];
             }
             load.phases_assigned &= sub.phases_assigned;
+            load.unknown.extend(sub.unknown);
+            load.unknown_invalid.extend(sub.unknown_invalid);
             if let Some(m) = sub.largest_motor {
                 if load.largest_motor.as_ref().map_or(true, |l| m.va > l.va) {
                     load.largest_motor = Some(m);
@@ -1166,6 +1268,7 @@ impl<'a> Context<'a> {
             _ => None,
         };
         let has_load = load.connected_w > 0.0;
+        let load_problem = load.problem();
         // El alimentador no puede tener más fases que el tablero que lo
         // alimenta.
         let upstream = panel
@@ -1182,27 +1285,32 @@ impl<'a> Context<'a> {
                     crate::connection::fits_upstream(panel.kind, parent_kind, &parent.id)
                 })
             });
-        let feeder = if has_load {
-            let mut outcome = upstream.and(given).and_then(|given| {
-                size_run(
-                    self.profile,
-                    settings,
-                    system,
-                    &RunSpec {
-                        kind: panel.kind,
-                        power_w: demanded_w,
-                        power_factor,
-                        continuous_fraction,
-                        length_m: panel.feeder.length_m,
-                        has_neutral: panel.feeder.has_neutral,
-                        overrides: &panel.feeder.overrides,
-                        drop_limit_percent: settings.feeder_drop_limit_percent,
-                        drop_rule: Rule::FeederDrop,
-                        upstream_drop_percent,
-                        given,
-                    },
-                )
-            });
+        let feeder = if let Some(e) = &load_problem {
+            run_result(&panel.id, "Alimentador", None, Err(e.clone()), vec![])
+        } else if has_load {
+            let length = run_length(panel.feeder.length_m, "del alimentador");
+            let mut outcome = upstream
+                .and(both(given, length))
+                .and_then(|(given, length_m)| {
+                    size_run(
+                        self.profile,
+                        settings,
+                        system,
+                        &RunSpec {
+                            kind: panel.kind,
+                            power_w: demanded_w,
+                            power_factor,
+                            continuous_fraction,
+                            length_m,
+                            has_neutral: panel.feeder.has_neutral,
+                            overrides: &panel.feeder.overrides,
+                            drop_limit_percent: settings.feeder_drop_limit_percent,
+                            drop_rule: Rule::FeederDrop,
+                            upstream_drop_percent,
+                            given,
+                        },
+                    )
+                });
             // Coordinación: un interruptor de alimentador menor que el del
             // motor mayor puede dispararse cuando el motor arranca.
             if let (Ok((run, _)), Some(motor_a)) = (&outcome, motor_breaker_a) {
@@ -1242,12 +1350,12 @@ impl<'a> Context<'a> {
                     }),
                 }
             }
-            run_result(&panel.id, "Alimentador", demanded_w, outcome, extra)
+            run_result(&panel.id, "Alimentador", Some(demanded_w), outcome, extra)
         } else {
             run_result(
                 &panel.id,
                 "Alimentador",
-                0.0,
+                Some(0.0),
                 Err(Error::InvalidInput("el tablero no tiene carga".into())),
                 vec![],
             )
@@ -1277,12 +1385,13 @@ impl<'a> Context<'a> {
                 load_percent: sec_rating
                     .as_ref()
                     .ok()
+                    .filter(|_| load_problem.is_none())
                     .map(|r| demand.demanded_va / (r.kva * 10.0)),
             });
-            let mut outcome = if has_load {
-                let length = t.secondary_length_m.ok_or_else(|| {
-                    Error::MissingData("falta la longitud de los conductores del secundario".into())
-                });
+            let mut outcome = if let Some(e) = &load_problem {
+                Err(e.clone())
+            } else if has_load {
+                let length = run_length(t.secondary_length_m, "de los conductores del secundario");
                 let secondary_kind = bars.clone();
                 let given_s = sec_rating.clone().and_then(|r| {
                     motors_given(&bus_system).and_then(|motors| {
@@ -1380,7 +1489,7 @@ impl<'a> Context<'a> {
             secondary = Some(run_result(
                 &panel.id,
                 "Secundario del transformador",
-                demanded_w,
+                load_problem.is_none().then_some(demanded_w),
                 outcome,
                 extra,
             ));
@@ -1409,16 +1518,22 @@ impl<'a> Context<'a> {
                     .clone()
                     .and_then(|own| crate::connection::fits_upstream(c.kind, own, &panel.id))
                     .and_then(|()| {
+                        both(
+                            self.circuit_load(index, k).map(|l| l.power_w),
+                            run_length(c.length_m, "del circuito"),
+                        )
+                    })
+                    .and_then(|(power_w, length_m)| {
                         size_run(
                             self.profile,
                             settings,
                             system,
                             &RunSpec {
                                 kind: c.kind,
-                                power_w: c.load.power_w,
+                                power_w,
                                 power_factor: c.load.power_factor,
                                 continuous_fraction: if c.load.continuous { 1.0 } else { 0.0 },
-                                length_m: c.length_m,
+                                length_m,
                                 has_neutral: c.has_neutral,
                                 overrides: &c.overrides,
                                 drop_limit_percent: settings.branch_drop_limit_percent,
@@ -1430,6 +1545,9 @@ impl<'a> Context<'a> {
                     });
                 let mut extra = match motor {
                     Some(Ok(m)) => m.checks,
+                    // Sin potencia capturada no hubo carga general: la causa ya
+                    // está en «Cálculo» (pendiente 19).
+                    Some(Err(_)) if c.load.power_w.is_none() => vec![],
                     Some(Err(e)) => vec![Check {
                         name: "Datos del equipo".to_string(),
                         status: Status::NotEvaluated,
@@ -1447,22 +1565,24 @@ impl<'a> Context<'a> {
                     None => vec![],
                 };
                 extra.extend(outlet_check(self.profile, project.occupancy.as_deref(), c));
-                let load_w = self.circuit_load(index, k).power_w;
+                let load_w = self.circuit_load(index, k).ok().map(|l| l.power_w);
                 run_result(&c.id, &c.name, load_w, outcome, extra)
             })
             .collect();
 
-        let imbalance_percent = (load.phases_assigned && load.connected_w > 0.0).then(|| {
-            let mut used = load.phase_va;
-            used.sort_by(|a, b| b.total_cmp(a));
-            let count = poles(bars.clone().unwrap_or(panel.kind)) as usize;
-            let (max, min) = (used[0], used[count - 1]);
-            if max > 0.0 {
-                (max - min) / max * 100.0
-            } else {
-                0.0
-            }
-        });
+        // Con la carga de algún circuito desconocida no hay desbalance que decir.
+        let imbalance_percent =
+            (load.phases_assigned && load.connected_w > 0.0 && load_problem.is_none()).then(|| {
+                let mut used = load.phase_va;
+                used.sort_by(|a, b| b.total_cmp(a));
+                let count = poles(bars.clone().unwrap_or(panel.kind)) as usize;
+                let (max, min) = (used[0], used[count - 1]);
+                if max > 0.0 {
+                    (max - min) / max * 100.0
+                } else {
+                    0.0
+                }
+            });
         if let Some(imbalance) = imbalance_percent {
             if imbalance > settings.imbalance_warning_percent {
                 self.warnings.push(format!(
@@ -1476,6 +1596,7 @@ impl<'a> Context<'a> {
             id: panel.id.clone(),
             name: panel.name.clone(),
             connected_w: load.connected_w,
+            load_unknown: load.unknown_reason(),
             demand_factor: if load.connected_w > 0.0 {
                 demanded_w / load.connected_w
             } else {

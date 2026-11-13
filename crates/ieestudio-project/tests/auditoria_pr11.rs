@@ -1141,16 +1141,56 @@ fn p17_un_monofasico_no_da_un_secundario_trifasico() {
     );
 }
 
-/// Pendiente 19 (Opus). Un circuito de 0 m se calcula con caída nula y
-/// cumple. Depende de la decisión de la etapa 2C (si 0 m es «sin tramo»,
-/// «dato faltante» o «inválido»); con cualquiera de las dos últimas no puede
-/// cumplir.
+/// Pendiente 19 (Opus). Un circuito de 0 m se calculaba con caída nula y
+/// cumplía. Etapa 2C (decisión 0033): 0 m es un dato inválido, nunca un
+/// tramo sin caída; el equipo en el mismo gabinete, si hace falta, será una
+/// casilla explícita «sin tramo».
 #[test]
-#[ignore = "Pendiente 19 abierto (decisión 2C)"]
 fn p19_un_circuito_de_cero_metros_no_cumple_solo() {
     let result = calc(&casos::p19_longitud_cero());
     let a1 = &result.panels[0].circuits[0];
     assert_ne!(a1.status, Status::Complies, "19: hoy {:?}", a1.status);
+    assert!(a1.invalid_data);
+    assert!(a1.run.is_none());
+    assert!(
+        a1.checks[0]
+            .detail
+            .contains("la longitud del circuito debe ser mayor que cero"),
+        "{}",
+        a1.checks[0].detail
+    );
+    assert_eq!(result.verdict.compliance, Compliance::InvalidData);
+}
+
+/// Pendiente 19: un circuito nuevo nace sin potencia ni longitud y queda
+/// «Sin evaluar» con lo que falta; nunca se supone un valor. El alimentador
+/// de su tablero tampoco se calcula con una carga parcial.
+#[test]
+fn p19_un_circuito_sin_potencia_ni_longitud_queda_sin_evaluar() {
+    let mut project = casos::p19_longitud_cero();
+    let c = &mut project.panels[0].circuits[0];
+    c.length_m = None;
+    c.load.power_w = None;
+    let result = calc(&project);
+    let a1 = &result.panels[0].circuits[0];
+    assert_eq!(a1.status, Status::NotEvaluated);
+    assert!(!a1.invalid_data);
+    assert_eq!(a1.load_w, None);
+    assert_eq!(
+        a1.checks[0].detail,
+        "falta la potencia de la carga; falta la longitud del circuito"
+    );
+    let feeder = &result.panels[0].feeder;
+    assert_eq!(feeder.status, Status::NotEvaluated);
+    assert_eq!(feeder.load_w, None);
+    assert!(
+        feeder.checks[0]
+            .detail
+            .contains("falta la potencia del circuito"),
+        "{}",
+        feeder.checks[0].detail
+    );
+    assert_eq!(result.verdict.compliance, Compliance::Incomplete);
 }
 
 // ------------------------------------------------------------------ informe
@@ -1281,14 +1321,25 @@ fn p31_ningun_tablero_da_mas_que_el_de_arriba() {
 #[test]
 fn p31_un_tramo_sin_longitud_no_se_descuenta() {
     let mut project = casos::p31_punto_a_punto();
-    project.panels[1].feeder.length_m = 0.0;
+    project.panels[1].feeder.length_m = None;
     let result = calc(&project);
     let ta = bars(&result, "TA");
     let f = ta.feeders.as_ref().unwrap();
     assert_eq!(f.counted, ["alimentador de TG"]);
-    assert_eq!(f.skipped, ["alimentador de TA: falta su longitud"]);
+    assert_eq!(
+        f.skipped,
+        ["alimentador de TA: no se calculó (falta la longitud del alimentador)"]
+    );
     close(ta.base_ka, bars(&result, "TG").base_ka, 1e-9);
     assert!(ta.steps.iter().any(|s| s.title == "Tramos sin descontar"));
+    // Una longitud de 0 m tampoco se descuenta: es un dato inválido
+    // (pendiente 19), nunca un tramo sin impedancia.
+    project.panels[1].feeder.length_m = Some(0.0);
+    let result = calc(&project);
+    let ta = bars(&result, "TA");
+    let skipped = &ta.feeders.as_ref().unwrap().skipped;
+    assert!(skipped[0].contains("dato inválido"), "{skipped:?}");
+    close(ta.base_ka, bars(&result, "TG").base_ka, 1e-9);
 }
 
 /// P-3: la aportación de los motores llega completa a cada tablero.
@@ -1307,7 +1358,7 @@ fn p31_los_motores_aportan_sin_reducir() {
 #[test]
 fn p31_en_1f_3h_manda_la_mayor_de_las_dos() {
     let mut project = casos::h01_acometida_240_120();
-    project.panels[0].feeder.length_m = 1.0;
+    project.panels[0].feeder.length_m = Some(1.0);
     project.panels[0].feeder.overrides.size = Some(ieestudio_core::Size::new("4/0"));
     let result = calc(&project);
     let near = bars(&result, "TG");

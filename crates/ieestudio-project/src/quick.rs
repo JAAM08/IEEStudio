@@ -610,7 +610,7 @@ impl QuickInput {
             kind: self.kind,
             phases: vec![],
             load: crate::Load {
-                power_w,
+                power_w: Some(power_w),
                 power_factor: self.power_factor,
                 continuous: self.continuous && self.motor.is_none(),
                 kind,
@@ -619,7 +619,7 @@ impl QuickInput {
                 compressor: None,
                 confirmed_general: false,
             },
-            length_m: self.length_m,
+            length_m: Some(self.length_m),
             has_neutral: self.has_neutral,
             overrides: crate::Overrides {
                 size: Some(self.size.clone()),

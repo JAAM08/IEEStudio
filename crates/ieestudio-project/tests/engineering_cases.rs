@@ -18,7 +18,7 @@ fn circuit(id: String, kind: LoadKind, va: f64) -> Circuit {
         kind: CircuitKind::ThreePhase,
         phases: vec![],
         load: Load {
-            power_w: va,
+            power_w: Some(va),
             power_factor: 1.0,
             continuous: false,
             kind,
@@ -27,7 +27,7 @@ fn circuit(id: String, kind: LoadKind, va: f64) -> Circuit {
             compressor: None,
             confirmed_general: false,
         },
-        length_m: 10.0,
+        length_m: Some(10.0),
         has_neutral: false,
         overrides: Overrides {
             // Dato declarado del caso: carga lineal (decisión 0030, T-6).
@@ -79,7 +79,7 @@ fn feeder_load_cases() {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 interrupting_ka: Default::default(),
-                length_m: 10.0,
+                length_m: Some(10.0),
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: true,

@@ -34,8 +34,8 @@ normativo nuevo ni un caso de referencia firmado (`reviewed_by`).
 | `h11-dato-invalido.iees` | H-10, H-11 | 0 kA. Antes, nota de «dato de la suministradora» en el plano y «dato inválido: sin evaluar»; desde la etapa 1E, «Datos inválidos: requiere corrección» e «Icc SIN ESTIMAR (DATO INVÁLIDO)» |
 | `h12-motor-detras-de-transformador-sin-datos.iees` | H-12 | Antes el lugar contaba 1 motor sin datos y la lista del estudio 0; desde la etapa 2B se cuentan igual, uno por motor |
 | `h16-aislamiento-127.iees` | H-16 | Transformador 127 → 127 V: desde la etapa 2B se marca como relación 1:1 |
-| `p17-secundario-con-otra-conexion.iees` | 17 | Elevador 127 → 240/120 V que rechaza un circuito de 240 V |
-| `p19-longitud-cero.iees` | 19 | Circuito de 0 m que cumple |
+| `p17-secundario-con-otra-conexion.iees` | 17 | Elevador 127 → 240/120 V; desde la etapa 2A acepta el circuito de 240 V |
+| `p19-longitud-cero.iees` | 19 | Circuito de 0 m; desde la etapa 2C es «dato inválido», antes «Cumple» |
 | `p31-punto-a-punto.iees` | 0031 | Ejemplo de la decisión 0031: 500 kVA, 4.5 %, 220Y/127 V. La falla baja tablero por tablero: 32.40 kA en terminales, 32.15 en TG, 5.79 en TA y 2.31 en TB (etapa 1F) |
 
 Desde la etapa 1D todos están en el formato 5: cada sistema lleva su

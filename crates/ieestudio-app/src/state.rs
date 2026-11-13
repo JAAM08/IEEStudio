@@ -85,7 +85,8 @@ fn new_panel(id: &str, name: &str, parent: Option<String>) -> Panel {
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
             interrupting_ka: Default::default(),
-            length_m: 10.0,
+            // Nace sin longitud: nunca se supone (pendiente 19).
+            length_m: None,
             demand: Default::default(),
             demand_factor: None,
             has_neutral: true,
@@ -269,10 +270,26 @@ impl Doc {
     }
 
     /// Reparte las fases de los circuitos del tablero para balancearlo.
-    /// Devuelve el desbalance antes y después, en porciento.
-    pub fn balance_phases(&mut self, panel: usize) -> Option<(f64, f64)> {
-        let result = self.panel_result(panel)?.clone();
+    /// Dice el desbalance antes y después, o por qué no se balanceó: sin la
+    /// carga de todos los circuitos no se reparte nada (pendiente 19).
+    pub fn balance_phases(&mut self, panel: usize) -> String {
+        let Some(result) = self.panel_result(panel).cloned() else {
+            return "No se balanceó: el tablero no se pudo calcular".to_string();
+        };
         let p = &self.project.panels[panel];
+        let missing: Vec<&str> = p
+            .circuits
+            .iter()
+            .zip(&result.circuits)
+            .filter(|(_, r)| r.load_w.is_none())
+            .map(|(c, _)| c.id.as_str())
+            .collect();
+        if !missing.is_empty() {
+            return format!(
+                "No se balanceó: falta la potencia de {}",
+                missing.join(", ")
+            );
+        }
         let before = result.imbalance_percent.unwrap_or(100.0);
         let va: Vec<f64> = p
             .circuits
@@ -280,7 +297,7 @@ impl Doc {
             .zip(&result.circuits)
             .map(|(c, r)| {
                 if c.load.power_factor > 0.0 {
-                    r.load_w / c.load.power_factor
+                    r.load_w.unwrap_or(0.0) / c.load.power_factor
                 } else {
                     0.0
                 }
@@ -291,8 +308,12 @@ impl Doc {
             c.phases = ph;
         }
         self.edited();
-        let after = self.panel_result(panel)?.imbalance_percent?;
-        Some((before, after))
+        match self.panel_result(panel).and_then(|r| r.imbalance_percent) {
+            Some(after) => {
+                format!("Fases balanceadas: desbalance de {before:.1} % a {after:.1} %")
+            }
+            None => "Fases asignadas; el tablero no se pudo calcular".to_string(),
+        }
     }
 
     /// Primer identificador `C-NN` libre en un tablero.
@@ -332,7 +353,8 @@ impl Doc {
             other => other.label(),
         };
         let mut load = Load {
-            power_w: 1000.0,
+            // Nace sin potencia: nunca se supone (pendiente 19).
+            power_w: None,
             power_factor: 0.9,
             continuous: false,
             kind: LoadKind::General,
@@ -349,7 +371,7 @@ impl Doc {
             kind: circuit_kind,
             phases,
             load,
-            length_m: 10.0,
+            length_m: None,
             has_neutral: false,
             overrides: Overrides::default(),
         });
@@ -360,7 +382,10 @@ impl Doc {
     /// Fases para un circuito nuevo del tipo de conexión dado: las menos
     /// cargadas de las que tiene el tablero, en orden A, B, C.
     pub fn default_phases(&self, panel: usize, kind: CircuitKind) -> Vec<Phase> {
-        let available: &[Phase] = match self.project.panels[panel].kind {
+        // Las fases de las barras: con transformador, las de su secundario.
+        let bars = ieestudio_project::connection::bars_kind(&self.project, panel)
+            .unwrap_or(self.project.panels[panel].kind);
+        let available: &[Phase] = match bars {
             CircuitKind::LineToNeutral => &[Phase::A],
             CircuitKind::LineToLine => &[Phase::A, Phase::B],
             CircuitKind::ThreePhase => &[Phase::A, Phase::B, Phase::C],
@@ -682,6 +707,58 @@ mod tests {
         }
         doc.recalculate();
         assert!(doc.result.is_ok(), "{:?}", doc.result.err());
+    }
+
+    /// Pendiente 19: lo nuevo nace sin potencia ni longitud y queda «Sin
+    /// evaluar» con lo que falta; nunca con valores supuestos.
+    #[test]
+    fn new_circuits_and_feeders_start_blank() {
+        let mut doc = Doc::new(ieestudio_project::example::house(), None);
+        doc.add_circuit_of(0, LoadKind::General);
+        let added = doc.project.panels[0].circuits.last().unwrap();
+        assert_eq!(added.load.power_w, None);
+        assert_eq!(added.length_m, None);
+        let id = added.id.clone();
+        let k = doc.add_subpanel(0);
+        assert_eq!(doc.project.panels[k].feeder.length_m, None);
+        doc.recalculate();
+        let result = doc.panel_result(0).unwrap();
+        let circuit = result.circuits.iter().find(|c| c.id == id).unwrap();
+        assert_eq!(circuit.status, ieestudio_project::Status::NotEvaluated);
+        assert!(circuit.checks[0].detail.contains("falta la potencia"));
+        assert!(result.load_unknown.is_some());
+        // Sin la carga de todos los circuitos no se balancea nada.
+        let phases: Vec<_> = doc.project.panels[0]
+            .circuits
+            .iter()
+            .map(|c| c.phases.clone())
+            .collect();
+        assert!(doc
+            .balance_phases(0)
+            .starts_with("No se balanceó: falta la potencia de"));
+        let after: Vec<_> = doc.project.panels[0]
+            .circuits
+            .iter()
+            .map(|c| c.phases.clone())
+            .collect();
+        assert_eq!(phases, after);
+    }
+
+    /// Pendiente 17: un tablero detrás de un elevador de una fase a 240/120 V
+    /// tiene barras de dos fases; un circuito nuevo puede ir entre fases.
+    #[test]
+    fn a_new_circuit_uses_the_phases_of_the_secondary() {
+        let project = ieestudio_project::Project::from_json(include_str!(
+            "../../../fixtures/auditoria-pr11/p17-secundario-con-otra-conexion.iees"
+        ))
+        .unwrap();
+        let tf = project.panels.iter().position(|p| p.id == "TF-1").unwrap();
+        assert_eq!(project.panels[tf].kind, CircuitKind::LineToNeutral);
+        let doc = Doc::new(project, None);
+        assert_eq!(
+            doc.default_phases(tf, CircuitKind::LineToLine),
+            vec![Phase::A, Phase::B]
+        );
     }
 
     #[test]

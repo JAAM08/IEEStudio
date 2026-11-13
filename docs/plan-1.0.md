@@ -153,6 +153,12 @@ El informe Fable demuestra que el programa puede mostrar 3.86 kA y «Cumple» pa
 > - **Cálculo de cortocircuito opcional por proyecto** (decisión 0032):
 >   encendido por omisión; apagado, la capacidad interruptiva queda «fuera
 >   de alcance» y la memoria lo anota. Implementado.
+> - **Etapa 2A/2C (decisión 0033):** la conexión del secundario sale de su
+>   topología declarada (17); circuitos y alimentadores nuevos nacen sin
+>   potencia ni longitud, 0 m es dato inválido y el archivo pasa al formato
+>   6 (19). El pendiente 20 (cuatro estados en cada verificación de los
+>   tramos) se difiere al rediseño: el dictamen y cada tramo ya distinguen
+>   faltante e inválido desde 1E, y lo que queda es de presentación.
 > - **El alcance de cortocircuito se congela después de 1F.** Un caso que no
 >   cubra queda «No concluyente: requiere estudio de cortocircuito».
 > - **En el rediseño de interfaz:** la captura del cortocircuito se reduce a

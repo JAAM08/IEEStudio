@@ -267,7 +267,7 @@ mod tests {
             .circuits
             .iter()
             .zip(&result.panels[0].circuits)
-            .map(|(c, r)| r.load_w / c.load.power_factor)
+            .map(|(c, r)| r.load_w.unwrap() / c.load.power_factor)
             .collect();
         let phases = balance(panel, &va);
         let mut balanced = project.clone();

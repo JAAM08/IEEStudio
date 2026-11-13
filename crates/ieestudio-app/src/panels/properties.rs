@@ -14,10 +14,10 @@ use super::Shared;
 use crate::state::{set_load_kind, Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{
-    blank_number, combo, combo_override, connection_picker, load_kind_hint, motor_hp_combo, muted,
-    number, optional_number, phase_picker, property, proposed_text, reset_button, section,
-    source_badge, status_text, strong, Source, CONDUITS, INSULATIONS, LOAD_KINDS, MATERIALS,
-    MOTOR_TYPES, NONLINEAR, NONLINEAR_HELP, SYSTEMS,
+    blank_number, blank_number_or_zero, combo, combo_override, connection_picker, load_kind_hint,
+    motor_hp_combo, muted, number, optional_number, phase_picker, property, proposed_text,
+    reset_button, section, source_badge, status_text, strong, Source, CONDUITS, INSULATIONS,
+    LOAD_KINDS, MATERIALS, MOTOR_TYPES, NONLINEAR, NONLINEAR_HELP, SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -359,7 +359,13 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         changed |= connection_picker(ui, p, &mut panel.kind, feeder_system, &feeder_kinds);
     });
     property(ui, p, "Longitud", |ui| {
-        changed |= number(ui, &mut panel.feeder.length_m, 0.5, 0.0, 5000.0, " m");
+        // Empieza vacía: nunca se supone una longitud (pendiente 19).
+        changed |= blank_number(
+            ui,
+            ("longitud-alimentador", i),
+            &mut panel.feeder.length_m,
+            "m",
+        );
     });
     if panel.kind != CircuitKind::LineToNeutral && feeder_system.line_to_neutral_v.is_some() {
         changed |= ui
@@ -660,7 +666,12 @@ fn secondary_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> 
         .size(11.0),
     );
     property(ui, p, "Longitud", |ui| {
-        changed |= blank_number(ui, "longitud-secundario", &mut t.secondary_length_m, "m");
+        changed |= blank_number(
+            ui,
+            ("longitud-secundario", i),
+            &mut t.secondary_length_m,
+            "m",
+        );
     });
     changed |= ui
         .checkbox(&mut t.secondary_has_neutral, "Lleva neutro")
@@ -726,7 +737,7 @@ pub(crate) fn circuit_form(
     let computed_w = doc
         .panel_result(i)
         .and_then(|r| r.circuits.get(c))
-        .map(|r| r.load_w);
+        .and_then(|r| r.load_w);
     // Lo que se necesita para la conexión, antes de tomar el circuito.
     let system = doc.bus_system(i);
     // Las fases de las barras: con transformador, las de su secundario.
@@ -827,7 +838,7 @@ pub(crate) fn circuit_form(
             {
                 circuit.load.outlets = (n > 0).then_some(n);
                 if n > 0 {
-                    circuit.load.power_w = unit * f64::from(n) * circuit.load.power_factor;
+                    circuit.load.power_w = Some(unit * f64::from(n) * circuit.load.power_factor);
                 }
                 changed = true;
             }
@@ -856,7 +867,8 @@ pub(crate) fn circuit_form(
         });
     } else {
         property(ui, p, "Potencia", |ui| {
-            changed |= number(ui, &mut circuit.load.power_w, 10.0, 0.0, 5.0e6, " W");
+            // Empieza vacía: nunca se supone una potencia (pendiente 19).
+            changed |= blank_number_or_zero(ui, ("potencia", i, c), &mut circuit.load.power_w, "W");
         });
     }
     if !guided {
@@ -885,7 +897,7 @@ pub(crate) fn circuit_form(
     }
     section(ui, p, "Instalación");
     property(ui, p, "Longitud", |ui| {
-        changed |= number(ui, &mut circuit.length_m, 0.5, 0.0, 5000.0, " m");
+        changed |= blank_number(ui, ("longitud-circuito", i, c), &mut circuit.length_m, "m");
     });
     if !guided {
         section(ui, p, "Interruptor (catálogo)");
@@ -1912,6 +1924,12 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab
 
 /// Carga del alimentador por grupo: de lo conectado a lo calculado.
 fn demand_results(ui: &mut egui::Ui, p: &Palette, panel: &ieestudio_project::PanelResult) {
+    // Una suma parcial no es la carga del tablero (pendiente 19).
+    if let Some(why) = &panel.load_unknown {
+        section(ui, p, "Carga (artículo 220)");
+        ui.label(muted(p, format!("Sin conocer: {why}.")).size(11.5));
+        return;
+    }
     if panel.demand.is_empty() {
         return;
     }
@@ -2013,7 +2031,13 @@ fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
         ui.horizontal(|ui| {
             ui.label(&panel.name);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(RichText::new(format!("{:.0} W", panel.demanded_w)).monospace());
+                ui.label(
+                    RichText::new(match panel.load_unknown {
+                        None => format!("{:.0} W", panel.demanded_w),
+                        Some(_) => "sin conocer".to_string(),
+                    })
+                    .monospace(),
+                );
             });
         });
     }

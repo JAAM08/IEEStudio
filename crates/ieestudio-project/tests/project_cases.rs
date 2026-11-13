@@ -156,7 +156,7 @@ fn project_round_trips_through_json() {
     close(p.settings.total_drop_limit_percent, 5.0);
     assert!(Project::from_json("{").is_err());
     assert!(
-        Project::from_json(&json.replace("\"format_version\": 5", "\"format_version\": 99"))
+        Project::from_json(&json.replace("\"format_version\": 6", "\"format_version\": 99"))
             .is_err()
     );
 }
@@ -176,7 +176,7 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 interrupting_ka: Default::default(),
-                length_m: 40.0,
+                length_m: Some(40.0),
                 demand: Demand::Custom(0.8),
                 demand_factor: None,
                 has_neutral: true,
@@ -199,7 +199,7 @@ fn industrial() -> Project {
             kind: CircuitKind::ThreePhase,
             feeder: Feeder {
                 interrupting_ka: Default::default(),
-                length_m: 60.0,
+                length_m: Some(60.0),
                 demand: Demand::Article220,
                 demand_factor: None,
                 has_neutral: false,
@@ -217,7 +217,7 @@ fn industrial() -> Project {
                 kind: CircuitKind::ThreePhase,
                 phases: vec![],
                 load: Load {
-                    power_w: 90_000.0,
+                    power_w: Some(90_000.0),
                     power_factor: 1.0,
                     continuous: true,
                     kind: LoadKind::General,
@@ -226,7 +226,7 @@ fn industrial() -> Project {
                     compressor: None,
                     confirmed_general: false,
                 },
-                length_m: 25.0,
+                length_m: Some(25.0),
                 has_neutral: false,
                 overrides: Overrides {
                     // Dato declarado del caso: carga lineal (decisión 0030, T-6).
@@ -268,6 +268,103 @@ fn subpanels_add_load_and_voltage_drop_upstream() {
         f.cumulative_drop_percent + oven.drop_percent,
     );
     assert!(oven.cumulative_drop_percent <= 5.0);
+}
+
+/// Pendiente 19 (decisión 0033): la carga de un tablero no se suma a
+/// medias. Si a un circuito le falta la potencia, el alimentador de su
+/// tablero y los de todos los tableros de arriba quedan «Sin evaluar» con
+/// el circuito que falta; nunca se calculan con una carga parcial.
+#[test]
+fn a_missing_power_leaves_every_feeder_upstream_unevaluated() {
+    let mut project = industrial();
+    let force = project.panels.iter().position(|p| p.id == "TF-1").unwrap();
+    project.panels[force].circuits[0].load.power_w = None;
+    let result = calculate(&project).unwrap();
+    for id in ["TF-1", "TGN"] {
+        let panel = result.panels.iter().find(|p| p.id == id).unwrap();
+        // La suma parcial no se presenta como la carga del tablero.
+        assert!(panel
+            .load_unknown
+            .as_deref()
+            .is_some_and(|w| w.contains("F-01 de TF-1")));
+        assert_eq!(panel.imbalance_percent, None);
+        assert_eq!(panel.feeder.status, Status::NotEvaluated, "{id}");
+        assert!(panel.feeder.run.is_none(), "{id}");
+        assert_eq!(panel.feeder.load_w, None, "{id}");
+        assert!(!panel.feeder.invalid_data, "{id}");
+        assert_eq!(
+            panel.feeder.checks[0].detail,
+            "falta la potencia del circuito F-01 de TF-1; sin ella no se conoce la carga del tablero"
+        );
+    }
+    let f01 = circuit(&result.panels[force].circuits, "F-01");
+    assert_eq!(f01.status, Status::NotEvaluated);
+    assert_eq!(f01.checks[0].detail, "falta la potencia de la carga");
+
+    // Una potencia negativa es un dato inválido, también para el alimentador.
+    project.panels[force].circuits[0].load.power_w = Some(-5.0);
+    let result = calculate(&project).unwrap();
+    let f01 = circuit(&result.panels[force].circuits, "F-01");
+    assert!(f01.invalid_data);
+    assert!(f01.checks[0]
+        .detail
+        .starts_with("dato inválido: la potencia de la carga no puede ser negativa"));
+    let tgn = result.panels.iter().find(|p| p.id == "TGN").unwrap();
+    assert!(tgn.feeder.invalid_data);
+    assert!(tgn.feeder.checks[0]
+        .detail
+        .contains("la potencia del circuito F-01 de TF-1 no es válida"));
+}
+
+/// Un alimentador sin longitud queda «Sin evaluar»; uno de 0 m o negativo
+/// es un dato inválido. Nunca se supone una longitud.
+#[test]
+fn a_feeder_without_length_is_not_sized() {
+    let mut project = example::house();
+    project.panels[0].feeder.length_m = None;
+    let result = calculate(&project).unwrap();
+    let feeder = &result.panels[0].feeder;
+    assert_eq!(feeder.status, Status::NotEvaluated);
+    assert!(!feeder.invalid_data);
+    assert_eq!(feeder.checks[0].detail, "falta la longitud del alimentador");
+    assert_eq!(result.panels[0].load_unknown, None);
+    // La carga sí se conoce: se dice aunque el tramo no se calcule.
+    assert!(feeder.load_w.is_some());
+    for length in [0.0, -3.0] {
+        project.panels[0].feeder.length_m = Some(length);
+        let result = calculate(&project).unwrap();
+        let feeder = &result.panels[0].feeder;
+        assert!(feeder.invalid_data, "{length}");
+        assert!(feeder.checks[0]
+            .detail
+            .contains("la longitud del alimentador debe ser mayor que cero"));
+    }
+}
+
+/// Un motor o un aire acondicionado toman la potencia de sus datos de
+/// placa: no necesitan la capturada.
+#[test]
+fn equipment_does_not_need_a_captured_power() {
+    let mut project = example::house();
+    let before = calculate(&project).unwrap();
+    for c in &mut project.panels[0].circuits {
+        if c.load.motor.is_some() || c.load.compressor.is_some() {
+            c.load.power_w = None;
+        }
+    }
+    let after = calculate(&project).unwrap();
+    assert_eq!(
+        after.panels[0].feeder.load_w,
+        before.panels[0].feeder.load_w
+    );
+    for (a, b) in after.panels[0]
+        .circuits
+        .iter()
+        .zip(&before.panels[0].circuits)
+    {
+        assert_eq!(a.status, b.status, "{}", a.id);
+        assert_eq!(a.load_w, b.load_w, "{}", a.id);
+    }
 }
 
 #[test]
@@ -398,7 +495,7 @@ fn motor_circuit(id: &str, hp: &str, length_m: f64) -> Circuit {
         kind: CircuitKind::ThreePhase,
         phases: vec![],
         load: Load {
-            power_w: 0.0,
+            power_w: Some(0.0),
             power_factor: 0.85,
             continuous: false,
             kind: LoadKind::Motor,
@@ -412,7 +509,7 @@ fn motor_circuit(id: &str, hp: &str, length_m: f64) -> Circuit {
             compressor: None,
             confirmed_general: false,
         },
-        length_m,
+        length_m: Some(length_m),
         has_neutral: false,
         overrides: Overrides {
             // Dato declarado del caso: carga lineal (decisión 0030, T-6).
@@ -434,7 +531,7 @@ fn motor_panel() -> Project {
         kind: CircuitKind::ThreePhase,
         phases: vec![],
         load: Load {
-            power_w: 3000.0,
+            power_w: Some(3000.0),
             power_factor: 1.0,
             continuous: true,
             kind: LoadKind::Lighting,
@@ -443,7 +540,7 @@ fn motor_panel() -> Project {
             compressor: None,
             confirmed_general: false,
         },
-        length_m: 10.0,
+        length_m: Some(10.0),
         has_neutral: false,
         overrides: Overrides {
             // Dato declarado del caso: carga lineal (decisión 0030, T-6).
@@ -460,7 +557,7 @@ fn motor_panel() -> Project {
         kind: CircuitKind::ThreePhase,
         feeder: Feeder {
             interrupting_ka: Default::default(),
-            length_m: 10.0,
+            length_m: Some(10.0),
             demand: Demand::Article220,
             demand_factor: None,
             has_neutral: false,
@@ -575,7 +672,7 @@ fn a_fixed_breaker_must_cover_the_design_current() {
 fn a_motor_without_data_is_not_evaluated() {
     let mut project = motor_panel();
     project.panels[0].circuits[0].load.motor = None;
-    project.panels[0].circuits[0].load.power_w = 7460.0;
+    project.panels[0].circuits[0].load.power_w = Some(7460.0);
     let result = calculate(&project).unwrap();
     let m10 = circuit(&result.panels[0].circuits, "M-10");
     assert_eq!(m10.status, Status::NotEvaluated);
@@ -594,6 +691,30 @@ fn a_motor_without_data_is_not_evaluated() {
     let result = calculate(&project).unwrap();
     let m10 = circuit(&result.panels[0].circuits, "M-10");
     assert_eq!(m10.status, Status::NotEvaluated);
+}
+
+/// Un motor sin sus datos y sin potencia capturada no se calcula como carga
+/// general: queda «Sin evaluar» con lo que le falta (pendiente 19).
+#[test]
+fn a_motor_without_data_or_power_is_not_sized() {
+    let mut project = motor_panel();
+    let m = &mut project.panels[0].circuits[0];
+    m.load.motor.as_mut().unwrap().hp = String::new();
+    m.load.power_w = None;
+    let result = calculate(&project).unwrap();
+    let m10 = circuit(&result.panels[0].circuits, "M-10");
+    assert_eq!(m10.status, Status::NotEvaluated);
+    assert!(m10.run.is_none());
+    assert_eq!(m10.load_w, None);
+    assert!(m10
+        .checks
+        .iter()
+        .all(|c| !c.detail.contains("carga general")));
+    assert!(
+        m10.checks[0].detail.contains("potencia del motor"),
+        "{}",
+        m10.checks[0].detail
+    );
 }
 
 /// Sin datos de la fuente la capacidad interruptiva queda fuera del alcance
@@ -643,12 +764,12 @@ fn grounding_electrode_follows_the_service_conductor() {
 fn large_feeders_go_parallel() {
     let mut project = motor_panel();
     let circuit = &mut project.panels[0].circuits[2];
-    circuit.load.power_w = 170_000.0;
+    circuit.load.power_w = Some(170_000.0);
     circuit.load.kind = LoadKind::General;
     circuit.load.continuous = true;
     project.panels[0].circuits.truncate(3);
     project.panels[0].circuits.drain(0..2);
-    project.panels[0].feeder.length_m = 5.0;
+    project.panels[0].feeder.length_m = Some(5.0);
     project.panels[0].areas.clear();
     let result = calculate(&project).unwrap();
     let panel = &result.panels[0];
@@ -692,9 +813,9 @@ fn transformer_project() -> Project {
     let mut project = industrial();
     let force = &mut project.panels[1];
     force.name = "Tablero de servicios".into();
-    force.circuits[0].load.power_w = 20_000.0;
+    force.circuits[0].load.power_w = Some(20_000.0);
     force.circuits[0].load.continuous = false;
-    force.feeder.length_m = 20.0;
+    force.feeder.length_m = Some(20.0);
     force.transformer = Some(ieestudio_project::Transformer {
         brand: Default::default(),
         connection: Default::default(),
@@ -1350,7 +1471,7 @@ fn a_two_phase_transformer_uses_its_single_phase_current() {
     tf.transformer.as_mut().unwrap().secondary_has_neutral = false;
     tf.circuits[0].kind = CircuitKind::LineToLine;
     tf.circuits[0].has_neutral = false;
-    tf.circuits[0].load.power_w = 5000.0;
+    tf.circuits[0].load.power_w = Some(5000.0);
     let result = calculate(&project).unwrap();
     let tf = panel(&result, "TF-1");
     close(
@@ -1691,7 +1812,7 @@ fn voltage_and_fault_propagate_through_several_panels() {
     lamp.phases = vec![ieestudio_project::Phase::A];
     lamp.has_neutral = true;
     lamp.load = Load {
-        power_w: 1270.0,
+        power_w: Some(1270.0),
         power_factor: 1.0,
         continuous: false,
         kind: LoadKind::Lighting,

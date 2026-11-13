@@ -660,43 +660,53 @@ fn panel_header(project: &Project, panel: usize, result: &PanelResult) -> Vec<(S
     } else {
         result.connected_w
     };
-    vec![
-        (
-            format!("{}  «{}»", p.id, p.name.to_uppercase()),
-            Font::Bold,
-            Ink::Accent,
-        ),
-        (
-            format!(
-                "{:.3} kVA ({:.3} kW) INSTALADOS",
-                installed_va / 1000.0,
-                result.connected_w / 1000.0
-            ),
+    // Una suma parcial no es la carga del tablero (pendiente 19).
+    let load = if result.load_unknown.is_some() {
+        vec![(
+            "CARGA SIN CONOCER: FALTA LA POTENCIA DE ALGÚN CIRCUITO".to_string(),
             Font::Regular,
             Ink::Text,
-        ),
-        (
-            format!(
-                "{:.3} kVA ({:.3} kW) DEMANDADOS, F.D. {:.2}",
-                result.demanded_va / 1000.0,
-                result.demanded_w / 1000.0,
-                result.demand_factor
+        )]
+    } else {
+        vec![
+            (
+                format!(
+                    "{:.3} kVA ({:.3} kW) INSTALADOS",
+                    installed_va / 1000.0,
+                    result.connected_w / 1000.0
+                ),
+                Font::Regular,
+                Ink::Text,
             ),
-            Font::Regular,
-            Ink::Text,
-        ),
-        (
-            format!(
-                "{}, {}{}",
-                voltage_label(&system),
-                kind_wires(p.kind, p.feeder.has_neutral),
-                frequency(project)
+            (
+                format!(
+                    "{:.3} kVA ({:.3} kW) DEMANDADOS, F.D. {:.2}",
+                    result.demanded_va / 1000.0,
+                    result.demanded_w / 1000.0,
+                    result.demand_factor
+                ),
+                Font::Regular,
+                Ink::Text,
             ),
-            Font::Regular,
-            Ink::Text,
-        ),
-    ]
+        ]
+    };
+    vec![(
+        format!("{}  «{}»", p.id, p.name.to_uppercase()),
+        Font::Bold,
+        Ink::Accent,
+    )]
     .into_iter()
+    .chain(load)
+    .chain(vec![(
+        format!(
+            "{}, {}{}",
+            voltage_label(&system),
+            kind_wires(p.kind, p.feeder.has_neutral),
+            frequency(project)
+        ),
+        Font::Regular,
+        Ink::Text,
+    )])
     .chain(board_line(&p.board))
     .chain(result.fault.as_ref().map(|f| {
         (
@@ -1108,8 +1118,11 @@ impl Layout<'_> {
                                 circuit.id.clone(),
                                 shorten(&name, 24),
                                 format!(
-                                    "{:.3} kW · {}",
-                                    item.load_w / 1000.0,
+                                    "{} · {}",
+                                    item.load_w.map_or_else(
+                                        || "sin potencia".to_string(),
+                                        |w| format!("{:.3} kW", w / 1000.0)
+                                    ),
                                     connection_label(circuit.kind, circuit.has_neutral, &system)
                                 ),
                             ],
@@ -1133,8 +1146,11 @@ impl Layout<'_> {
                                 cp.id.clone(),
                                 shorten(&cp.name.to_uppercase(), 24),
                                 format!(
-                                    "{:.3} kW · {}",
-                                    cr.demanded_w / 1000.0,
+                                    "{} · {}",
+                                    match cr.load_unknown {
+                                        None => format!("{:.3} kW", cr.demanded_w / 1000.0),
+                                        Some(_) => "carga sin conocer".to_string(),
+                                    },
                                     connection_label(cp.kind, cp.feeder.has_neutral, &system)
                                 ),
                             ],

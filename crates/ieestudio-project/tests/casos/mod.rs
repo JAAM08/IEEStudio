@@ -27,7 +27,7 @@ pub fn lighting(id: &str, kind: CircuitKind, phases: &[Phase], watts: f64) -> Ci
         kind,
         phases: phases.to_vec(),
         load: Load {
-            power_w: watts,
+            power_w: Some(watts),
             power_factor: 1.0,
             continuous: false,
             kind: LoadKind::Lighting,
@@ -36,7 +36,7 @@ pub fn lighting(id: &str, kind: CircuitKind, phases: &[Phase], watts: f64) -> Ci
             compressor: None,
             confirmed_general: false,
         },
-        length_m: 10.0,
+        length_m: Some(10.0),
         has_neutral: kind == CircuitKind::LineToNeutral,
         overrides: Overrides {
             // Dato declarado del caso: carga lineal (decisión 0030, T-6).
@@ -54,7 +54,7 @@ pub fn motor(id: &str, name: &str, hp: &str) -> Circuit {
         kind: CircuitKind::ThreePhase,
         phases: vec![],
         load: Load {
-            power_w: 0.0,
+            power_w: Some(0.0),
             power_factor: 0.85,
             continuous: false,
             kind: LoadKind::Motor,
@@ -68,7 +68,7 @@ pub fn motor(id: &str, name: &str, hp: &str) -> Circuit {
             compressor: None,
             confirmed_general: false,
         },
-        length_m: 15.0,
+        length_m: Some(15.0),
         has_neutral: false,
         overrides: Overrides {
             // Dato declarado del caso: carga lineal (decisión 0030, T-6).
@@ -89,7 +89,7 @@ pub fn board(id: &str, parent: Option<&str>, kind: CircuitKind) -> Panel {
         kind,
         feeder: Feeder {
             interrupting_ka: None,
-            length_m: 15.0,
+            length_m: Some(15.0),
             demand: Demand::Full,
             demand_factor: None,
             has_neutral: true,
@@ -241,7 +241,7 @@ pub fn h03_bombas(as_motor: bool) -> Project {
         let mut c = motor(id, "Bomba 50 hp", "50");
         if !as_motor {
             c.load = Load {
-                power_w: 37_300.0,
+                power_w: Some(37_300.0),
                 power_factor: 0.85,
                 continuous: false,
                 kind: LoadKind::General,
@@ -402,7 +402,7 @@ pub fn p17_secundario_con_otra_conexion() -> Project {
 /// Pendiente 19: un circuito con longitud de 0 m.
 pub fn p19_longitud_cero() -> Project {
     let mut p = single_board(System::WYE_220_127, CircuitKind::ThreePhase);
-    p.panels[0].circuits[0].length_m = 0.0;
+    p.panels[0].circuits[0].length_m = Some(0.0);
     p
 }
 
@@ -470,7 +470,7 @@ pub fn p31_punto_a_punto() -> Project {
     sub.mounting = Some(Mounting::PadMounted);
     project.source.substation = Some(sub);
     let conductor = |size: &str, n: u32, m: f64, feeder: &mut Feeder| {
-        feeder.length_m = m;
+        feeder.length_m = Some(m);
         feeder.overrides.size = Some(ieestudio_core::Size::new(size));
         feeder.overrides.conductors_per_phase = Some(n);
         feeder.overrides.conduit = Some(ieestudio_core::ConduitType::Pvc40);

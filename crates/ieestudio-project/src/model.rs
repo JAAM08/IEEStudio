@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 /// en tres estados (decisión 0030). De un archivo anterior, un sistema toma
 /// la topología solo si sus tensiones son las de un sistema de la interfaz,
 /// y «carga no lineal: no», que era el valor de fábrica, queda sin capturar.
-pub const FORMAT_VERSION: u32 = 5;
+pub const FORMAT_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Project {
@@ -446,7 +446,10 @@ pub enum Demand {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Feeder {
-    pub length_m: f64,
+    /// Longitud del alimentador, en metros. Sin capturar queda «Sin evaluar»;
+    /// nunca se supone (formato 6). Los archivos anteriores conservan la suya.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length_m: Option<f64>,
     #[serde(default)]
     pub demand: Demand,
     /// Factor de demanda de los archivos de formato 1 y 2. Al leerlos se
@@ -473,7 +476,10 @@ pub struct Circuit {
     #[serde(default)]
     pub phases: Vec<Phase>,
     pub load: Load,
-    pub length_m: f64,
+    /// Longitud del circuito, en metros. Sin capturar queda «Sin evaluar»;
+    /// nunca se supone (formato 6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length_m: Option<f64>,
     /// Lleva neutro además de las fases. En un circuito de una fase siempre lo lleva.
     #[serde(default)]
     pub has_neutral: bool,
@@ -483,8 +489,11 @@ pub struct Circuit {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Load {
-    /// Potencia activa, en watts.
-    pub power_w: f64,
+    /// Potencia activa, en watts. Sin capturar queda «Sin evaluar»; nunca se
+    /// supone (formato 6). Un motor o un aire acondicionado la toman de sus
+    /// datos de placa.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_w: Option<f64>,
     pub power_factor: f64,
     /// Carga continua: opera a su corriente máxima tres horas o más.
     #[serde(default)]
@@ -773,7 +782,7 @@ mod tests {
     fn a_format_3_fault_datum_has_no_location() {
         let json = crate::example::house()
             .to_json()
-            .replacen("\"format_version\": 5", "\"format_version\": 3", 1)
+            .replacen("\"format_version\": 6", "\"format_version\": 3", 1)
             .replacen(
                 "\"source\": {",
                 "\"source\": {\n    \"fault\": { \"available_ka\": 10.0 },",
@@ -784,9 +793,41 @@ mod tests {
         assert_eq!(read.source.fault.location, None);
         read.source.fault.location = Some(FaultLocation::Primary);
         let written = read.to_json();
-        assert!(written.contains("\"format_version\": 5"));
+        assert!(written.contains("\"format_version\": 6"));
         assert!(written.contains("\"location\": \"Primary\""));
         assert_eq!(Project::from_json(&written).unwrap().to_json(), written);
+    }
+
+    /// Formato 6 (decisión 0033): la potencia y la longitud pueden quedar sin
+    /// capturar. Un archivo del formato 5 conserva lo que tenía guardado,
+    /// incluso un 0, que ahora se marca como dato inválido al calcular; uno
+    /// del 6 sin ellas las lee como faltantes y así las vuelve a escribir.
+    #[test]
+    fn format_6_keeps_saved_values_and_missing_ones() {
+        let house = crate::example::house();
+        let old = house
+            .to_json()
+            .replacen("\"format_version\": 6", "\"format_version\": 5", 1);
+        let read = Project::from_json(&old).unwrap();
+        assert_eq!(read.panels, house.panels);
+        assert!(read.panels[0].feeder.length_m.is_some());
+        assert!(read.panels[0].circuits.iter().all(|c| c.length_m.is_some()));
+
+        let mut blank = house.clone();
+        blank.panels[0].feeder.length_m = None;
+        blank.panels[0].circuits[0].length_m = None;
+        blank.panels[0].circuits[0].load.power_w = None;
+        let json = blank.to_json();
+        let read = Project::from_json(&json).unwrap();
+        assert_eq!(read, blank);
+        assert_eq!(read.to_json(), json);
+        assert_eq!(read.panels[0].circuits[0].load.power_w, None);
+
+        let zero = old.replacen("\"length_m\": 12.0", "\"length_m\": 0.0", 1);
+        assert_ne!(zero, old);
+        let read = Project::from_json(&zero).unwrap();
+        assert!(read.panels.iter().any(|p| p.feeder.length_m == Some(0.0)
+            || p.circuits.iter().any(|c| c.length_m == Some(0.0))));
     }
 
     /// Un archivo de un formato más nuevo no se abre a medias: el error dice
@@ -794,15 +835,15 @@ mod tests {
     #[test]
     fn a_newer_format_is_refused() {
         let json = crate::example::house().to_json().replacen(
-            "\"format_version\": 5",
             "\"format_version\": 6",
+            "\"format_version\": 7",
             1,
         );
         let error = Project::from_json(&json).unwrap_err();
-        assert!(error.contains("formato 6, más nuevo"), "{error}");
+        assert!(error.contains("formato 7, más nuevo"), "{error}");
         let changed = json.replacen("\"name\": \"Acometida\"", "\"name\": 7", 1);
         let error = Project::from_json(&changed).unwrap_err();
-        assert!(error.contains("formato 6, más nuevo"), "{error}");
+        assert!(error.contains("formato 7, más nuevo"), "{error}");
     }
 
     /// Un archivo del formato 4 no guardaba la topología: la toma solo un

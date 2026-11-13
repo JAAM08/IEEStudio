@@ -38,6 +38,7 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0030 | [Topología declarada y coherencia de conexiones (H-04, H-05)](0030-topologia-declarada-y-coherencia-de-conexiones.md) | Aceptada; N-1 a N-3 en pausa |
 | 0031 | [Falla en cada tablero descontando los conductores (punto a punto)](0031-falla-en-cada-tablero-punto-a-punto.md) | Aceptada; implementada en la etapa 1F |
 | 0032 | [Cálculo de cortocircuito opcional por proyecto](0032-calculo-de-cortocircuito-opcional.md) | Aceptada |
+| 0033 | [Conexión del secundario, datos de captura y estados de los tramos (pendientes 17, 19 y 20)](0033-secundario-captura-y-estados.md) | Aceptada; 17 y 19 implementados, 20 diferido al rediseño |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`. Las auditorías del
 PR #11 están en `../auditoria-modelo-y-falla.md` (Opus) y
