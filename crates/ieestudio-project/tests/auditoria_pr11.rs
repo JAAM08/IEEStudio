@@ -1036,7 +1036,6 @@ fn h07_un_dato_invalido_encabeza_como_dato_invalido() {
 /// como «1 motor sin datos» en el punto de conexión, pero la lista del
 /// estudio (la que usa la memoria) no lo tiene.
 #[test]
-#[ignore = "H-12 abierto"]
 fn h12_un_solo_conteo_de_motores_sin_datos() {
     let result = calc(&casos::h12_motor_detras_de_transformador_sin_datos());
     let study = result.fault.as_ref().unwrap();
@@ -1054,7 +1053,6 @@ fn h12_un_solo_conteo_de_motores_sin_datos() {
 /// H-13 (bajo). La referencia de la aportación de motores todavía dice que
 /// se suma «en cada tablero»; desde la decisión 0028 es por zona de tensión.
 #[test]
-#[ignore = "H-13 abierto"]
 fn h13_la_referencia_de_motores_habla_de_zonas() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../data/nom-001-sede-2012/references.csv");
@@ -1071,7 +1069,6 @@ fn h13_la_referencia_de_motores_habla_de_zonas() {
 /// pero también entra en la falla. El minisplit del ejemplo (C-03) solo
 /// tiene la ampacidad mínima.
 #[test]
-#[ignore = "H-15 abierto"]
 fn h15_la_nota_del_compresor_menciona_la_falla() {
     let result = calc(&ieestudio_project::example::house());
     let c03 = result.panels[0]
@@ -1098,7 +1095,6 @@ fn h15_la_nota_del_compresor_menciona_la_falla() {
 /// (220/127 V) con el secundario (127 V) en vez de la tensión de la
 /// conexión.
 #[test]
-#[ignore = "H-16 abierto"]
 fn h16_un_aislamiento_127_se_marca_uno_a_uno() {
     let result = calc(&casos::h16_aislamiento_127());
     assert!(

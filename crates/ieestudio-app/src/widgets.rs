@@ -273,31 +273,42 @@ fn blank_number_at(ui: &mut egui::Ui, id: egui::Id, value: &mut Option<f64>, suf
         .unwrap_or_else(|| shown(value));
     let mut changed = false;
     ui.horizontal(|ui| {
-        let response = ui.add(
-            egui::TextEdit::singleline(&mut text)
-                .desired_width(80.0)
-                .hint_text("Sin dato"),
-        );
+        // Lo escrito que no se puede guardar se marca y se explica; nunca
+        // se ignora en silencio (H-17).
+        let rejection = rejected(&text);
+        let mut edit = egui::TextEdit::singleline(&mut text)
+            .desired_width(80.0)
+            .hint_text("Sin dato");
+        if rejection.is_some() {
+            edit = edit.text_color(ui.visuals().error_fg_color);
+        }
+        let response = ui.add(edit);
         ui.label(suffix.trim());
         if response.changed() {
-            let trimmed = text.trim().replace(',', ".");
-            let parsed = if trimmed.is_empty() {
-                Some(None)
-            } else {
-                trimmed
-                    .parse::<f64>()
-                    .ok()
-                    .filter(|x| x.is_finite() && *x > 0.0)
-                    .map(Some)
-            };
-            if let Some(new) = parsed {
+            if let Some(new) = parse_positive(&text) {
                 if new != *value {
                     *value = new;
                     changed = true;
                 }
             }
         }
-        if response.has_focus() {
+        if let Some(why) = rejected(&text) {
+            ui.label(
+                RichText::new(format!(
+                    "{} {why}; se conserva {}",
+                    icon::WARNING,
+                    match value {
+                        Some(v) => format!("{v}{suffix}"),
+                        None => "sin dato".to_string(),
+                    }
+                ))
+                .color(ui.visuals().error_fg_color)
+                .size(11.5),
+            );
+        }
+        if response.has_focus() || rejected(&text).is_some() {
+            // Mientras se edita, o si lo escrito no se pudo guardar, se
+            // conserva el texto para que se vea qué se rechazó.
             ui.data_mut(|d| d.insert_temp(id, text.clone()));
         } else {
             // Fuera de edición se muestra el dato guardado, también tras
@@ -306,6 +317,32 @@ fn blank_number_at(ui: &mut egui::Ui, id: egui::Id, value: &mut Option<f64>, suf
         }
     });
     changed
+}
+
+/// Lo escrito como número positivo: `Some(None)` si está vacío, `None` si no
+/// se puede guardar. Acepta coma decimal.
+fn parse_positive(text: &str) -> Option<Option<f64>> {
+    let trimmed = text.trim().replace(',', ".");
+    if trimmed.is_empty() {
+        return Some(None);
+    }
+    trimmed
+        .parse::<f64>()
+        .ok()
+        .filter(|x| x.is_finite() && *x > 0.0)
+        .map(Some)
+}
+
+/// Por qué no se guarda lo escrito, o `None` si se puede guardar.
+fn rejected(text: &str) -> Option<&'static str> {
+    if parse_positive(text).is_some() {
+        return None;
+    }
+    let trimmed = text.trim().replace(',', ".");
+    Some(match trimmed.parse::<f64>() {
+        Ok(x) if x.is_finite() => "debe ser mayor que cero",
+        _ => "no es un número",
+    })
 }
 
 /// Potencia de un motor, de las que trae su tabla (430-248 o 430-250).
@@ -792,4 +829,22 @@ pub fn trace_ui(
             ui.add_space(2.0);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// H-17: lo que no se guarda dice por qué.
+    #[test]
+    fn rejected_values_say_why() {
+        assert_eq!(rejected(""), None);
+        assert_eq!(rejected("2,5"), None);
+        assert_eq!(rejected("0"), Some("debe ser mayor que cero"));
+        assert_eq!(rejected("-3"), Some("debe ser mayor que cero"));
+        assert_eq!(rejected("tres"), Some("no es un número"));
+        assert_eq!(parse_positive("2,5"), Some(Some(2.5)));
+        assert_eq!(parse_positive(" "), Some(None));
+        assert_eq!(parse_positive("0"), None);
+    }
 }

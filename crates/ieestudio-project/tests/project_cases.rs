@@ -1163,8 +1163,9 @@ fn motors_contribute_by_voltage_zone() {
     close(tf.total_ka, tf.base_ka + 0.112);
 
     // Punto de conexión: 25 kA del dato más 4 · 14 = 56 A directos y lo que
-    // llega por el transformador: Ib₁ = 54.13 A, Ib₂ = 118.09 A,
-    // 54.13 / (0.027 + 118.09 / 112) = 50.05 A. Total 106.05 A.
+    // llega por el transformador: Ib₁ = 54.13 A, Ib₂ = 118.09 A, en
+    // cuadratura (0029, D-4): 54.13 / √(0.027² + (118.09 / 112)²) = 51.32 A.
+    // Total 107.32 A.
     let source = study.source.as_ref().unwrap();
     assert_eq!(
         source.origin,
@@ -1175,9 +1176,9 @@ fn motors_contribute_by_voltage_zone() {
     assert_eq!(m.through.len(), 1);
     assert_eq!(m.through[0].panel, "TF-1");
     close(m.through[0].downstream_a, 112.0);
-    close(m.through[0].contribution_a, 50.05);
-    close(m.total_a, 106.05);
-    close(source.total_ka, 25.10605);
+    close(m.through[0].contribution_a, 51.3165);
+    close(m.total_a, 107.3165);
+    close(source.total_ka, 25.10732);
     // TGN está en la zona de la fuente: su falla, menos su alimentador.
     let tgn = panel(&result, "TGN").fault.as_ref().unwrap();
     close(tgn.base_ka, point_to_point(tgn, 480.0 / 3f64.sqrt(), 1.0));
@@ -1483,7 +1484,8 @@ fn low_voltage_service_with_the_supplier_fault() {
 /// Transformador de la acometida (500 kVA, 5.75 %, 480Y/277 V) y un
 /// transformador propio aguas abajo: cada zona con su bus infinito.
 /// Acometida: 601.41 A / 0.05175 = 11.6214 kA; con 56 A de motores de 480 V
-/// y 50.05 A de los de 220 V, 11.7274 kA. TF-1: 4.4859 kA.
+/// y 51.32 A de los de 220 V (en cuadratura, 0029 D-4), 11.7287 kA. TF-1:
+/// 4.4859 kA en sus terminales.
 #[test]
 fn service_transformer_and_an_own_transformer_downstream() {
     let mut project = two_levels();
@@ -1503,7 +1505,7 @@ fn service_transformer_and_an_own_transformer_downstream() {
         ieestudio_project::fault::FaultOrigin::Substation
     );
     close(source.base_ka, 11.6214);
-    close(source.total_ka, 11.7274);
+    close(source.total_ka, 11.7287);
     let tf = panel(&result, "TF-1").fault.as_ref().unwrap();
     close(tf.total_ka, 4.4859);
     // Dos equipos distintos: el intermedio no sale de la acometida.

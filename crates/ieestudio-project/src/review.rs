@@ -176,8 +176,19 @@ pub fn duplicate_flags(project: &Project) -> Vec<DuplicateFlag> {
             continue;
         }
         let primary = crate::connection::feeder_system(project, i);
-        let one_to_one = primary.line_to_line_v == t.secondary.line_to_line_v
+        // 1:1 si el secundario tiene el mismo sistema que el primario, o si
+        // la tensión de la conexión es la misma de los dos lados: un
+        // aislamiento de 127 a 127 V que sale de un tablero 220Y/127 V (H-16).
+        let same_system = primary.line_to_line_v == t.secondary.line_to_line_v
             && primary.line_to_neutral_v == t.secondary.line_to_neutral_v;
+        let same_connection = match (
+            panel.kind.reference_voltage(&primary),
+            panel.kind.reference_voltage(&t.secondary),
+        ) {
+            (Ok(v1), Ok(v2)) => v1 == v2,
+            _ => false,
+        };
+        let one_to_one = same_system || same_connection;
         let service = project.source.substation.as_ref();
         let beside_service = panel.parent.is_none() && service.is_some();
         let same_rating = service

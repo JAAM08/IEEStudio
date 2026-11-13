@@ -13,7 +13,9 @@ formato 4. D-3 en la etapa 1C: una «Otra carga» con nombre de motor sin
 confirmar deja su zona no concluyente, y «Es otra carga» se guarda en el
 circuito (`confirmed_general`). D-6 en la etapa 1E: el dictamen tiene los
 cuatro encabezados y lo inválido se cuenta aparte de lo que falta. La
-impedancia de media bobina queda pendiente.
+impedancia de media bobina queda pendiente. D-4 (H-18) en la etapa 2B: la
+aportación de motores a través de un transformador se combina en
+cuadratura.
 
 **Precisión de la etapa 1B.** En un secundario 1F-3H con el dato en media
 tensión, la combinación de la red con la media bobina no está definida aquí:

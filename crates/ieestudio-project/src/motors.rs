@@ -338,7 +338,7 @@ fn compressor(
             "Corriente de carga nominal o de selección del circuito derivado de la placa, la mayor."
                 .into()
         } else {
-            "Sin la corriente de carga nominal se estima desde la ampacidad mínima de la placa; solo se usa para la caída de tensión y el cuadro de cargas.".into()
+            "Sin la corriente de carga nominal se estima desde la ampacidad mínima de la placa; se usa para la caída de tensión, el cuadro de cargas y la aportación del compresor a la corriente de falla.".into()
         }),
         references: r(&[Rule::CompressorRating]),
     });
