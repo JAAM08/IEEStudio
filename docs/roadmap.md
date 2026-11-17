@@ -104,6 +104,10 @@
   cuando no caben; la versión web nueva llega completa y avisa para recargar;
   capturas en cinco tamaños (`tools/capturas.sh`) y mediciones de la vista
   previa de la memoria y del teclado del teléfono.
+- Rediseño 2026, etapa R2 (`rediseno-2026-r2-sistema-visual.md`): sistema
+  visual nuevo con amarillo eléctrico, azul técnico y morado lavanda sobre
+  obsidiana y grafito, en tema oscuro y claro; etiquetas de estado uniformes
+  y esquinas en tres medidas. Sin cambios de cálculo.
 
 ## Pendiente, en orden
 
