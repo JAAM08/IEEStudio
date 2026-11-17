@@ -12,6 +12,7 @@ use ieestudio_project::{size_label, Check, LoadKind, RunResult, Status};
 use ieestudio_rules::{cite_all, Profile, Rule};
 use serde::{Deserialize, Serialize};
 
+use crate::layout;
 use crate::panels::{properties, report, Shared};
 use crate::state::{set_load_kind, Doc, Selection};
 use crate::symbols::{self, Symbol};
@@ -254,7 +255,7 @@ fn choice(ui: &mut egui::Ui, p: &Palette, on: bool, title: &str, sub: &str, widt
 
 /// Columna centrada de ancho máximo, para formularios.
 fn centered(ui: &mut egui::Ui, max_width: f32, add: impl FnOnce(&mut egui::Ui)) {
-    let width = ui.available_width().min(max_width);
+    let width = ui.available_width().min(max_width).max(0.0);
     let left = ((ui.available_width() - width) / 2.0).max(0.0);
     ui.horizontal_top(|ui| {
         ui.add_space(left);
@@ -325,6 +326,33 @@ fn sentence(text: &str) -> String {
 }
 
 // ------------------------------------------------------------------ pasos
+
+/// Panel fijo de un paso, al lado del contenido si cabe. En una ventana
+/// angosta (navegador en celular o tableta vertical) pasa a lo ancho, arriba
+/// o abajo según `above`, con su alto ajustable: nada se oculta ni se encima, y
+/// el contenido principal nunca queda con ancho negativo.
+fn step_panel(ui: &egui::Ui, id: &'static str, left: bool, width: f32, above: bool) -> egui::Panel {
+    let room = ui.available_rect_before_wrap();
+    if layout::side_fits(room.width(), width) {
+        let panel = if left {
+            egui::Panel::left(id)
+        } else {
+            egui::Panel::right(id)
+        };
+        return panel.resizable(false).exact_size(width);
+    }
+    let (default, min, max) = layout::bottom_panel(room.height());
+    let id = egui::Id::new(id).with("apilado");
+    let panel = if above {
+        egui::Panel::top(id)
+    } else {
+        egui::Panel::bottom(id)
+    };
+    panel
+        .resizable(true)
+        .default_size(default)
+        .size_range(min..=max)
+}
 
 /// Dibuja el paso y su pie. Devuelve el paso al que se quiere ir y lo que se
 /// pide a la ventana principal.
@@ -495,7 +523,7 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                     "Datos generales de la obra. Lo que no sepas todavía lo puedes llenar después.",
                 );
                 let project = &mut doc.project;
-                let half = (ui.available_width() - 16.0) / 2.0;
+                let half = layout::column_width(ui.available_width(), 2, 16.0);
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = 16.0;
                     ui.vertical(|ui| {
@@ -525,7 +553,7 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                 ui.label(muted(p, "Decide la carga mínima por m² y los factores de demanda (Tabla 220-12).").size(12.5));
                 ui.add_space(6.0);
                 let profile = Profile::nom_001_sede_2012();
-                let card = (ui.available_width() - 3.0 * 12.0) / 4.0;
+                let card = layout::column_width(ui.available_width(), 4, 12.0);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 12.0;
                     for id in COMMON_OCCUPANCIES {
@@ -569,7 +597,7 @@ fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
                 ui.add_space(24.0);
                 label_caps(ui, p, "Suministro");
                 ui.add_space(6.0);
-                let card = (ui.available_width() - 2.0 * 12.0) / 3.0;
+                let card = layout::column_width(ui.available_width(), 3, 12.0);
                 for row in SYSTEMS.chunks(3) {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 12.0;
@@ -727,9 +755,7 @@ fn panels_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Step> {
         Selection::Project => None,
         _ => doc.panel_index(),
     };
-    egui::Panel::right("ficha-tablero")
-        .resizable(false)
-        .exact_size(420.0)
+    step_panel(ui, "ficha-tablero", false, 420.0, false)
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
@@ -992,9 +1018,7 @@ fn circuits_step(
         _ => None,
     };
 
-    egui::Panel::right("ficha-circuito")
-        .resizable(false)
-        .exact_size(390.0)
+    step_panel(ui, "ficha-circuito", false, 390.0, false)
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
@@ -1159,7 +1183,7 @@ fn subpanel_list(
             .corner_radius(6)
             .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
-                ui.set_width(ui.available_width() - 2.0);
+                ui.set_width(layout::remaining(ui.available_width(), 2.0));
                 ui.horizontal(|ui| {
                     symbols::show(ui, Symbol::Subpanel, 22.0, p.ink);
                     ui.add_space(4.0);
@@ -1825,7 +1849,7 @@ fn interrupting_strip(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, panel_index
         .corner_radius(6)
         .inner_margin(egui::Margin::symmetric(10, 6))
         .show(ui, |ui| {
-            ui.set_width(ui.available_width() - 2.0);
+            ui.set_width(layout::remaining(ui.available_width(), 2.0));
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::CIRCLE_DASHED).color(p.warn));
                 let text = match (group.fault_ka, group.short(), group.board_ka) {
@@ -1906,7 +1930,7 @@ fn duplicate_review(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Car
             .corner_radius(8)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
-                ui.set_width(ui.available_width() - 2.0);
+                ui.set_width(layout::remaining(ui.available_width(), 2.0));
                 ui.add(egui::Label::new(RichText::new(format!("{} {}.", icon::WARNING, flag.text())).size(12.5)).wrap());
                 ui.horizontal(|ui| {
                     if ui
@@ -1945,7 +1969,7 @@ fn interrupting_card(
         .corner_radius(8)
         .inner_margin(egui::Margin::symmetric(14, 10))
         .show(ui, |ui| {
-            ui.set_width(ui.available_width() - 2.0);
+            ui.set_width(layout::remaining(ui.available_width(), 2.0));
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::CIRCLE_DASHED).color(p.warn).size(16.0));
                 ui.add(
@@ -2120,9 +2144,7 @@ fn review_items(doc: &Doc) -> Vec<Pending> {
 
 fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Shared) -> Option<Step> {
     let mut go = None;
-    egui::Panel::right("revisar-unifilar")
-        .resizable(false)
-        .exact_size(440.0)
+    step_panel(ui, "revisar-unifilar", false, 440.0, false)
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
@@ -2259,10 +2281,26 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                     };
                     // Los tres niveles del veredicto.
                     let lines = result.verdict.lines("NOM-001-SEDE-2012");
-                    let width = (ui.available_width() - 2.0 * 12.0) / 3.0 - 4.0;
-                    ui.horizontal_top(|ui| {
-                        ui.spacing_mut().item_spacing.x = 12.0;
+                    // Tres tarjetas en una fila; si no caben, una debajo de
+                    // otra a lo ancho. El ancho interior descuenta el margen
+                    // (14 + 14), el borde (1 + 1) y 4 px de holgura, como
+                    // antes, y nunca es negativo.
+                    let gap = 12.0;
+                    let per_row = layout::cards_per_row(ui.available_width(), lines.len(), gap);
+                    let inner = layout::remaining(layout::column_width(ui.available_width(), per_row, gap), 34.0);
+                    let row = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut egui::Ui)| {
+                        if per_row > 1 {
+                            ui.horizontal_top(|ui| add(ui));
+                        } else {
+                            ui.vertical(|ui| add(ui));
+                        }
+                    };
+                    row(ui, &mut |ui: &mut egui::Ui| {
+                        ui.spacing_mut().item_spacing.x = gap;
                         for (k, (level, status, detail)) in lines.iter().enumerate() {
+                            if per_row == 1 && k > 0 {
+                                ui.add_space(gap);
+                            }
                             let color = if k == 2 { p.ink2 } else { status_color(p, *status) };
                             let (head, rest) = result.verdict.split_line(detail);
                             egui::Frame::new()
@@ -2271,7 +2309,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                 .corner_radius(8)
                                 .inner_margin(egui::Margin::symmetric(14, 12))
                                 .show(ui, |ui| {
-                                    ui.set_width(width - 30.0);
+                                    ui.set_width(inner);
                                     ui.vertical(|ui| {
                                         label_caps(ui, p, level);
                                         let glyph = if k == 2 { icon::SEAL_QUESTION } else { status_icon(*status) };
@@ -2355,7 +2393,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             .corner_radius(8)
                             .inner_margin(egui::Margin::symmetric(14, 10))
                             .show(ui, |ui| {
-                                ui.set_width(ui.available_width() - 2.0);
+                                ui.set_width(layout::remaining(ui.available_width(), 2.0));
                                 ui.horizontal(|ui| {
                                     ui.label(RichText::new(status_icon(item.check.status)).color(color).size(16.0));
                                     ui.add(egui::Label::new(strong(format!("{}: {}", item.title, item.check.name.to_lowercase()))).wrap());
@@ -2513,7 +2551,7 @@ fn connection_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> bool {
         .corner_radius(8)
         .inner_margin(egui::Margin::symmetric(14, 10))
         .show(ui, |ui| {
-            ui.set_width(ui.available_width() - 2.0);
+            ui.set_width(layout::remaining(ui.available_width(), 2.0));
             ui.horizontal(|ui| {
                 ui.label(RichText::new(icon::X_CIRCLE).color(p.bad).size(16.0));
                 ui.add(
@@ -2630,7 +2668,7 @@ fn system_review(
             .corner_radius(8)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
-                ui.set_width(ui.available_width() - 2.0);
+                ui.set_width(layout::remaining(ui.available_width(), 2.0));
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(if issue.invalid { icon::WARNING } else { icon::QUESTION }).color(color).size(16.0));
                     ui.add(
@@ -2725,7 +2763,7 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> 
             .corner_radius(8)
             .inner_margin(egui::Margin::symmetric(14, 10))
             .show(ui, |ui| {
-                ui.set_width(ui.available_width() - 2.0);
+                ui.set_width(layout::remaining(ui.available_width(), 2.0));
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(icon::QUESTION).color(p.warn).size(16.0));
                     ui.add(
@@ -2791,9 +2829,7 @@ fn report_step(
     shared: &mut Shared,
 ) -> Option<Export> {
     let mut request = None;
-    egui::Panel::left("memoria-datos")
-        .resizable(false)
-        .exact_size(440.0)
+    step_panel(ui, "memoria-datos", true, 440.0, true)
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
@@ -2817,7 +2853,7 @@ fn report_step(
                     changed |= text_field(ui, p, "Cédula profesional", &mut info.license, "Número de cédula");
                     ui.add_space(8.0);
                     ui.horizontal_top(|ui| {
-                        let half = (ui.available_width() - 12.0) / 2.0;
+                        let half = layout::column_width(ui.available_width(), 2, 12.0);
                         ui.vertical(|ui| {
                             ui.set_width(half);
                             changed |= text_field(ui, p, "Revisión", &mut info.revision, "A, 0, 1…");

@@ -35,6 +35,15 @@
   }
   #pequena button { margin-top: 8px; font: inherit; color: #1b1e23; background: #f5c518; border: 0; border-radius: 6px; padding: 6px 12px; }
   @media (max-width: 760px) { #pequena.mostrar { display: block; } }
+  #nueva {
+    position: fixed; left: 50%; top: 12px; transform: translateX(-50%); max-width: calc(100% - 24px);
+    display: none; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px 10px 16px; border-radius: 8px;
+    background: #272b31; border: 1px solid #3a3f47; font-size: 13px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  }
+  #nueva.mostrar { display: flex; }
+  #nueva button { font: inherit; border: 0; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  #nueva #recargar { color: #1b1e23; background: #f5c518; }
+  #nueva #despues { color: #e6e8eb; background: transparent; }
   @media (prefers-reduced-motion: reduce) { #carga, #carga .barra span { transition: none; } }
 </style>
 </head>
@@ -49,6 +58,10 @@
 <div id="pequena">
   IEEStudio está pensado para pantallas grandes. En el celular funciona, pero es más cómodo en una computadora o tableta.
   <br><button type="button" id="entendido">Entendido</button>
+</div>
+<div id="nueva" role="status">
+  <span>Hay una versión nueva de IEEStudio.</span>
+  <span><button type="button" id="recargar">Recargar</button> <button type="button" id="despues">Después</button></span>
 </div>
 <noscript><p style="padding:24px">IEEStudio necesita JavaScript activado.</p></noscript>
 <script type="module">
@@ -106,8 +119,33 @@
     try { localStorage.setItem("ieestudio-aviso-pantalla", "1"); } catch (_) {}
   });
 
+  // Versión nueva: el service worker nuevo toma el control de esta página,
+  // pero el programa que corre sigue siendo el anterior hasta recargar. Se
+  // avisa en lugar de recargar solo, para no interrumpir una captura.
+  const nueva = document.getElementById("nueva");
+  document.getElementById("despues").addEventListener("click", () => nueva.classList.remove("mostrar"));
+  document.getElementById("recargar").addEventListener("click", () => {
+    // El programa guarda el proyecto en este navegador al perder el foco;
+    // se le quita el foco y se le da un momento antes de recargar.
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    setTimeout(() => location.reload(), 400);
+  });
+
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    // Si esta página ya tenía service worker, un cambio de control es una
+    // versión nueva; la primera instalación no avisa.
+    let habia = Boolean(navigator.serviceWorker.controller);
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (habia) nueva.classList.add("mostrar");
+      habia = true;
+    });
+    navigator.serviceWorker.register("./sw.js").then((registro) => {
+      // Con la app abierta mucho tiempo, se busca una versión nueva al volver
+      // a la pestaña.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") registro.update().catch(() => {});
+      });
+    }).catch(() => {});
   }
 </script>
 </body>

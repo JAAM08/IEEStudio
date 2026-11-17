@@ -99,6 +99,11 @@
   reproducible (`tools/auditoria.sh`, `etapa-0-linea-base.md`) y las
   decisiones D-1 a D-8, analizadas en `decisiones-pendientes-d1-d8.md`, quedaron
   aprobadas en la decisión 0029.
+- Rediseño 2026, etapa R1 (`rediseno-2026-r1-linea-base.md`): Revisar ya no
+  se cierra en ventanas angostas y los paneles de los pasos pasan abajo
+  cuando no caben; la versión web nueva llega completa y avisa para recargar;
+  capturas en cinco tamaños (`tools/capturas.sh`) y mediciones de la vista
+  previa de la memoria y del teclado del teléfono.
 
 ## Pendiente, en orden
 
@@ -115,7 +120,8 @@ El orden y el detalle están en `plan-1.0.md`. En resumen:
 - Etapas 7 y 8: una sola interfaz adaptativa para escritorio, tablet y
   teléfono (sustituye la idea de llevar la vista guiada a una vista por
   paso). Antes, una prueba en un teléfono real de egui en el navegador
-  (teclado virtual, desplazamiento).
+  (teclado virtual, desplazamiento), con el procedimiento de la sección 5 de
+  `rediseno-2026-r1-linea-base.md`.
 - Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
   plantillas de circuito.
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
