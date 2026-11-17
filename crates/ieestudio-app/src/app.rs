@@ -21,6 +21,12 @@ use crate::widgets::{muted, strong, verdict_chips};
 use crate::workspace::{self, Tab, Workspace};
 
 const STORAGE_KEY: &str = "ieestudio-interfaz-1";
+/// Ancho de los botones de la derecha de la barra superior de la vista
+/// guiada (cálculo rápido, buscar, vista avanzada y tema).
+const RIGHT_TOOLS: f32 = 230.0;
+/// Ancho aproximado de la barra de pasos completa y de la reducida a números.
+const FULL_STEPS: f32 = 530.0;
+const COMPACT_STEPS: f32 = 300.0;
 /// En el navegador, el proyecto abierto se guarda solo con esta clave, para
 /// no perder trabajo si se cierra la pestaña. Una clave por formato desde el
 /// 4: el 5 agrega la topología declarada (decisión 0030) y el 6 deja sin
@@ -95,6 +101,10 @@ enum Pending {
 struct Capture {
     path: PathBuf,
     frames: u32,
+    /// Cuadros que se miden antes de tomar la imagen (`--medir`).
+    measure: u32,
+    /// Lo que tardó `App::ui` en cada cuadro, en milisegundos.
+    times: Vec<f64>,
 }
 
 pub struct App {
@@ -161,6 +171,8 @@ pub struct Options {
     pub chooser: bool,
     /// Empieza con el unifilar a pantalla completa en la vista guiada.
     pub diagram: bool,
+    /// Con `capture`: cuadros que se miden antes de tomar la imagen.
+    pub measure: u32,
 }
 
 impl App {
@@ -226,7 +238,12 @@ impl App {
             unreadable: None,
             done: None,
             about: false,
-            capture: options.capture.map(|path| Capture { path, frames: 0 }),
+            capture: options.capture.map(|path| Capture {
+                path,
+                frames: 0,
+                measure: options.measure,
+                times: Vec::new(),
+            }),
             pending: None,
             imported: None,
             allow_close: false,
@@ -912,6 +929,18 @@ impl App {
     /// Barra superior de la vista guiada: marca, Archivo, los cinco pasos y
     /// lo que siempre debe estar a la mano.
     fn guided_bar(&mut self, ui: &mut egui::Ui) {
+        // En una ventana angosta no cabe todo en un renglón: la barra entera
+        // se recorre de lado, sin encimar nada ni dejar botones fuera.
+        if crate::layout::bars_in_one_row(ui.available_width()) {
+            self.guided_bar_row(ui, false);
+        } else {
+            egui::ScrollArea::horizontal()
+                .id_salt("barra-superior")
+                .show(ui, |ui| self.guided_bar_row(ui, true));
+        }
+    }
+
+    fn guided_bar_row(&mut self, ui: &mut egui::Ui, scrolling: bool) {
         let p = self.shared.palette;
         ui.horizontal(|ui| {
             ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
@@ -950,75 +979,117 @@ impl App {
             ui.add_space(12.0);
             // Los pasos completos necesitan unos 530 px y lo de la derecha
             // 230: si no caben, los pasos se reducen a su número.
-            let compact = ui.available_width() < 780.0;
-            if let Some(step) = guided::step_bar(
-                ui,
-                &p,
-                if self.home { Step::ALL[0] } else { self.step },
-                &self.doc,
-                compact,
-            ) {
+            let compact = scrolling || ui.available_width() < 780.0;
+            // Si aun así no caben (ventana de menos de unos 900 px), se
+            // recorren de lado en lugar de quedar debajo de los botones de la
+            // derecha.
+            let room = crate::layout::remaining(ui.available_width(), RIGHT_TOOLS);
+            let need = if compact { COMPACT_STEPS } else { FULL_STEPS };
+            let current = if self.home { Step::ALL[0] } else { self.step };
+            let chosen = if scrolling || room >= need {
+                guided::step_bar(ui, &p, current, &self.doc, compact)
+            } else {
+                egui::ScrollArea::horizontal()
+                    .id_salt("barra-de-pasos")
+                    .max_width(room)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| guided::step_bar(ui, &p, current, &self.doc, compact))
+                            .inner
+                    })
+                    .inner
+            };
+            if let Some(step) = chosen {
                 self.step = step;
                 self.home = false;
                 self.shared.diagram_full = false;
             }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let (glyph, tip) = if self.dark {
-                    (icon::SUN, "Cambiar a tema claro")
-                } else {
-                    (icon::MOON, "Cambiar a tema oscuro")
-                };
-                if ui
-                    .add(egui::Button::new(RichText::new(glyph).size(15.0)).frame(false))
-                    .on_hover_text(tip)
-                    .clicked()
-                {
-                    self.dark = !self.dark;
-                    self.restyle(ui.ctx());
-                }
-                if ui
-                    .add(
-                        egui::Button::new(RichText::new(icon::LAYOUT).size(15.0).color(p.ink2))
-                            .frame(false),
-                    )
-                    .on_hover_text(
-                        "Vista avanzada: paneles acoplables, para quien ya domina el programa",
-                    )
-                    .clicked()
-                {
-                    self.guided = false;
-                    self.home = false;
-                }
-                if ui
-                    .add(
-                        egui::Button::new(
-                            RichText::new(icon::MAGNIFYING_GLASS)
-                                .size(15.0)
-                                .color(p.ink2),
-                        )
-                        .frame(false),
-                    )
-                    .on_hover_text(
-                        "Buscar comandos, pasos, tableros y circuitos por su nombre (Ctrl+K)",
-                    )
-                    .clicked()
-                {
-                    self.commands.toggle();
-                }
-                ui.scope(|ui| {
-                    let w = &mut ui.style_mut().visuals.widgets;
-                    w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
-                    w.inactive.weak_bg_fill = p.panel;
+            if scrolling {
+                ui.add_space(16.0);
+                self.guided_tools(ui, false);
+            } else {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    self.guided_tools(ui, true);
+                });
+            }
+        });
+    }
+
+    /// Botones de la derecha de la barra guiada: cálculo rápido, buscar,
+    /// vista avanzada y tema, en ese orden de lectura.
+    fn guided_tools(&mut self, ui: &mut egui::Ui, right_to_left: bool) {
+        let p = self.shared.palette;
+        let order: [u8; 4] = if right_to_left {
+            [0, 1, 2, 3]
+        } else {
+            [3, 2, 1, 0]
+        };
+        for tool in order {
+            match tool {
+                0 => {
+                    let (glyph, tip) = if self.dark {
+                        (icon::SUN, "Cambiar a tema claro")
+                    } else {
+                        (icon::MOON, "Cambiar a tema oscuro")
+                    };
                     if ui
-                        .button(format!("{}  Cálculo rápido", icon::CALCULATOR))
-                        .on_hover_text("Un circuito suelto, sin proyecto (F8)")
+                        .add(egui::Button::new(RichText::new(glyph).size(15.0)).frame(false))
+                        .on_hover_text(tip)
                         .clicked()
                     {
-                        self.run_command(Command::Quick);
+                        self.dark = !self.dark;
+                        self.restyle(ui.ctx());
                     }
-                });
-            });
-        });
+                }
+                1 => {
+                    if ui
+                        .add(
+                            egui::Button::new(RichText::new(icon::LAYOUT).size(15.0).color(p.ink2))
+                                .frame(false),
+                        )
+                        .on_hover_text(
+                            "Vista avanzada: paneles acoplables, para quien ya domina el programa",
+                        )
+                        .clicked()
+                    {
+                        self.guided = false;
+                        self.home = false;
+                    }
+                }
+                2 => {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(icon::MAGNIFYING_GLASS)
+                                    .size(15.0)
+                                    .color(p.ink2),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text(
+                            "Buscar comandos, pasos, tableros y circuitos por su nombre (Ctrl+K)",
+                        )
+                        .clicked()
+                    {
+                        self.commands.toggle();
+                    }
+                }
+                3 => {
+                    ui.scope(|ui| {
+                        let w = &mut ui.style_mut().visuals.widgets;
+                        w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
+                        w.inactive.weak_bg_fill = p.panel;
+                        if ui
+                            .button(format!("{}  Cálculo rápido", icon::CALCULATOR))
+                            .on_hover_text("Un circuito suelto, sin proyecto (F8)")
+                            .clicked()
+                        {
+                            self.run_command(Command::Quick);
+                        }
+                    });
+                }
+                _ => {}
+            }
+        }
     }
 
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
@@ -1297,8 +1368,11 @@ impl App {
         });
     }
 
-    fn status_bar(&mut self, ui: &mut egui::Ui) {
+    fn status_bar(&mut self, ui: &mut egui::Ui, window_width: f32) {
         let p = self.shared.palette;
+        // En una ventana angosta el veredicto va en su propio renglón; en uno
+        // solo se encimaba con la ruta de la izquierda.
+        let two_rows = !crate::layout::bars_in_one_row(window_width);
         ui.horizontal(|ui| {
             let crumbs = self.doc.breadcrumb();
             for (i, part) in crumbs.iter().enumerate() {
@@ -1318,21 +1392,31 @@ impl App {
                 ui.separator();
                 ui.label(RichText::new(format!("{} {done}", icon::CHECK)).color(p.ok));
             }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                match &self.doc.result {
-                    Ok(r) => verdict_chips(ui, &p, &r.verdict),
-                    Err(e) => {
-                        ui.label(
-                            RichText::new(format!(
-                                "{} No se pudo calcular: {e}",
-                                icon::WARNING_CIRCLE
-                            ))
-                            .color(p.bad),
-                        );
-                    }
-                }
-            });
+            if !two_rows {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    self.status_verdict(ui, &p);
+                });
+            }
         });
+        if two_rows {
+            ui.horizontal_wrapped(|ui| self.status_verdict(ui, &p));
+        }
+    }
+
+    /// Veredicto de la barra de estado.
+    fn status_verdict(&self, ui: &mut egui::Ui, p: &Palette) {
+        match &self.doc.result {
+            Ok(r) => verdict_chips(ui, p, &r.verdict),
+            Err(e) => {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("{} No se pudo calcular: {e}", icon::WARNING_CIRCLE))
+                            .color(p.bad),
+                    )
+                    .wrap(),
+                );
+            }
+        }
     }
 
     /// «¿Qué vas a conectar?»: agrega el circuito del tipo elegido, o un
@@ -1571,7 +1655,7 @@ impl App {
             return;
         };
         capture.frames += 1;
-        if capture.frames == 8 {
+        if capture.frames == 8 + capture.measure {
             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
         }
         let image = ctx.input(|i| {
@@ -1591,14 +1675,18 @@ impl App {
             ) {
                 eprintln!("No se pudo guardar la captura: {e}");
             }
+            if capture.measure > 0 {
+                println!("{}", frame_report(&capture.times));
+            }
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         ctx.request_repaint();
     }
 }
 
-impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+impl App {
+    /// Un cuadro de la interfaz.
+    fn draw(&mut self, ui: &mut egui::Ui) {
         let p = self.shared.palette;
         let ctx = ui.ctx().clone();
         // Cerrar la ventana con cambios sin guardar pregunta antes.
@@ -1622,13 +1710,14 @@ impl eframe::App for App {
                     .inner_margin(egui::Margin::symmetric(10, 5)),
             )
             .show(ui, |ui| self.menu_bar(ui));
+        let window_width = ui.available_width();
         egui::Panel::bottom("estado")
             .frame(
                 egui::Frame::new()
                     .fill(p.bg)
                     .inner_margin(egui::Margin::symmetric(10, 4)),
             )
-            .show(ui, |ui| self.status_bar(ui));
+            .show(ui, |ui| self.status_bar(ui, window_width));
 
         let style = self.dock_style(ui);
         let revision = self.doc.revision;
@@ -1742,7 +1831,22 @@ impl eframe::App for App {
             self.quit = false;
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
-        self.handle_capture(&ctx);
+    }
+}
+
+impl eframe::App for App {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Solo al medir con --medir, que no existe en el navegador.
+        let started = self
+            .capture
+            .as_ref()
+            .filter(|c| c.measure > 0)
+            .map(|_| std::time::Instant::now());
+        self.draw(ui);
+        if let (Some(started), Some(capture)) = (started, &mut self.capture) {
+            capture.times.push(started.elapsed().as_secs_f64() * 1000.0);
+        }
+        self.handle_capture(&ui.ctx().clone());
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -1984,4 +2088,27 @@ fn home_screen(
         );
     });
     chosen
+}
+
+/// Resumen de los tiempos de `--medir`: el primer cuadro aparte, porque arma
+/// lo que después queda guardado (unifilar, memoria).
+fn frame_report(times: &[f64]) -> String {
+    let Some((first, rest)) = times.split_first() else {
+        return "Sin cuadros medidos.".to_string();
+    };
+    let mut sorted = rest.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let at = |q: f64| {
+        sorted
+            .get(((sorted.len() as f64 * q).ceil() as usize).saturating_sub(1))
+            .copied()
+            .unwrap_or(0.0)
+    };
+    format!(
+        "Cuadros medidos: {} · primero {first:.1} ms · después: mediana {:.2} ms, p95 {:.2} ms, máximo {:.2} ms",
+        times.len(),
+        at(0.5),
+        at(0.95),
+        sorted.last().copied().unwrap_or(0.0)
+    )
 }

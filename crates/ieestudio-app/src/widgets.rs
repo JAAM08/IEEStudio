@@ -656,7 +656,19 @@ pub fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
         },
         "Aprobación profesional pendiente",
     ];
-    for (i, (level, status, detail)) in lines.iter().enumerate().rev() {
+    // Se lee siempre cálculo · verificación · aprobación: en un renglón de
+    // derecha a izquierda se agregan al revés.
+    let right_to_left = ui.layout().main_dir() == egui::Direction::RightToLeft;
+    let order: Vec<usize> = if right_to_left {
+        vec![2, 1, 0]
+    } else {
+        vec![0, 1, 2]
+    };
+    for i in order {
+        let (level, status, detail) = &lines[i];
+        if !right_to_left && i > 0 {
+            ui.label(muted(p, "·"));
+        }
         let color = if i == 2 {
             p.ink2
         } else {
@@ -670,7 +682,7 @@ pub fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
         };
         ui.label(RichText::new(format!("{glyph} {}", short[i])).color(color))
             .on_hover_text(format!("{level}: {detail}"));
-        if i > 0 {
+        if right_to_left && i > 0 {
             ui.label(muted(p, "·"));
         }
     }

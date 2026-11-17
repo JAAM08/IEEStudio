@@ -4,7 +4,7 @@
 //! Uso en escritorio: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
 //! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--inicio] [--comandos]
 //! [--paso proyecto|tableros|circuitos|revisar|memoria] [--avanzada] [--agregar] [--unifilar-completo]
-//! [--tamano 1024x768] [--captura imagen.png]`
+//! [--tamano 1024x768] [--captura imagen.png] [--medir 60]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -13,6 +13,7 @@ mod chooser;
 mod commands;
 mod files;
 mod guided;
+mod layout;
 mod panels;
 mod state;
 mod symbols;
@@ -43,6 +44,7 @@ fn main() -> eframe::Result {
         advanced: false,
         chooser: false,
         diagram: false,
+        measure: 0,
     };
     let mut size = None;
     let mut args = std::env::args().skip(1);
@@ -73,6 +75,9 @@ fn main() -> eframe::Result {
                 }
             }
             "--captura" => options.capture = args.next().map(PathBuf::from),
+            // Con --captura: mide cuánto tarda la interfaz en armar N cuadros
+            // más antes de tomar la imagen, e imprime los tiempos.
+            "--medir" => options.measure = args.next().and_then(|v| v.parse().ok()).unwrap_or(60),
             "--espacio" => {
                 options.workspace = match args.next().as_deref() {
                     Some("diagrama") => Some(Workspace::Diagram),
@@ -211,6 +216,7 @@ fn main() {
         advanced: false,
         chooser: false,
         diagram: false,
+        measure: 0,
     };
     wasm_bindgen_futures::spawn_local(async move {
         let canvas = web_sys::window()
