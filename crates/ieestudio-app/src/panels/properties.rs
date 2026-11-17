@@ -30,6 +30,7 @@ pub enum PropsTab {
 
 pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     let p = shared.palette;
+    let mut kind: Option<&str> = None;
     let (title, status) = match doc.selection {
         Selection::Project => (doc.project.name.clone(), None),
         Selection::Feeder(i) => (
@@ -42,6 +43,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         ),
         Selection::Circuit(i, c) => {
             let circuit = &doc.project.panels[i].circuits[c];
+            kind = Some(circuit.load.kind.label());
             (
                 format!("{} · {}", circuit.id, circuit.name),
                 doc.selected_run().map(|r| r.status),
@@ -51,8 +53,15 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     ui.horizontal(|ui| {
         ui.add(egui::Label::new(strong(title).size(14.0)).truncate());
     });
-    if let Some(s) = status {
-        ui.label(status_text(&p, s));
+    if status.is_some() || kind.is_some() {
+        ui.horizontal(|ui| {
+            if let Some(s) = status {
+                crate::widgets::status_chip(ui, &p, s);
+            }
+            if let Some(k) = kind {
+                crate::widgets::tag(ui, &p, k);
+            }
+        });
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {

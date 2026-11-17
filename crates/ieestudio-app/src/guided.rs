@@ -18,8 +18,7 @@ use crate::state::{set_load_kind, Doc, Selection};
 use crate::symbols::{self, Symbol};
 use crate::theme::{semibold, Palette};
 use crate::widgets::{
-    label_of, muted, status_color, status_icon, status_text, steps_ui, strong, worst, KINDS,
-    SYSTEMS,
+    label_of, muted, status_color, status_icon, steps_ui, strong, worst, KINDS, SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -1434,7 +1433,7 @@ fn circuit_table(
                             let label = if compact {
                                 ui.label(crate::widgets::status_glyph(p, item.status).size(15.0))
                             } else {
-                                ui.label(status_text(p, item.status))
+                                crate::widgets::status_chip(ui, p, item.status)
                             };
                             match problem {
                                 Some(text) => label.on_hover_text(text),

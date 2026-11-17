@@ -455,6 +455,58 @@ pub fn status_glyph(p: &Palette, status: Status) -> RichText {
     RichText::new(status_icon(status)).color(status_color(p, status))
 }
 
+/// Color de relleno y borde de un estado: el rojo de texto es más claro en el
+/// tema oscuro, así que los rellenos usan el rojo propio.
+fn status_fill(p: &Palette, status: Status) -> Color32 {
+    match status {
+        Status::Fails => p.bad_fill,
+        _ => status_color(p, status),
+    }
+}
+
+/// Píldora de 20 px de alto con texto, fondo tenue y borde del mismo color.
+/// Se pinta a mano para que su alto no dependa del renglón donde cae.
+fn pill(ui: &mut egui::Ui, text: RichText, tint: Color32) -> egui::Response {
+    let galley = egui::WidgetText::from(text).into_galley(
+        ui,
+        Some(egui::TextWrapMode::Extend),
+        f32::INFINITY,
+        egui::TextStyle::Body,
+    );
+    let size = galley.size() + egui::vec2(12.0, 4.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
+    if ui.is_rect_visible(rect) {
+        let radius = crate::theme::RADIUS_CONTROL;
+        ui.painter()
+            .rect_filled(rect, radius, tint.gamma_multiply(0.12));
+        ui.painter().rect_stroke(
+            rect,
+            radius,
+            Stroke::new(1.0, tint.gamma_multiply(0.4)),
+            egui::StrokeKind::Inside,
+        );
+        ui.painter()
+            .galley(rect.min + egui::vec2(6.0, 2.0), galley, tint);
+    }
+    response
+}
+
+/// Etiqueta de estado: ícono, texto y color sobre un fondo tenue con borde.
+/// Es la forma de mostrar un estado en tablas y tarjetas (R2).
+pub fn status_chip(ui: &mut egui::Ui, p: &Palette, status: Status) -> egui::Response {
+    pill(
+        ui,
+        status_text(p, status).size(12.0),
+        status_fill(p, status),
+    )
+}
+
+/// Etiqueta de categoría o de elemento complementario, en lavanda: «Calibre
+/// fijo», tipo de carga.
+pub fn tag(ui: &mut egui::Ui, p: &Palette, text: &str) -> egui::Response {
+    pill(ui, RichText::new(text).size(12.0).color(p.lav_text), p.lav)
+}
+
 /// El peor estado de una lista: no cumple > sin evaluar > cumple.
 pub fn worst(statuses: impl IntoIterator<Item = Status>) -> Status {
     statuses
@@ -479,7 +531,7 @@ pub fn section(ui: &mut egui::Ui, p: &Palette, title: &str) {
     ui.add_space(8.0);
     ui.label(
         RichText::new(title.to_uppercase())
-            .size(10.5)
+            .size(11.0)
             .color(p.ink3)
             .family(semibold()),
     );
@@ -506,18 +558,18 @@ pub fn source_badge(ui: &mut egui::Ui, p: &Palette, source: Source) {
         ),
         Source::Proposed => (
             "propuesto",
-            p.accent_text,
+            p.info,
             "El menor valor que cumple. Es una propuesta: puedes fijar otro y se verificará.",
         ),
         Source::Fixed => (
             "fijado por ti",
-            p.ink2,
+            p.lav_text,
             "Lo decidiste tú. IEEStudio lo verifica, nunca lo cambia.",
         ),
     };
     egui::Frame::new()
         .stroke(Stroke::new(1.0, color.gamma_multiply(0.6)))
-        .corner_radius(8)
+        .corner_radius(crate::theme::RADIUS_CONTROL)
         .inner_margin(egui::Margin::symmetric(5, 0))
         .show(ui, |ui| {
             ui.label(RichText::new(text).size(10.5).color(color));
