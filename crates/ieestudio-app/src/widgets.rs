@@ -670,7 +670,7 @@ pub fn steps_ui(
                             ui.label(
                                 RichText::new(format!("{} {cite}", icon::BOOK_OPEN))
                                     .size(11.0)
-                                    .color(p.ink3),
+                                    .color(p.info),
                             );
                         }
                     });

@@ -359,7 +359,11 @@ impl CommandPalette {
                                 ui.set_min_height(26.0);
                                 ui.set_width(ui.available_width());
                                 if selected {
-                                    ui.painter().rect_filled(ui.max_rect(), 3.0, p.selected);
+                                    ui.painter().rect_filled(
+                                        ui.max_rect(),
+                                        crate::theme::RADIUS_CONTROL as f32,
+                                        p.selected,
+                                    );
                                 }
                                 ui.add_space(6.0);
                                 ui.label(RichText::new(e.glyph).color(if selected {

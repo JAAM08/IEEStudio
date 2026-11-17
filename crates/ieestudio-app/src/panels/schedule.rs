@@ -789,7 +789,7 @@ fn context_bar(
     egui::Frame::new()
         .fill(p.raise)
         .stroke(egui::Stroke::new(1.0, p.line))
-        .corner_radius(4)
+        .corner_radius(crate::theme::RADIUS_CONTROL)
         .inner_margin(egui::Margin::symmetric(8, 4))
         .outer_margin(egui::Margin::symmetric(8, 0))
         .show(ui, |ui| {
