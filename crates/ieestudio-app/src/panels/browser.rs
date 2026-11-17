@@ -255,14 +255,14 @@ fn item_inline(
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 22.0), Sense::click());
     let painter = ui.painter_at(rect);
     if selected {
-        painter.rect_filled(rect, 3.0, p.selected);
+        painter.rect_filled(rect, crate::theme::RADIUS_CONTROL as f32, p.selected);
         painter.rect_filled(
             egui::Rect::from_min_size(rect.left_top(), Vec2::new(2.0, rect.height())),
             0.0,
             p.accent,
         );
     } else if response.hovered() {
-        painter.rect_filled(rect, 3.0, p.raise);
+        painter.rect_filled(rect, crate::theme::RADIUS_CONTROL as f32, p.raise);
     }
     // Primero lo que va a la derecha (estado y detalle); el nombre ocupa el
     // resto y se recorta si no cabe.

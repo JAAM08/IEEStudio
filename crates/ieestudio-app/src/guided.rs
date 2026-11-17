@@ -18,8 +18,7 @@ use crate::state::{set_load_kind, Doc, Selection};
 use crate::symbols::{self, Symbol};
 use crate::theme::{semibold, Palette};
 use crate::widgets::{
-    label_of, muted, status_color, status_icon, status_text, steps_ui, strong, worst, KINDS,
-    SYSTEMS,
+    label_of, muted, status_color, status_icon, steps_ui, strong, worst, KINDS, SYSTEMS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -1180,7 +1179,7 @@ fn subpanel_list(
         egui::Frame::new()
             .fill(p.panel)
             .stroke(egui::Stroke::new(1.0, p.line))
-            .corner_radius(6)
+            .corner_radius(crate::theme::RADIUS_CARD)
             .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
                 ui.set_width(layout::remaining(ui.available_width(), 2.0));
@@ -1434,7 +1433,7 @@ fn circuit_table(
                             let label = if compact {
                                 ui.label(crate::widgets::status_glyph(p, item.status).size(15.0))
                             } else {
-                                ui.label(status_text(p, item.status))
+                                crate::widgets::status_chip(ui, p, item.status)
                             };
                             match problem {
                                 Some(text) => label.on_hover_text(text),
@@ -1535,7 +1534,7 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
                         ui.label(RichText::new(head).color(color).family(semibold()));
                         ui.label(sentence(&check.detail));
                         if let Some(cite) = cite_all(&check.references) {
-                            ui.label(muted(p, cite).size(11.5));
+                            ui.label(RichText::new(cite).size(11.5).color(p.info));
                         }
                         let others = more;
                         if others > 1 {
@@ -1668,7 +1667,7 @@ fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunRes
     let frame = egui::Frame::new()
         .fill(p.bg)
         .stroke(egui::Stroke::new(1.0, p.line))
-        .corner_radius(6)
+        .corner_radius(crate::theme::RADIUS_CARD)
         .inner_margin(egui::Margin {
             left: 14,
             right: 10,
@@ -1688,7 +1687,7 @@ fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunRes
                                 .wrap(),
                         );
                         if let Some(cite) = cite_all(&step.references) {
-                            ui.label(muted(p, cite).size(11.0));
+                            ui.label(RichText::new(cite).size(11.0).color(p.info));
                         }
                         ui.add_space(3.0);
                     }
@@ -1846,7 +1845,7 @@ fn interrupting_strip(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, panel_index
     egui::Frame::new()
         .fill(p.warn.gamma_multiply(0.08))
         .stroke(egui::Stroke::new(1.0, p.warn.gamma_multiply(0.45)))
-        .corner_radius(6)
+        .corner_radius(crate::theme::RADIUS_CARD)
         .inner_margin(egui::Margin::symmetric(10, 6))
         .show(ui, |ui| {
             ui.set_width(layout::remaining(ui.available_width(), 2.0));

@@ -16,7 +16,7 @@ use crate::guided::{self, Step};
 use crate::panels::{schedule, Shared, Viewer};
 use crate::state::{empty_project, Doc, Selection};
 use crate::symbols::Symbol;
-use crate::theme::{self, Palette, ACCENTS};
+use crate::theme::{self, Palette};
 use crate::widgets::{muted, strong, verdict_chips};
 use crate::workspace::{self, Tab, Workspace};
 
@@ -59,6 +59,10 @@ const PROJECT_FILTER: Filter<'static> = Filter {
 #[derive(Serialize, Deserialize)]
 struct Prefs {
     dark: bool,
+    /// Antes se elegía el color de acento. El amarillo es ahora el único
+    /// acento (R2); el campo se conserva para leer preferencias viejas.
+    #[serde(default)]
+    #[allow(dead_code)]
     accent: usize,
     workspace: Workspace,
     dock: DockState<Tab>,
@@ -113,7 +117,6 @@ pub struct App {
     dock: DockState<Tab>,
     workspace: Workspace,
     dark: bool,
-    accent: usize,
     notice: Option<String>,
     /// En el navegador, el proyecto guardado que no se pudo leer: se copia a
     /// `WEB_PROJECT_UNREADABLE_KEY` antes de guardar otro encima.
@@ -200,10 +203,9 @@ impl App {
             || options.no_panels;
         let guided_view = options.step.is_some() || (!advanced && saved_guided);
         let start_step = options.step.unwrap_or(saved_step);
-        let (dark, accent, workspace, dock, columns, zoom) = match prefs {
+        let (dark, workspace, dock, columns, zoom) = match prefs {
             Some(p) => (
                 p.dark,
-                p.accent.min(ACCENTS.len() - 1),
                 p.workspace,
                 // Un acomodo guardado sin paneles se repone.
                 workspace::sanitize(p.dock, p.workspace),
@@ -214,7 +216,6 @@ impl App {
                 let ws = options.workspace.unwrap_or(Workspace::Calculation);
                 (
                     !options.light,
-                    0,
                     ws,
                     ws.layout(),
                     schedule::Columns::default(),
@@ -222,7 +223,7 @@ impl App {
                 )
             }
         };
-        let palette = Palette::new(dark, ACCENTS[accent].1);
+        let palette = Palette::new(dark);
         theme::apply(&cc.egui_ctx, &palette);
         let mut shared = Shared::new(palette);
         shared.columns = columns;
@@ -233,7 +234,6 @@ impl App {
             dock,
             workspace,
             dark,
-            accent,
             notice: None,
             unreadable: None,
             done: None,
@@ -773,7 +773,7 @@ impl App {
     }
 
     fn restyle(&mut self, ctx: &egui::Context) {
-        let palette = Palette::new(self.dark, ACCENTS[self.accent].1);
+        let palette = Palette::new(self.dark);
         self.shared.palette = palette;
         theme::apply(ctx, &palette);
     }
@@ -1191,11 +1191,6 @@ impl App {
                 restyle |= ui
                     .radio_value(&mut self.dark, false, "Tema claro")
                     .changed();
-                ui.separator();
-                ui.label(muted(&p, "Color de acento"));
-                for (i, (name, _)) in ACCENTS.iter().enumerate() {
-                    restyle |= ui.radio_value(&mut self.accent, i, *name).changed();
-                }
                 if restyle {
                     self.restyle(ui.ctx());
                 }
@@ -1852,7 +1847,7 @@ impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         let prefs = Prefs {
             dark: self.dark,
-            accent: self.accent,
+            accent: 0,
             workspace: self.workspace,
             dock: self.dock.clone(),
             columns: self.shared.columns.clone(),

@@ -636,7 +636,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                                     ui.add_space(INDENT);
                                 }
                                 if *col == Col::Status {
-                                    ui.label(status_text(&p, row.item.status));
+                                    crate::widgets::status_chip(ui, &p, row.item.status);
                                     return;
                                 }
                                 let text = cell(*col, row);
@@ -660,7 +660,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                                     });
                                 } else if *col == Col::Size && row.forced {
                                     ui.label(rich);
-                                    ui.label(RichText::new(icon::LOCK_SIMPLE).size(11.0).color(p.ink3))
+                                    ui.label(RichText::new(icon::LOCK_SIMPLE).size(11.0).color(p.lav_text))
                                         .on_hover_text("Calibre fijado por ti: IEEStudio lo verifica, no lo cambia.");
                                 } else {
                                     ui.label(rich);
@@ -789,7 +789,7 @@ fn context_bar(
     egui::Frame::new()
         .fill(p.raise)
         .stroke(egui::Stroke::new(1.0, p.line))
-        .corner_radius(4)
+        .corner_radius(crate::theme::RADIUS_CONTROL)
         .inner_margin(egui::Margin::symmetric(8, 4))
         .outer_margin(egui::Margin::symmetric(8, 0))
         .show(ui, |ui| {
@@ -978,15 +978,16 @@ fn summary_strip(
                     .color(if warn { p.warn } else { p.ink3 }),
             );
             let max = r.phase_va.iter().cloned().fold(1.0, f64::max);
-            for (name, va) in ["A", "B", "C"].iter().zip(r.phase_va) {
+            for (idx, (name, va)) in ["A", "B", "C"].iter().zip(r.phase_va).enumerate() {
+                let phase_color = p.phases[idx];
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 5.0;
-                    ui.label(RichText::new(*name).size(10.5).color(p.ink2));
+                    ui.label(RichText::new(*name).size(10.5).color(phase_color));
                     let (rect, resp) = ui.allocate_exact_size(Vec2::new(90.0, 5.0), Sense::hover());
                     ui.painter().rect_filled(rect, 2.0, p.selected);
                     let mut fill = rect;
                     fill.set_width(rect.width() * (va / max) as f32);
-                    ui.painter().rect_filled(fill, 2.0, p.ink2);
+                    ui.painter().rect_filled(fill, 2.0, phase_color);
                     ui.label(
                         RichText::new(format!("{:.1} kVA", va / 1000.0))
                             .monospace()

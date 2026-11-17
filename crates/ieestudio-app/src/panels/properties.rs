@@ -30,6 +30,7 @@ pub enum PropsTab {
 
 pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     let p = shared.palette;
+    let mut kind: Option<&str> = None;
     let (title, status) = match doc.selection {
         Selection::Project => (doc.project.name.clone(), None),
         Selection::Feeder(i) => (
@@ -42,6 +43,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         ),
         Selection::Circuit(i, c) => {
             let circuit = &doc.project.panels[i].circuits[c];
+            kind = Some(circuit.load.kind.label());
             (
                 format!("{} · {}", circuit.id, circuit.name),
                 doc.selected_run().map(|r| r.status),
@@ -51,8 +53,15 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     ui.horizontal(|ui| {
         ui.add(egui::Label::new(strong(title).size(14.0)).truncate());
     });
-    if let Some(s) = status {
-        ui.label(status_text(&p, s));
+    if status.is_some() || kind.is_some() {
+        ui.horizontal(|ui| {
+            if let Some(s) = status {
+                crate::widgets::status_chip(ui, &p, s);
+            }
+            if let Some(k) = kind {
+                crate::widgets::tag(ui, &p, k);
+            }
+        });
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {
@@ -1160,7 +1169,7 @@ pub(crate) fn fault_box(
     egui::Frame::new()
         .fill(p.bg)
         .stroke(egui::Stroke::new(1.0, p.line))
-        .corner_radius(6)
+        .corner_radius(crate::theme::RADIUS_CARD)
         .inner_margin(egui::Margin::symmetric(10, 8))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -1192,7 +1201,7 @@ pub(crate) fn fault_box(
                 let response = egui::Frame::new()
                     .fill(p.accent.gamma_multiply(0.10))
                     .stroke(egui::Stroke::new(1.0, p.accent.gamma_multiply(0.5)))
-                    .corner_radius(5)
+                    .corner_radius(crate::theme::RADIUS_CONTROL)
                     .inner_margin(egui::Margin::symmetric(8, 6))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
@@ -1811,7 +1820,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab
     let mut set_size: Option<Option<Size>> = None;
     egui::Frame::new()
         .fill(p.raise)
-        .corner_radius(4)
+        .corner_radius(crate::theme::RADIUS_CONTROL)
         .inner_margin(8)
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -1900,7 +1909,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab
                 ui.label(
                     RichText::new(format!("{} {cite}", icon::BOOK_OPEN))
                         .size(10.5)
-                        .color(p.ink3),
+                        .color(p.info),
                 );
             }
         }
@@ -2065,7 +2074,7 @@ fn checks(ui: &mut egui::Ui, p: &Palette, item: &RunResult) {
             ui.label(
                 RichText::new(format!("{} {cite}", icon::BOOK_OPEN))
                     .size(11.0)
-                    .color(p.ink3),
+                    .color(p.info),
             );
         }
         ui.add_space(6.0);
@@ -2095,7 +2104,7 @@ fn profile_references(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
             ui.label(
                 RichText::new(profile.clause(rule))
                     .monospace()
-                    .color(p.accent_text),
+                    .color(p.info),
             );
             if let Some(desc) = profile.rule_description(rule) {
                 ui.label(muted(p, desc));
