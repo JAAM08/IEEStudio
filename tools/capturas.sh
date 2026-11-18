@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Captura la aplicación en las vistas y los tamaños de referencia del
-# rediseño (etapa R1) y sale con error si alguna se cierra o no deja imagen.
+# rediseño (etapas R1 a R3) y sale con error si alguna se cierra o no deja imagen.
 #
 # Uso: tools/capturas.sh [carpeta] [programa]
 #   carpeta   donde quedan las imágenes y resumen.txt (target/capturas)
@@ -29,16 +29,19 @@ if [ -z "$proyecto" ]; then
 fi
 
 tamanos=${TAMANOS:-"1440x900 1024x768 768x1024 600x844 390x844"}
-vistas=${VISTAS:-"proyecto tableros circuitos unifilar revisar memoria avanzada"}
+vistas=${VISTAS:-"proyecto tableros circuitos unifilar revisar memoria procedimiento"}
 temas=${TEMAS:-"oscuro claro"}
 
-# Opciones de la aplicación para cada vista.
+# Opciones de la aplicación para cada vista. «procedimiento» es el cuadro con
+# el panel de procedimiento abierto abajo; «dividida», dos vistas a la vez.
 opciones() {
   case "$1" in
-    unifilar) echo "--paso revisar --unifilar-completo" ;;
-    avanzada) echo "--avanzada --espacio calculo" ;;
-    circuitos) echo "--paso circuitos --seleccion C-03" ;;
-    *) echo "--paso $1" ;;
+    tableros) echo "--vista tableros --seleccion TG-1" ;;
+    circuitos) echo "--vista tableros --seleccion C-03" ;;
+    unifilar) echo "--vista unifilar --seleccion C-03" ;;
+    procedimiento) echo "--vista tableros --seleccion C-03 --procedimiento" ;;
+    dividida) echo "--vista tableros --seleccion C-03 --dividir" ;;
+    *) echo "--vista $1" ;;
   esac
 }
 

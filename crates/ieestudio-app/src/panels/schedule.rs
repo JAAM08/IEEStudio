@@ -712,7 +712,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                 doc.edited();
             }
         }
-        Some(Context::Procedure) => shared.open_tab = Some(crate::workspace::Tab::Procedure),
+        Some(Context::Procedure) => shared.open_procedure = true,
         None => {}
     }
     match action {

@@ -61,6 +61,47 @@ pub fn bottom_panel(height: f32) -> (f32, f32, f32) {
     (default, min, max)
 }
 
+/// Ancho del navegador (árbol de la instalación) en escritorio.
+pub const NAVIGATOR_W: f32 = 248.0;
+
+/// Ancho del inspector (ficha del elemento elegido) en escritorio.
+pub const INSPECTOR_W: f32 = 328.0;
+
+/// Ancho de ventana desde el que caben dos vistas a la vez, como en la
+/// maqueta R0.
+pub const SPLIT_FROM: f32 = 1360.0;
+
+/// Qué regiones fijas caben alrededor de la vista activa.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Regions {
+    pub navigator: bool,
+    pub inspector: bool,
+    /// Dos vistas a la vez: el cuadro y el unifilar lado a lado.
+    pub split: bool,
+}
+
+/// Regiones de escritorio para una ventana de `width` px. `split_wanted` es
+/// lo que pidió el usuario; solo se cumple si caben las dos vistas.
+///
+/// Por debajo de [`WIDE`] no hay regiones laterales: tabletas y teléfonos
+/// usan cajones y hojas (etapa R6), y mientras tanto cada vista se muestra
+/// sola. Con dos vistas a la vez el navegador se contrae, como en la maqueta.
+pub fn regions(width: f32, split_wanted: bool) -> Regions {
+    if width < WIDE {
+        return Regions {
+            navigator: false,
+            inspector: false,
+            split: false,
+        };
+    }
+    let split = split_wanted && width >= SPLIT_FROM;
+    Regions {
+        navigator: !split && width >= NAVIGATOR_W + INSPECTOR_W + MIN_CONTENT,
+        inspector: true,
+        split,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +169,38 @@ mod tests {
         assert!(max < 844.0);
         let (default, min, max) = bottom_panel(100.0);
         assert!(min <= default && default <= max);
+    }
+
+    #[test]
+    fn regions_follow_the_window_width() {
+        let wide = regions(1440.0, false);
+        assert!(wide.navigator && wide.inspector && !wide.split);
+        // 1024 px todavía alcanza para el navegador, el inspector y el centro.
+        let compact = regions(1024.0, false);
+        assert!(compact.navigator && compact.inspector);
+        // A 900 px el navegador deja su lugar al centro.
+        let narrow = regions(900.0, false);
+        assert!(!narrow.navigator && narrow.inspector);
+        // Por debajo de 900 px no hay regiones laterales.
+        for width in [768.0, 600.0, 390.0] {
+            let r = regions(width, true);
+            assert!(!r.navigator && !r.inspector && !r.split);
+        }
+    }
+
+    #[test]
+    fn two_views_contract_the_navigator_and_need_room() {
+        let two = regions(1440.0, true);
+        assert!(two.split && !two.navigator && two.inspector);
+        // Sin ancho para dos vistas, se pide pero no se cumple.
+        let no_room = regions(1280.0, true);
+        assert!(!no_room.split && no_room.navigator);
+        // El centro nunca queda por debajo del mínimo.
+        for width in [900.0, 1024.0, 1280.0, 1360.0, 1440.0, 1920.0] {
+            let r = regions(width, true);
+            let side = (if r.navigator { NAVIGATOR_W } else { 0.0 })
+                + (if r.inspector { INSPECTOR_W } else { 0.0 });
+            assert!(width - side >= MIN_CONTENT, "{width}");
+        }
     }
 }

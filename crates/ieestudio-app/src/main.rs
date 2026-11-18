@@ -15,17 +15,18 @@ mod files;
 mod guided;
 mod layout;
 mod panels;
+mod shell;
 mod state;
 mod symbols;
 mod theme;
+mod views;
 mod widgets;
-mod workspace;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
 #[cfg(not(target_arch = "wasm32"))]
-use workspace::{Tab, Workspace};
+use views::View;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
@@ -33,15 +34,15 @@ fn main() -> eframe::Result {
         open: None,
         capture: None,
         light: false,
-        workspace: None,
-        focus: None,
-        no_panels: false,
         select: None,
         properties: None,
         home: false,
         palette: false,
-        step: None,
-        advanced: false,
+        view: None,
+        sub: None,
+        procedure: false,
+        split: false,
+        quick: false,
         chooser: false,
         diagram: false,
         measure: 0,
@@ -55,7 +56,11 @@ fn main() -> eframe::Result {
             "--seleccion" => options.select = args.next(),
             "--inicio" => options.home = true,
             "--comandos" => options.palette = true,
-            "--avanzada" => options.advanced = true,
+            "--procedimiento" => options.procedure = true,
+            "--dividir" => options.split = true,
+            // De antes del marco único: la vista avanzada era el cuadro con
+            // sus paneles.
+            "--avanzada" => options.view = options.view.or(Some(View::Schedule)),
             "--agregar" => options.chooser = true,
             "--unifilar-completo" => options.diagram = true,
             // Tamaño de la ventana para revisar pantallas angostas: 1024x768.
@@ -65,41 +70,39 @@ fn main() -> eframe::Result {
                     Some([w.parse::<f32>().ok()?, h.parse::<f32>().ok()?])
                 });
             }
+            "--vista" => options.view = args.next().as_deref().and_then(view_named),
+            // `--paso`, `--espacio`, `--panel`, `--rapido` y `--unifilar` son
+            // de antes del marco único; se aceptan hasta la etapa R7.
             "--paso" => {
-                options.step = match args.next().as_deref() {
-                    Some("proyecto") => Some(guided::Step::Project),
+                let step = args.next();
+                options.sub = match step.as_deref() {
                     Some("tableros") => Some(guided::Step::Panels),
-                    Some("revisar") => Some(guided::Step::Review),
-                    Some("memoria") => Some(guided::Step::Report),
                     _ => Some(guided::Step::Circuits),
-                }
+                };
+                options.view = step
+                    .as_deref()
+                    .and_then(view_named)
+                    .or(Some(View::Schedule));
             }
             "--captura" => options.capture = args.next().map(PathBuf::from),
             // Con --captura: mide cuánto tarda la interfaz en armar N cuadros
             // más antes de tomar la imagen, e imprime los tiempos.
             "--medir" => options.measure = args.next().and_then(|v| v.parse().ok()).unwrap_or(60),
             "--espacio" => {
-                options.workspace = match args.next().as_deref() {
-                    Some("diagrama") => Some(Workspace::Diagram),
-                    Some("documentacion") => Some(Workspace::Documentation),
-                    _ => Some(Workspace::Calculation),
+                options.view = match args.next().as_deref() {
+                    Some("diagrama") => Some(View::Diagram),
+                    Some("documentacion") => Some(View::Report),
+                    _ => Some(View::Schedule),
                 }
             }
-            "--panel" => {
-                options.focus = match args.next().as_deref() {
-                    Some("rapido") => Some(Tab::Quick),
-                    Some("unifilar") => Some(Tab::Diagram),
-                    Some("memoria") => Some(Tab::Report),
-                    Some("ninguno") => {
-                        options.no_panels = true;
-                        None
-                    }
-                    _ => None,
-                }
-            }
-            // Compatibilidad con las opciones anteriores.
-            "--rapido" => options.focus = Some(Tab::Quick),
-            "--unifilar" => options.focus = Some(Tab::Diagram),
+            "--panel" => match args.next().as_deref() {
+                Some("rapido") => options.quick = true,
+                Some("unifilar") => options.view = Some(View::Diagram),
+                Some("memoria") => options.view = Some(View::Report),
+                _ => {}
+            },
+            "--rapido" => options.quick = true,
+            "--unifilar" => options.view = Some(View::Diagram),
             _ => options.open = Some(PathBuf::from(arg)),
         }
     }
@@ -128,6 +131,19 @@ fn main() -> eframe::Result {
         errors.join("\n")
     ));
     std::process::exit(1);
+}
+
+/// La vista que nombra una opción de línea de comandos.
+#[cfg(not(target_arch = "wasm32"))]
+fn view_named(name: &str) -> Option<View> {
+    match name {
+        "proyecto" => Some(View::Project),
+        "tableros" | "circuitos" | "cuadro" => Some(View::Schedule),
+        "unifilar" => Some(View::Diagram),
+        "revisar" => Some(View::Review),
+        "memoria" => Some(View::Report),
+        _ => None,
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -205,15 +221,15 @@ fn main() {
         open: None,
         capture: None,
         light: false,
-        workspace: None,
-        focus: None,
-        no_panels: false,
         select: None,
         properties: None,
         home: false,
         palette: false,
-        step: None,
-        advanced: false,
+        view: None,
+        sub: None,
+        procedure: false,
+        split: false,
+        quick: false,
         chooser: false,
         diagram: false,
         measure: 0,

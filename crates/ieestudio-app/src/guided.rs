@@ -10,7 +10,6 @@ use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
 use ieestudio_project::{size_label, Check, LoadKind, RunResult, Status};
 use ieestudio_rules::{cite_all, Profile, Rule};
-use serde::{Deserialize, Serialize};
 
 use crate::layout;
 use crate::panels::{properties, report, Shared};
@@ -21,46 +20,16 @@ use crate::widgets::{
     label_of, muted, status_color, status_icon, steps_ui, strong, worst, KINDS, SYSTEMS,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+/// Contenido que dibuja este módulo. Antes eran los cinco pasos de la vista
+/// guiada; ahora las vistas del marco (`views::View`) los reparten, y en
+/// ventanas angostas «Tableros» y «Circuitos» siguen siendo dos contenidos.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     Project,
     Panels,
-    #[default]
     Circuits,
     Review,
     Report,
-}
-
-impl Step {
-    pub const ALL: [Step; 5] = [
-        Step::Project,
-        Step::Panels,
-        Step::Circuits,
-        Step::Review,
-        Step::Report,
-    ];
-
-    pub fn title(self) -> &'static str {
-        match self {
-            Step::Project => "Proyecto",
-            Step::Panels => "Tableros",
-            Step::Circuits => "Circuitos",
-            Step::Review => "Revisar",
-            Step::Report => "Memoria",
-        }
-    }
-
-    fn index(self) -> usize {
-        Step::ALL.iter().position(|s| *s == self).unwrap_or(0)
-    }
-
-    fn previous(self) -> Option<Step> {
-        self.index().checked_sub(1).map(|i| Step::ALL[i])
-    }
-
-    fn next(self) -> Option<Step> {
-        Step::ALL.get(self.index() + 1).copied()
-    }
 }
 
 /// Archivo que un paso pide exportar a la ventana principal.
@@ -74,7 +43,7 @@ pub enum Export {
 
 /// Verificaciones que no cumplen y que quedaron sin evaluar en todo el
 /// proyecto, contando las de los tramos que no se pudieron calcular.
-fn problem_counts(doc: &Doc) -> (usize, usize) {
+pub fn problem_counts(doc: &Doc) -> (usize, usize) {
     let Ok(result) = &doc.result else {
         return (0, 0);
     };
@@ -85,111 +54,6 @@ fn problem_counts(doc: &Doc) -> (usize, usize) {
         v.failed_checks,
         v.pending_checks + v.uncalculated + v.invalid_data - v.invalid_runs,
     )
-}
-
-/// Si el paso ya tiene lo mínimo, para marcarlo con ✓.
-fn step_done(step: Step, doc: &Doc) -> bool {
-    let project = &doc.project;
-    match step {
-        Step::Project => !project.name.trim().is_empty() && project.occupancy.is_some(),
-        Step::Panels => !project.panels.is_empty(),
-        Step::Circuits => project.panels.iter().any(|p| !p.circuits.is_empty()),
-        Step::Review => {
-            doc.result.is_ok() && problem_counts(doc) == (0, 0) && step_done(Step::Circuits, doc)
-        }
-        Step::Report => false,
-    }
-}
-
-/// Barra de pasos para la barra superior. Devuelve el paso elegido.
-///
-/// Con `compact`, los pasos que no son el actual muestran solo su número:
-/// así la barra cabe en ventanas angostas sin encimarse con lo demás.
-pub fn step_bar(
-    ui: &mut egui::Ui,
-    p: &Palette,
-    current: Step,
-    doc: &Doc,
-    compact: bool,
-) -> Option<Step> {
-    let mut chosen = None;
-    let (fails, pending) = problem_counts(doc);
-    for (k, step) in Step::ALL.into_iter().enumerate() {
-        let now = step == current;
-        let done = !now && step_done(step, doc);
-        let (bubble_fill, bubble_ink, bubble_text) = if now {
-            (p.accent, p.on_accent, format!("{}", k + 1))
-        } else if done {
-            (p.raise, p.ok, icon::CHECK.to_string())
-        } else {
-            (p.bg, p.ink2, format!("{}", k + 1))
-        };
-        let text_color = if now { p.ink } else { p.ink2 };
-        let response = egui::Frame::new()
-            .fill(if now {
-                p.raise
-            } else {
-                egui::Color32::TRANSPARENT
-            })
-            .corner_radius(14)
-            .inner_margin(egui::Margin {
-                left: 6,
-                right: if compact && !now { 6 } else { 12 },
-                top: 3,
-                bottom: 3,
-            })
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 7.0;
-                    let (rect, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
-                    ui.painter().circle(
-                        rect.center(),
-                        10.0,
-                        bubble_fill,
-                        egui::Stroke::new(1.0, if now { p.accent } else { p.line }),
-                    );
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        bubble_text,
-                        egui::FontId::proportional(11.5),
-                        bubble_ink,
-                    );
-                    if now || !compact {
-                        let label = RichText::new(step.title()).color(text_color);
-                        ui.label(if now { label.family(semibold()) } else { label });
-                    }
-                    // Revisar avisa cuánto falta, desde cualquier paso: el
-                    // mismo total que lista ese paso.
-                    if step == Step::Review && fails + pending > 0 {
-                        let color = if fails > 0 { p.bad } else { p.warn };
-                        ui.label(
-                            RichText::new(format!("· {}", fails + pending))
-                                .color(color)
-                                .size(12.0),
-                        );
-                    }
-                });
-            })
-            .response
-            .interact(Sense::click())
-            .on_hover_cursor(egui::CursorIcon::PointingHand);
-        let response = if step == Step::Review && fails + pending > 0 {
-            response.on_hover_text(format!(
-                "Revisar: {} por resolver ({fails} no {}, {pending} sin evaluar)",
-                fails + pending,
-                if fails == 1 { "cumple" } else { "cumplen" }
-            ))
-        } else if compact && !now {
-            response.on_hover_text(step.title())
-        } else {
-            response
-        };
-        if response.clicked() && !now {
-            chosen = Some(step);
-        }
-    }
-    chosen
 }
 
 // ------------------------------------------------------------------ piezas
@@ -353,9 +217,10 @@ fn step_panel(ui: &egui::Ui, id: &'static str, left: bool, width: f32, above: bo
         .size_range(min..=max)
 }
 
-/// Dibuja el paso y su pie. Devuelve el paso al que se quiere ir y lo que se
-/// pide a la ventana principal.
-pub fn show(
+/// Dibuja el contenido de un paso. Devuelve el paso al que se quiere ir y lo
+/// que se pide a la ventana principal. El «Siguiente» y los totales viven en
+/// la barra de estado del marco.
+pub fn view(
     ui: &mut egui::Ui,
     step: Step,
     doc: &mut Doc,
@@ -364,57 +229,6 @@ pub fn show(
     let p = shared.palette;
     let mut go = None;
     let mut request = None;
-
-    if shared.diagram_full {
-        return diagram_page(ui, &p, step, doc, shared);
-    }
-
-    egui::Panel::bottom("pie-guiado")
-        .frame(
-            egui::Frame::new()
-                .fill(p.bg)
-                .inner_margin(egui::Margin::symmetric(16, 8)),
-        )
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                if let Some(prev) = step.previous() {
-                    if ui
-                        .add(
-                            egui::Button::new(format!("{}  {}", icon::ARROW_LEFT, prev.title()))
-                                .frame(false),
-                        )
-                        .clicked()
-                    {
-                        go = Some(prev);
-                    }
-                }
-                ui.add_space(8.0);
-                footer_summary(ui, &p, step, doc);
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    match step.next() {
-                        Some(next) => {
-                            if primary(
-                                ui,
-                                &p,
-                                &format!("Siguiente: {}  {}", next.title(), icon::ARROW_RIGHT),
-                            ) {
-                                go = Some(next);
-                            }
-                        }
-                        None => {
-                            if primary(
-                                ui,
-                                &p,
-                                &format!("{}  Exportar memoria en PDF", icon::FILE_PDF),
-                            ) {
-                                request = Some(Export::Pdf);
-                            }
-                        }
-                    }
-                });
-            });
-        });
-
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(p.bg))
         .show(ui, |ui| match step {
@@ -441,64 +255,6 @@ pub fn show(
             }
         });
     (go, request)
-}
-
-fn footer_summary(ui: &mut egui::Ui, p: &Palette, step: Step, doc: &Doc) {
-    let k = step.index() + 1;
-    match step {
-        Step::Circuits => {
-            let Some(i) = doc.panel_index() else {
-                ui.label(muted(p, "Paso 3 de 5"));
-                return;
-            };
-            let Some(result) = doc.panel_result(i) else {
-                ui.label(muted(p, "Paso 3 de 5"));
-                return;
-            };
-            let count = |s: Status| result.circuits.iter().filter(|c| c.status == s).count();
-            ui.label(muted(p, format!("{} ·", doc.project.panels[i].id)));
-            let ok = count(Status::Complies);
-            ui.label(
-                RichText::new(format!(
-                    "{ok} {}",
-                    if ok == 1 { "cumple" } else { "cumplen" }
-                ))
-                .color(p.ok),
-            );
-            let fails = count(Status::Fails);
-            if fails > 0 {
-                let verb = if fails == 1 {
-                    "no cumple"
-                } else {
-                    "no cumplen"
-                };
-                ui.label(RichText::new(format!("· {fails} {verb}")).color(p.bad));
-            }
-            let pending = count(Status::NotEvaluated);
-            if pending > 0 {
-                ui.label(RichText::new(format!("· {pending} sin evaluar")).color(p.warn));
-            }
-        }
-        Step::Review => {
-            ui.label(muted(
-                p,
-                "Puedes generar la memoria aunque falten puntos: saldrán anotados como pendientes.",
-            ));
-        }
-        Step::Panels => {
-            let n = doc.project.panels.len();
-            ui.label(muted(
-                p,
-                format!(
-                    "Paso 2 de 5 · {n} {}",
-                    if n == 1 { "tablero" } else { "tableros" }
-                ),
-            ));
-        }
-        _ => {
-            ui.label(muted(p, format!("Paso {k} de 5")));
-        }
-    }
 }
 
 // ------------------------------------------------------------- 1 · proyecto
@@ -1717,15 +1473,16 @@ fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunRes
 
 // ------------------------------------------------------ unifilar completo
 
-/// El unifilar a pantalla completa dentro de la vista guiada: es lo que el
-/// ingeniero entrega, así que tiene su lugar y no solo una miniatura.
-fn diagram_page(
+/// La vista Unifilar: es lo que el ingeniero entrega, así que tiene su lugar y
+/// no solo una miniatura. Con `leave_on_select` (ventanas sin inspector), un
+/// clic en un tablero o circuito lleva a su ficha en «Tableros y circuitos».
+pub fn diagram_view(
     ui: &mut egui::Ui,
-    p: &Palette,
-    step: Step,
     doc: &mut Doc,
     shared: &mut Shared,
+    leave_on_select: bool,
 ) -> (Option<Step>, Option<Export>) {
+    let p = &shared.palette.clone();
     let mut go = None;
     let mut request = None;
     egui::Panel::top("unifilar-completo-barra")
@@ -1736,13 +1493,6 @@ fn diagram_page(
         )
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                if ui
-                    .button(format!("{}  Volver a {}", icon::ARROW_LEFT, step.title()))
-                    .clicked()
-                {
-                    shared.diagram_full = false;
-                }
-                ui.add_space(8.0);
                 ui.label(strong("Diagrama unifilar").size(16.0));
                 ui.label(
                     muted(p, "Haz clic en un tablero o circuito para ir a su ficha.").size(12.0),
@@ -1796,11 +1546,12 @@ fn diagram_page(
                     (i, Some(c)) => Selection::Circuit(i, c),
                     (i, None) => Selection::Feeder(i),
                 };
-                go = Some(match hit.1 {
-                    Some(_) => Step::Circuits,
-                    None => Step::Panels,
-                });
-                shared.diagram_full = false;
+                if leave_on_select {
+                    go = Some(match hit.1 {
+                        Some(_) => Step::Circuits,
+                        None => Step::Panels,
+                    });
+                }
             }
             // La hoja del plano tiene otra proporción: se vuelve a ajustar.
             if before != shared.diagram_mode {
@@ -3039,13 +2790,6 @@ mod tests {
         // «Es otra carga» se guarda en el proyecto y deja de preguntar.
         doc.project.panels[0].circuits[c].load.confirmed_general = true;
         assert!(suspicious_kinds(&doc).is_empty());
-    }
-
-    #[test]
-    fn steps_go_back_and_forth() {
-        assert_eq!(Step::Project.previous(), None);
-        assert_eq!(Step::Project.next(), Some(Step::Panels));
-        assert_eq!(Step::Report.next(), None);
     }
 
     /// En la casa de ejemplo, Revisar lista primero lo que no cumple (C-04)
