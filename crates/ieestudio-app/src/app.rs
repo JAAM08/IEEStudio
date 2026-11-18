@@ -66,6 +66,9 @@ struct Prefs {
     #[allow(dead_code)]
     accent: usize,
     columns: schedule::Columns,
+    /// Juego de columnas del cuadro.
+    #[serde(default)]
+    column_set: schedule::ColumnSet,
     diagram_zoom: f32,
     /// Proyectos abiertos o guardados hace poco; el primero se abre al
     /// arrancar.
@@ -125,6 +128,9 @@ pub struct App {
     /// Resultado de la última importación de Excel, con el proyecto de antes
     /// para poder deshacerla.
     imported: Option<(ieestudio_exchange::ImportReport, Project)>,
+    /// Importación de Excel en vista previa: lo que haría, sin aplicarlo
+    /// todavía (paso 2 de 3).
+    import_preview: Option<ImportPreview>,
     /// El usuario ya decidió cerrar; no se vuelve a preguntar.
     allow_close: bool,
     /// Cerrar la ventana al terminar este cuadro.
@@ -148,6 +154,8 @@ pub struct App {
     procedure: bool,
     /// Cálculo rápido como ventana flotante.
     quick_window: bool,
+    /// Ventana «Personalizar columnas».
+    columns_window: bool,
 }
 
 #[derive(Clone)]
@@ -197,14 +205,20 @@ impl App {
         let recent = prefs.as_ref().map(|p| p.recent.clone()).unwrap_or_default();
         let saved_view = prefs.as_ref().map(|p| p.view);
         let saved_split = prefs.as_ref().is_some_and(|p| p.split);
-        let (dark, columns, zoom) = match prefs {
-            Some(p) => (p.dark, p.columns, p.diagram_zoom),
-            None => (!options.light, schedule::Columns::default(), 1.3),
+        let (dark, columns, column_set, zoom) = match prefs {
+            Some(p) => (p.dark, p.columns, p.column_set, p.diagram_zoom),
+            None => (
+                !options.light,
+                schedule::Columns::default(),
+                schedule::ColumnSet::default(),
+                1.3,
+            ),
         };
         let palette = Palette::new(dark);
         theme::apply(&cc.egui_ctx, &palette);
         let mut shared = Shared::new(palette);
         shared.columns = columns;
+        shared.column_set = column_set;
         shared.diagram_zoom = zoom;
         let mut app = App {
             doc: Doc::new(example::house(), None),
@@ -222,6 +236,7 @@ impl App {
             }),
             pending: None,
             imported: None,
+            import_preview: None,
             allow_close: false,
             quit: false,
             recent,
@@ -234,6 +249,7 @@ impl App {
             split: options.split || saved_split,
             procedure: options.procedure,
             quick_window: options.quick,
+            columns_window: false,
         };
         app.doc.selection = Selection::Circuit(0, 1);
         // Abre lo que se pidió; si no, el último proyecto, si todavía existe.
@@ -604,6 +620,8 @@ impl App {
         files::pick(&self.inbox, Purpose::Excel, EXCEL_FILTER, &self.ctx);
     }
 
+    /// Paso 2 de 3: lee el libro sobre una copia del proyecto y muestra lo
+    /// que haría. El proyecto abierto no cambia hasta pulsar «Importar».
     fn import_picked(&mut self, picked: Picked) {
         let bytes = match picked.bytes {
             Ok(b) => b,
@@ -612,19 +630,117 @@ impl App {
                 return;
             }
         };
-        let before = self.doc.project.clone();
-        match ieestudio_exchange::import_xlsx(&mut self.doc.project, &bytes) {
+        let mut project = self.doc.project.clone();
+        match ieestudio_exchange::import_xlsx(&mut project, &bytes) {
             Ok(report) => {
                 self.notice = None;
-                if self.doc.project != before {
-                    self.doc.edited();
+                self.import_preview = Some(ImportPreview {
+                    file: picked.name,
+                    changes: project != self.doc.project,
+                    report,
+                    project,
+                });
+            }
+            Err(e) => self.notice = Some(format!("No se importó: {e}")),
+        }
+    }
+
+    /// Vista previa de la importación: lo que va a cambiar y las filas que no
+    /// se pueden importar. «Importar» lo aplica y pasa al informe.
+    fn import_preview_window(&mut self, ctx: &egui::Context) {
+        let Some(preview) = &self.import_preview else {
+            return;
+        };
+        let p = self.shared.palette;
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::new("importacion-vista-previa")).show(ctx, |ui| {
+            ui.set_width(500.0);
+            ui.label(muted(&p, "Importar cuadro de cargas · paso 2 de 3").size(11.5));
+            ui.label(strong(format!("Vista previa de «{}»", preview.file)).size(15.0));
+            ui.add_space(6.0);
+            let r = &preview.report;
+            egui::Grid::new("vista-previa-importacion")
+                .num_columns(2)
+                .spacing([16.0, 4.0])
+                .show(ui, |ui| {
+                    for (label, value) in [
+                        ("Circuitos nuevos", r.circuits_added.to_string()),
+                        (
+                            "Circuitos que se actualizan",
+                            r.circuits_updated.to_string(),
+                        ),
+                        ("Tableros que se actualizan", r.panels_updated.to_string()),
+                        (
+                            "Tableros nuevos",
+                            if r.panels_created.is_empty() {
+                                "0".to_string()
+                            } else {
+                                r.panels_created.join(", ")
+                            },
+                        ),
+                        (
+                            "Filas que no se pueden importar",
+                            r.errors.len().to_string(),
+                        ),
+                    ] {
+                        ui.label(muted(&p, label));
+                        ui.label(strong(value));
+                        ui.end_row();
+                    }
+                });
+            if !r.errors.is_empty() {
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical()
+                    .max_height(140.0)
+                    .show(ui, |ui| {
+                        for e in &r.errors {
+                            ui.label(RichText::new(e).color(p.warn).size(12.0));
+                        }
+                    });
+            }
+            ui.add_space(4.0);
+            ui.label(
+                muted(
+                    &p,
+                    if preview.changes {
+                        "Nada cambia hasta que pulses «Importar»; después se puede deshacer."
+                    } else {
+                        "El libro no cambia nada del proyecto."
+                    },
+                )
+                .size(11.5),
+            );
+            ui.add_space(10.0);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(
+                        preview.changes,
+                        egui::Button::new(RichText::new("Importar").color(p.on_accent))
+                            .fill(p.accent),
+                    )
+                    .clicked()
+                {
+                    answer = Some(true);
                 }
-                self.imported = Some((report, before));
+                if ui.button("Cancelar").clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        if modal.should_close() && answer.is_none() {
+            answer = Some(false);
+        }
+        match answer {
+            Some(true) => {
+                if let Some(preview) = self.import_preview.take() {
+                    let before = std::mem::replace(&mut self.doc.project, preview.project);
+                    self.doc.selection = Selection::Project;
+                    self.doc.edited();
+                    self.imported = Some((preview.report, before));
+                }
             }
-            Err(e) => {
-                self.doc.project = before;
-                self.notice = Some(format!("No se importó: {e}"));
-            }
+            Some(false) => self.import_preview = None,
+            None => {}
         }
     }
 
@@ -646,6 +762,7 @@ impl App {
                 ui.label(RichText::new(glyph).size(20.0).color(color));
                 ui.label(strong("Importación del cuadro de cargas").size(15.0));
             });
+            ui.label(muted(&p, "Paso 3 de 3: informe").size(11.5));
             ui.add_space(4.0);
             ui.label(format!(
                 "{}.",
@@ -1193,6 +1310,14 @@ impl App {
             self.toggle_procedure();
         }
         if ui
+            .button(format!("{}  Personalizar columnas…", icon::TABLE))
+            .on_hover_text("Columnas del juego «Completo» del cuadro de cargas")
+            .clicked()
+        {
+            ui.close();
+            self.columns_window = true;
+        }
+        if ui
             .add(
                 egui::Button::new(format!("{}  Dos vistas a la vez", icon::COLUMNS))
                     .selected(self.split),
@@ -1618,8 +1743,14 @@ impl App {
             }
         }
         self.chooser_window(&ctx);
+        if self.columns_window {
+            let mut open = true;
+            schedule::columns_window(&ctx, &mut self.shared, &mut open);
+            self.columns_window = open;
+        }
         self.about_window(&ctx);
         self.confirm_window(&ctx);
+        self.import_preview_window(&ctx);
         self.import_window(&ctx);
         if std::mem::take(&mut self.shared.open_procedure) {
             self.home = false;
@@ -1685,6 +1816,7 @@ impl eframe::App for App {
             dark: self.dark,
             accent: 0,
             columns: self.shared.columns.clone(),
+            column_set: self.shared.column_set,
             diagram_zoom: self.shared.diagram_zoom,
             recent: self.recent.clone(),
             view: self.view,
@@ -1717,6 +1849,16 @@ fn next_button(ui: &mut egui::Ui, p: &Palette, next: View) -> bool {
     )
     .on_hover_text(format!("Ir a {} ({})", next.title(), next.shortcut()))
     .clicked()
+}
+
+/// Lo que haría una importación de Excel, antes de aplicarla.
+struct ImportPreview {
+    file: String,
+    report: ieestudio_exchange::ImportReport,
+    /// El proyecto como quedaría.
+    project: Project,
+    /// Si cambia algo del proyecto abierto.
+    changes: bool,
 }
 
 /// Qué se eligió en la pantalla de inicio.
@@ -1932,6 +2074,7 @@ mod tests {
             dark: true,
             accent: 0,
             columns: schedule::Columns::default(),
+            column_set: schedule::ColumnSet::Complete,
             diagram_zoom: 1.3,
             recent: Vec::new(),
             view: View::Review,

@@ -12,26 +12,56 @@ use crate::widgets::{muted, status_glyph, strong, worst};
 
 pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     let p = shared.palette;
-    ui.horizontal(|ui| {
-        if ui
-            .button(format!("{} Tablero", icon::PLUS))
-            .on_hover_text(
-                "Agregar un tablero. Si hay uno seleccionado, queda como subtablero suyo.",
-            )
-            .clicked()
-        {
-            doc.add_panel();
-        }
-        if let Some(panel) = doc.panel_index() {
+    // Un solo «Agregar», con lo que se agrega dicho sin ambigüedad: un
+    // tablero desde la acometida, un subtablero del tablero elegido o un
+    // circuito en él.
+    let selected_panel = match doc.selection {
+        Selection::Project => None,
+        _ => doc.panel_index(),
+    };
+    ui.menu_button(
+        format!("{}  Agregar {}", icon::PLUS, icon::CARET_DOWN),
+        |ui| {
             if ui
-                .button(format!("{} Circuito", icon::PLUS))
-                .on_hover_text("Agregar un circuito al tablero activo")
+                .button(format!(
+                    "{}  Tablero desde {}",
+                    icon::SQUARES_FOUR,
+                    doc.project.source.name
+                ))
                 .clicked()
             {
-                shared.choose_load = Some(panel);
+                ui.close();
+                doc.selection = Selection::Project;
+                doc.add_panel();
             }
-        }
-    });
+            if let Some(i) = selected_panel {
+                let id = doc.project.panels[i].id.clone();
+                if ui
+                    .button(format!("{}  Subtablero de {id}", icon::TREE_STRUCTURE))
+                    .on_hover_text(format!("Un tablero que se alimenta de {id}"))
+                    .clicked()
+                {
+                    ui.close();
+                    let k = doc.add_subpanel(i);
+                    shared.done = Some(format!(
+                        "Subtablero {} agregado desde {id}: captura su alimentador en la ficha.",
+                        doc.project.panels[k].id
+                    ));
+                }
+            }
+            if let Some(i) = doc.panel_index() {
+                let id = doc.project.panels[i].id.clone();
+                if ui
+                    .button(format!("{}  Circuito en {id}", icon::PLUG))
+                    .on_hover_text("¿Qué vas a conectar? Elige el tipo de carga")
+                    .clicked()
+                {
+                    ui.close();
+                    shared.choose_load = Some(i);
+                }
+            }
+        },
+    );
     ui.add_space(4.0);
 
     let mut select = None;

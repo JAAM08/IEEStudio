@@ -17,7 +17,8 @@ use crate::state::{set_load_kind, Doc, Selection};
 use crate::symbols::{self, Symbol};
 use crate::theme::{semibold, Palette};
 use crate::widgets::{
-    label_of, muted, status_color, status_icon, steps_ui, strong, worst, KINDS, SYSTEMS,
+    label_caps, label_of, main_problem, muted, page_title, proposed_instead, sentence,
+    status_color, status_icon, steps_ui, strong, text_field, thousands, worst, KINDS, SYSTEMS,
 };
 
 /// Contenido que dibuja este módulo. Antes eran los cinco pasos de la vista
@@ -25,7 +26,6 @@ use crate::widgets::{
 /// ventanas angostas «Tableros» y «Circuitos» siguen siendo dos contenidos.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
-    Project,
     Panels,
     Circuits,
     Review,
@@ -58,22 +58,6 @@ pub fn problem_counts(doc: &Doc) -> (usize, usize) {
 
 // ------------------------------------------------------------------ piezas
 
-fn page_title(ui: &mut egui::Ui, p: &Palette, title: &str, subtitle: &str) {
-    ui.label(strong(title).size(24.0));
-    ui.add_space(2.0);
-    ui.label(muted(p, subtitle));
-    ui.add_space(14.0);
-}
-
-fn label_caps(ui: &mut egui::Ui, p: &Palette, text: &str) {
-    ui.label(
-        RichText::new(text.to_uppercase())
-            .size(11.0)
-            .color(p.ink2)
-            .family(semibold()),
-    );
-}
-
 /// Botón principal, amarillo.
 fn primary(ui: &mut egui::Ui, p: &Palette, text: &str) -> bool {
     ui.add(
@@ -82,110 +66,6 @@ fn primary(ui: &mut egui::Ui, p: &Palette, text: &str) -> bool {
             .min_size(Vec2::new(0.0, 30.0)),
     )
     .clicked()
-}
-
-/// Tarjeta seleccionable: título y una línea debajo.
-fn choice(ui: &mut egui::Ui, p: &Palette, on: bool, title: &str, sub: &str, width: f32) -> bool {
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 62.0), Sense::click());
-    let hovered = response.hovered();
-    ui.painter().rect(
-        rect,
-        7.0,
-        if on || hovered { p.raise } else { p.panel },
-        egui::Stroke::new(
-            if on { 1.5 } else { 1.0 },
-            if on {
-                p.accent
-            } else if hovered {
-                p.ink3
-            } else {
-                p.line
-            },
-        ),
-        egui::StrokeKind::Inside,
-    );
-    let mut child = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect.shrink2(Vec2::new(14.0, 11.0)))
-            .layout(Layout::top_down(Align::Min)),
-    );
-    child.label(strong(title));
-    child.label(muted(p, sub).size(12.0));
-    response
-        .on_hover_cursor(egui::CursorIcon::PointingHand)
-        .clicked()
-}
-
-/// Columna centrada de ancho máximo, para formularios.
-fn centered(ui: &mut egui::Ui, max_width: f32, add: impl FnOnce(&mut egui::Ui)) {
-    let width = ui.available_width().min(max_width).max(0.0);
-    let left = ((ui.available_width() - width) / 2.0).max(0.0);
-    ui.horizontal_top(|ui| {
-        ui.add_space(left);
-        ui.vertical(|ui| {
-            ui.set_width(width);
-            add(ui);
-        });
-    });
-}
-
-fn text_field(ui: &mut egui::Ui, p: &Palette, label: &str, value: &mut String, hint: &str) -> bool {
-    let mut changed = false;
-    ui.vertical(|ui| {
-        label_caps(ui, p, label);
-        changed = ui
-            .add(
-                egui::TextEdit::singleline(value)
-                    .hint_text(hint)
-                    .desired_width(f32::INFINITY)
-                    .margin(egui::Margin::symmetric(8, 6)),
-            )
-            .changed();
-    });
-    changed
-}
-
-/// `1,800`: miles con coma, sin decimales.
-fn thousands(value: f64) -> String {
-    let digits = format!("{:.0}", value.abs());
-    let mut out = String::new();
-    for (k, ch) in digits.chars().enumerate() {
-        if k > 0 && (digits.len() - k) % 3 == 0 {
-            out.push(',');
-        }
-        out.push(ch);
-    }
-    if value < 0.0 {
-        format!("-{out}")
-    } else {
-        out
-    }
-}
-
-/// Primera verificación que impide que el tramo cumpla: la que no cumple, o
-/// si no hay, la que quedó sin evaluar.
-fn main_problem(item: &RunResult) -> Option<&Check> {
-    item.checks
-        .iter()
-        .find(|c| c.status == Status::Fails)
-        .or_else(|| {
-            item.checks
-                .iter()
-                .find(|c| c.status == Status::NotEvaluated)
-        })
-}
-
-/// El calibre que propone IEEStudio cuando el usuario fijó otro.
-fn proposed_instead(item: &RunResult) -> Option<ieestudio_core::Size> {
-    let run = item.run.as_ref()?;
-    match &run.recommended_size {
-        Some(rec) if run.forced && rec != &run.size => Some(rec.clone()),
-        _ => None,
-    }
-}
-
-fn sentence(text: &str) -> String {
-    crate::widgets::capitalize(text.trim_end_matches('.')) + "."
 }
 
 // ------------------------------------------------------------------ pasos
@@ -232,7 +112,6 @@ pub fn view(
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(p.bg))
         .show(ui, |ui| match step {
-            Step::Project => project_step(ui, &p, doc),
             Step::Panels => {
                 if let Some(s) = panels_step(ui, &p, doc) {
                     go = Some(s);
@@ -255,251 +134,6 @@ pub fn view(
             }
         });
     (go, request)
-}
-
-// ------------------------------------------------------------- 1 · proyecto
-
-/// Tipos de inmueble que se ofrecen como tarjetas; los demás, en la lista.
-const COMMON_OCCUPANCIES: [&str; 3] = ["dwellings", "offices", "stores"];
-
-fn project_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) {
-    let mut changed = false;
-    let study = doc.result.as_ref().ok().and_then(|r| r.fault.clone());
-    egui::ScrollArea::vertical()
-        .id_salt("paso-proyecto")
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            ui.add_space(28.0);
-            centered(ui, 920.0, |ui| {
-                page_title(
-                    ui,
-                    p,
-                    "¿Qué vas a calcular?",
-                    "Datos generales de la obra. Lo que no sepas todavía lo puedes llenar después.",
-                );
-                let project = &mut doc.project;
-                let half = layout::column_width(ui.available_width(), 2, 16.0);
-                ui.horizontal_top(|ui| {
-                    ui.spacing_mut().item_spacing.x = 16.0;
-                    ui.vertical(|ui| {
-                        ui.set_width(half);
-                        changed |= text_field(ui, p, "Nombre del proyecto", &mut project.name, "Casa, local, nave…");
-                    });
-                    ui.vertical(|ui| {
-                        ui.set_width(half);
-                        changed |= text_field(ui, p, "Cliente", &mut project.info.client, "Propietario o razón social");
-                    });
-                });
-                ui.add_space(10.0);
-                ui.horizontal_top(|ui| {
-                    ui.spacing_mut().item_spacing.x = 16.0;
-                    ui.vertical(|ui| {
-                        ui.set_width(half);
-                        changed |= text_field(ui, p, "Ubicación", &mut project.info.location, "Domicilio o municipio");
-                    });
-                    ui.vertical(|ui| {
-                        ui.set_width(half);
-                        changed |= text_field(ui, p, "Quién lo elabora", &mut project.info.prepared_by, "Tu nombre");
-                    });
-                });
-
-                ui.add_space(24.0);
-                label_caps(ui, p, "Tipo de inmueble");
-                ui.label(muted(p, "Decide la carga mínima por m² y los factores de demanda (Tabla 220-12).").size(12.5));
-                ui.add_space(6.0);
-                let profile = Profile::nom_001_sede_2012();
-                let card = layout::column_width(ui.available_width(), 4, 12.0);
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 12.0;
-                    for id in COMMON_OCCUPANCIES {
-                        if let Some(o) = profile.occupancy(id) {
-                            let on = project.occupancy.as_deref() == Some(id);
-                            if choice(ui, p, on, &o.label, &format!("{} VA/m²", o.va_per_m2), card) && !on {
-                                project.occupancy = Some(id.to_string());
-                                changed = true;
-                            }
-                        }
-                    }
-                    ui.vertical(|ui| {
-                        ui.set_width(card);
-                        ui.add_space(4.0);
-                        ui.label(muted(p, "Otro tipo").size(12.0));
-                        let other = project
-                            .occupancy
-                            .as_deref()
-                            .is_some_and(|o| !COMMON_OCCUPANCIES.contains(&o));
-                        let mut value = if other { project.occupancy.clone() } else { None };
-                        if properties::occupancy_combo(ui, "inmueble-otro", &mut value, false, "Elegir de la tabla") {
-                            if value.is_some() {
-                                project.occupancy = value;
-                            }
-                            changed = true;
-                        }
-                    });
-                });
-                if project.occupancy.is_none() {
-                    ui.add_space(4.0);
-                    ui.label(
-                        RichText::new(format!(
-                            "{} Sin el tipo de inmueble, los alimentadores con alumbrado o contactos quedan sin evaluar.",
-                            icon::INFO
-                        ))
-                        .color(p.warn)
-                        .size(12.5),
-                    );
-                }
-
-                ui.add_space(24.0);
-                label_caps(ui, p, "Suministro");
-                ui.add_space(6.0);
-                let card = layout::column_width(ui.available_width(), 3, 12.0);
-                for row in SYSTEMS.chunks(3) {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 12.0;
-                        for (label, system) in row {
-                            let (phases, volts) = label.split_once(' ').unwrap_or((label, ""));
-                            let on = project.source.system == *system;
-                            let plain = match phases {
-                                "1F-2H" => "una fase y neutro",
-                                "1F-3H" => "monofásico de tres hilos",
-                                "3F-4H" => "trifásico con neutro",
-                                _ => "trifásico sin neutro",
-                            };
-                            let detail = format!("{phases} · {plain}");
-                            if choice(ui, p, on, volts, &detail, card) && !on {
-                                project.source.system = *system;
-                                changed = true;
-                            }
-                        }
-                    });
-                    ui.add_space(10.0);
-                }
-                // Un sistema que no es de la lista (archivo anterior o
-                // importado) declara aquí su topología (decisión 0030).
-                if !SYSTEMS.iter().any(|(_, s)| *s == project.source.system) {
-                    let tolerance = crate::panels::properties::ratio_tolerance(&project.profile);
-                    ui.label(strong(format!(
-                        "Sistema del archivo: {}",
-                        project.source.system.voltages_label()
-                    )));
-                    changed |= crate::widgets::topology_row(
-                        ui,
-                        p,
-                        "topologia-guiado",
-                        &mut project.source.system,
-                        tolerance,
-                    );
-                    ui.add_space(10.0);
-                }
-                // Cambiar el suministro con tableros ya capturados puede
-                // dejar conexiones que el sistema nuevo no tiene.
-                let stale = ieestudio_project::connection::mismatches(project).len();
-                if stale > 0 {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label(
-                            RichText::new(format!(
-                                "{} {} con fases que este suministro no tiene: no se calculan hasta ajustarlos.",
-                                icon::WARNING,
-                                if stale == 1 { "Hay 1 tramo capturado".to_string() } else { format!("Hay {stale} tramos capturados") }
-                            ))
-                            .color(p.bad)
-                            .size(12.5),
-                        );
-                        if ui
-                            .button("Ajustarlos")
-                            .on_hover_text("Pasa cada tramo a la conexión más cercana que sí existe. Se puede deshacer con Ctrl+Z.")
-                            .clicked()
-                        {
-                            ieestudio_project::connection::fix(project);
-                            changed = true;
-                        }
-                    });
-                    ui.add_space(10.0);
-                }
-
-                egui::Frame::new()
-                    .fill(p.panel)
-                    .stroke(egui::Stroke::new(1.0, p.line))
-                    .corner_radius(8)
-                    .inner_margin(egui::Margin::symmetric(16, 12))
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.label(strong("Acometida y cortocircuito"));
-                        changed |= properties::fault_study_toggle(ui, &mut project.settings.fault_study);
-                        let source = &project.source;
-                        let mut summary = Vec::new();
-                        if !source.supplier.trim().is_empty() {
-                            summary.push(source.supplier.trim().to_string());
-                        }
-                        if let Some(sub) = &source.substation {
-                            summary.push(match sub.kva {
-                                Some(kva) => format!("transformador de la acometida de {kva} kVA"),
-                                None => "transformador de la acometida sin potencia".to_string(),
-                            });
-                        }
-                        use ieestudio_project::fault::IssueKind;
-                        // Con algo por resolver en la falla, la sección se
-                        // abre sola: ahí está el dato que falta.
-                        let mut attention = false;
-                        match study.as_ref().map(|f| (&f.source, &f.source_issue)) {
-                            _ if !project.settings.fault_study => summary.push(
-                                "cálculo de cortocircuito apagado: la capacidad interruptiva queda fuera de alcance y la memoria lo anota".into(),
-                            ),
-                            Some((Some(bus), _)) => summary.push(format!("falla de {:.2} kA en el punto de conexión", bus.total_ka)),
-                            Some((None, Some(issue))) if issue.kind == IssueKind::Incomplete => {
-                                attention = true;
-                                summary.push(format!("falla sin estimar: {}", issue.reason))
-                            }
-                            Some((None, Some(issue))) if issue.kind == IssueKind::Invalid => {
-                                attention = true;
-                                summary.push(format!("dato inválido: {}", issue.reason))
-                            }
-                            _ => summary.push("sin datos de falla: la capacidad interruptiva de lo que depende de la acometida queda fuera de alcance".into()),
-                        }
-                        ui.label(muted(p, crate::widgets::capitalize(&summary.join(" · "))).size(12.5));
-                        egui::CollapsingHeader::new("Datos de la acometida, su transformador y la falla")
-                            // Otro identificador con algo por resolver: egui
-                            // recuerda si estaba cerrada antes del cálculo.
-                            .id_salt(("acometida-guiado", attention))
-                            .default_open(attention)
-                            .show(ui, |ui| {
-                                changed |= properties::source_inputs(ui, p, &mut project.source, study.as_ref());
-                            });
-                    });
-
-                ui.add_space(14.0);
-                let s = &project.settings;
-                let summary = format!(
-                    "Caída {} % en derivados, {} % en alimentadores y {} % acumulada · {} °C · {} {} · {}",
-                    s.branch_drop_limit_percent,
-                    s.feeder_drop_limit_percent,
-                    s.total_drop_limit_percent,
-                    s.ambient_c,
-                    label_of(&crate::widgets::MATERIALS, s.material).to_lowercase(),
-                    label_of(&crate::widgets::INSULATIONS, s.insulation),
-                    label_of(&crate::widgets::CONDUITS, s.conduit),
-                );
-                egui::Frame::new()
-                    .fill(p.panel)
-                    .stroke(egui::Stroke::new(1.0, p.line))
-                    .corner_radius(8)
-                    .inner_margin(egui::Margin::symmetric(16, 12))
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.label(strong("Criterios de diseño"));
-                        ui.label(muted(p, summary).size(12.5));
-                        egui::CollapsingHeader::new("Cambiar criterios")
-                            .id_salt("criterios-guiado")
-                            .show(ui, |ui| {
-                                changed |= properties::criteria_inputs(ui, p, &mut project.settings);
-                            });
-                    });
-                ui.add_space(30.0);
-            });
-        });
-    if changed {
-        doc.edited();
-    }
 }
 
 // ------------------------------------------------------------- 2 · tableros

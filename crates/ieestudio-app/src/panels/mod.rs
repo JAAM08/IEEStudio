@@ -3,6 +3,7 @@
 pub mod browser;
 pub mod diagram;
 pub mod procedure;
+pub mod project;
 pub mod properties;
 pub mod quick;
 pub mod report;
@@ -19,6 +20,8 @@ use crate::views::Panel;
 pub struct Shared {
     pub palette: Palette,
     pub columns: schedule::Columns,
+    /// Juego de columnas del cuadro: «Esencial» o «Completo».
+    pub column_set: schedule::ColumnSet,
     pub filter: String,
     pub status_filter: schedule::StatusFilter,
     pub props_tab: properties::PropsTab,
@@ -49,6 +52,7 @@ impl Shared {
         Shared {
             palette,
             columns: schedule::Columns::default(),
+            column_set: schedule::ColumnSet::Essential,
             filter: String::new(),
             status_filter: schedule::StatusFilter::All,
             props_tab: properties::PropsTab::Inputs,

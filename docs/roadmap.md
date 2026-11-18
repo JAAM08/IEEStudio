@@ -112,6 +112,12 @@
   marco en escritorio, sin modo guiado ni avanzado: barra superior con las
   cinco vistas, navegador e inspector fijos, procedimiento en un panel
   inferior, cálculo rápido flotante y «Siguiente» en la barra de estado.
+- Rediseño 2026, etapa R4 (`rediseno-2026-r4-captura-unificada.md`): vista
+  Proyecto con resumen, tabla de tableros y cuatro bloques de captura; un
+  cuadro con juegos «Esencial» y «Completo» y filtro «Pendientes»; un árbol
+  con «Agregar»; una ficha con lo que no cumple, su arreglo y los ajustes
+  manuales; verificación de capacidad interruptiva con confirmación;
+  importación de Excel en tres pasos.
 
 ## Pendiente, en orden
 
@@ -132,6 +138,13 @@ El orden y el detalle están en `plan-1.0.md`. En resumen:
   `rediseno-2026-r1-linea-base.md`.
 - Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
   plantillas de circuito.
+- Rediseño 2026, etapa R6 (además de lo de la maqueta R0): la pantalla de
+  inicio ofrece dos experiencias independientes, requisito del dueño del
+  proyecto del 18 de noviembre de 2026: «Proyecto completo» (crear un
+  proyecto nuevo o abrir uno existente) y «Cálculo rápido» (las herramientas
+  de cálculo directo, sin crear un proyecto). Va en R6 porque ahí el cálculo
+  rápido pasa a ser su propia pantalla en teléfono y se arma el marco de cada
+  tamaño; la elección se construye una vez para todos.
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
 - Confirmar con la NMX-J-136-ANCE-2019 los símbolos del unifilar (cotejados
   con la edición 2007) y con el texto de la NMX-J-116-ANCE la tabla de
