@@ -7,11 +7,10 @@
 use eframe::egui::{self, Key, RichText};
 use egui_phosphor::regular as icon;
 
-use crate::guided::Step;
 use crate::state::{Doc, Selection};
 use crate::theme::Palette;
+use crate::views::View;
 use crate::widgets::{muted, strong};
-use crate::workspace::{Tab, Workspace};
 
 /// Lo que se puede hacer desde la paleta.
 #[derive(Debug, Clone, PartialEq)]
@@ -33,13 +32,14 @@ pub enum Command {
     Remove,
     Balance,
     Quick,
-    Panel(Tab),
-    Workspace(Workspace),
-    ResetWorkspace,
+    /// Ir a una de las cinco vistas.
+    View(View),
+    /// Abrir o cerrar el panel de procedimiento.
+    Procedure,
+    /// Dos vistas a la vez: el cuadro y el unifilar.
+    Split,
     ToggleTheme,
     Select(Selection),
-    Step(Step),
-    ToggleView,
 }
 
 /// Un renglón de la paleta: el comando, su texto, su ícono, palabras para
@@ -177,10 +177,17 @@ fn entries(doc: &Doc) -> Vec<Entry> {
             "Ctrl+Y",
         ),
         entry(
-            Command::ResetWorkspace,
-            icon::LAYOUT,
-            "Restablecer el espacio de trabajo",
-            "paneles acomodo",
+            Command::Procedure,
+            icon::LIST_BULLETS,
+            "Procedimiento: abrir o cerrar el panel",
+            "procedimiento pasos fórmulas panel inferior",
+            "F7",
+        ),
+        entry(
+            Command::Split,
+            icon::COLUMNS,
+            "Dos vistas a la vez: cuadro y unifilar",
+            "dividir dos vistas cuadro unifilar lado",
             "",
         ),
         entry(
@@ -207,38 +214,13 @@ fn entries(doc: &Doc) -> Vec<Entry> {
             "Supr",
         ));
     }
-    for (k, step) in Step::ALL.into_iter().enumerate() {
+    for view in View::ALL {
         list.push(entry(
-            Command::Step(step),
-            icon::LIST_NUMBERS,
-            format!("Paso {}: {}", k + 1, step.title()),
-            "paso ir guiada",
-            "",
-        ));
-    }
-    list.push(entry(
-        Command::ToggleView,
-        icon::LAYOUT,
-        "Cambiar entre vista guiada y avanzada",
-        "vista guiada avanzada paneles pasos",
-        "",
-    ));
-    for tab in Tab::ALL {
-        list.push(entry(
-            Command::Panel(tab),
-            tab.icon(),
-            format!("Panel: {}", tab.title()),
-            "panel ventana abrir",
-            tab.shortcut(),
-        ));
-    }
-    for ws in Workspace::ALL {
-        list.push(entry(
-            Command::Workspace(ws),
-            icon::LAYOUT,
-            format!("Espacio de trabajo: {}", ws.title()),
-            "espacio",
-            "",
+            Command::View(view),
+            view.icon(),
+            format!("Ir a {}", view.title()),
+            "vista ir pantalla",
+            view.shortcut(),
         ));
     }
     // Ir a un tablero o a un circuito por su ID o su descripción.
@@ -444,5 +426,26 @@ mod tests {
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].starts_with("Ir a C-04 · Contactos sala"));
         assert!(search("bomba").iter().any(|l| l.contains("C-06")));
+    }
+
+    // Las cinco vistas se alcanzan desde la paleta con su atajo; los modos y
+    // los espacios de trabajo de antes ya no están.
+    #[test]
+    fn the_palette_goes_to_each_view_and_has_no_old_modes() {
+        let doc = Doc::new(ieestudio_project::example::house(), None);
+        let list = entries(&doc);
+        for view in View::ALL {
+            let found = list
+                .iter()
+                .find(|e| e.command == Command::View(view))
+                .expect("la vista está en la paleta");
+            assert_eq!(found.shortcut, view.shortcut());
+        }
+        assert!(list.iter().all(|e| !e.label.contains("Espacio de trabajo")));
+        assert!(list.iter().all(|e| !e.label.contains("guiada")));
+        assert!(search("revisar").iter().any(|l| l == "Ir a Revisar"));
+        assert!(search("procedimiento")
+            .iter()
+            .any(|l| l.starts_with("Procedimiento")));
     }
 }

@@ -1,4 +1,4 @@
-//! Los paneles acoplables y lo que comparten.
+//! Los paneles de las regiones del marco y lo que comparten.
 
 pub mod browser;
 pub mod diagram;
@@ -8,13 +8,12 @@ pub mod quick;
 pub mod report;
 pub mod schedule;
 
-use eframe::egui::{self, Id, RichText, WidgetText};
-use egui_dock::TabViewer;
+use eframe::egui;
 use ieestudio_diagrams::{single_line_with, Mode, Options};
 
 use crate::state::{Doc, Selection};
 use crate::theme::Palette;
-use crate::workspace::Tab;
+use crate::views::Panel;
 
 /// Estado de la interfaz que no es del proyecto.
 pub struct Shared {
@@ -28,15 +27,15 @@ pub struct Shared {
     pub preview: report::Preview,
     /// Aviso de una acción terminada, para la barra de estado.
     pub done: Option<String>,
-    /// Panel que otro panel pidió abrir, por ejemplo el procedimiento desde
-    /// la barra contextual del cuadro de cargas.
-    pub open_tab: Option<Tab>,
+    /// Otro panel pidió abrir el procedimiento, por ejemplo desde la barra
+    /// contextual del cuadro de cargas.
+    pub open_procedure: bool,
     /// Tablero al que se va a agregar un circuito: mientras tenga valor está
     /// abierta la ventana «¿Qué vas a conectar?».
     pub choose_load: Option<usize>,
     /// Unifilar como revisión (colores) o como plano (hoja para imprimir).
     pub diagram_mode: ieestudio_diagrams::Mode,
-    /// El unifilar ocupa toda la vista guiada.
+    /// Un panel pidió ver el unifilar completo: el marco pasa a esa vista.
     pub diagram_full: bool,
     /// Pendiente de ajustar el unifilar a la pantalla al abrirlo.
     pub diagram_fit: bool,
@@ -56,7 +55,7 @@ impl Shared {
             diagram_zoom: 1.3,
             quick: quick::QuickView::default(),
             done: None,
-            open_tab: None,
+            open_procedure: false,
             choose_load: None,
             diagram_mode: ieestudio_diagrams::Mode::Review,
             diagram_full: false,
@@ -95,8 +94,6 @@ impl Shared {
 pub struct Viewer<'a> {
     pub doc: &'a mut Doc,
     pub shared: &'a mut Shared,
-    /// El panel de la memoria pidió exportar el PDF.
-    pub export_report: bool,
 }
 
 fn padded(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
@@ -105,30 +102,19 @@ fn padded(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
         .show(ui, add);
 }
 
-impl TabViewer for Viewer<'_> {
-    type Tab = Tab;
-
-    fn id(&mut self, tab: &mut Tab) -> Id {
-        Id::new(("panel", *tab))
-    }
-
-    fn title(&mut self, tab: &mut Tab) -> WidgetText {
-        RichText::new(format!("{}  {}", tab.icon(), tab.title())).into()
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Tab) {
+impl Viewer<'_> {
+    pub fn panel(&mut self, ui: &mut egui::Ui, panel: Panel) {
         let p = self.shared.palette;
-        match tab {
-            Tab::Browser => padded(ui, |ui| {
+        match panel {
+            Panel::Browser => padded(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("navegador")
                     .auto_shrink([false, false])
                     .show(ui, |ui| browser::show(ui, self.doc, self.shared));
             }),
-            Tab::Schedule => schedule::show(ui, self.doc, self.shared),
-            Tab::Properties => padded(ui, |ui| properties::show(ui, self.doc, self.shared)),
-            Tab::Procedure => padded(ui, |ui| procedure::show(ui, self.doc, self.shared)),
-            Tab::Diagram => padded(ui, |ui| {
+            Panel::Schedule => schedule::show(ui, self.doc, self.shared),
+            Panel::Properties => padded(ui, |ui| properties::show(ui, self.doc, self.shared)),
+            Panel::Diagram => padded(ui, |ui| {
                 match self.shared.diagram(self.doc, self.shared.diagram_mode) {
                     Some(d) => {
                         let selected = match self.doc.selection {
@@ -159,14 +145,6 @@ impl TabViewer for Viewer<'_> {
                     ),
                 }
             }),
-            Tab::Report => padded(ui, |ui| {
-                self.export_report |= report::show(ui, self.doc, self.shared);
-            }),
-            Tab::Quick => self.shared.quick.ui(ui, &p),
         }
-    }
-
-    fn scroll_bars(&self, _tab: &Tab) -> [bool; 2] {
-        [false, false]
     }
 }

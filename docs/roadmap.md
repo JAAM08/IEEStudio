@@ -108,6 +108,10 @@
   visual nuevo con amarillo eléctrico, azul técnico y morado lavanda sobre
   obsidiana y grafito, en tema oscuro y claro; etiquetas de estado uniformes
   y esquinas en tres medidas. Sin cambios de cálculo.
+- Rediseño 2026, etapa R3 (`rediseno-2026-r3-marco-unico.md`): un solo
+  marco en escritorio, sin modo guiado ni avanzado: barra superior con las
+  cinco vistas, navegador e inspector fijos, procedimiento en un panel
+  inferior, cálculo rápido flotante y «Siguiente» en la barra de estado.
 
 ## Pendiente, en orden
 

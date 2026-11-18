@@ -88,19 +88,27 @@ proyecto vacío en su lugar. Un proyecto guardado que no se puede leer se copia 
 
 ## Interfaz
 
-`ieestudio-app` usa egui con paneles acoplables (egui_dock). Todos los
-paneles leen el mismo `Doc` (`state.rs`): el proyecto, su resultado y la
-selección; cambiar algo en un panel recalcula y los demás lo reflejan.
+`ieestudio-app` usa egui con un marco único: una barra superior con cinco
+vistas (Proyecto, Tableros y circuitos, Unifilar, Revisar, Memoria), un
+navegador y un inspector fijos a los lados, un panel de procedimiento abajo y la
+barra de estado. Todas las vistas leen el mismo `Doc` (`state.rs`): el
+proyecto, su resultado y la selección; cambiar algo recalcula y las demás lo
+reflejan. Las medidas que dependen del ancho de la ventana están en
+`layout.rs`, sin interfaz, para probarlas solas.
 
 ```
-src/app.rs           menús, espacios de trabajo, barra de estado, preferencias guardadas
+src/app.rs           barra superior, barra de estado, atajos, preferencias guardadas
+src/shell.rs         pestañas de las vistas y disposición de las regiones
+src/views.rs         las cinco vistas y los paneles de las regiones
+src/layout.rs        qué regiones caben según el ancho (probado sin pantalla)
 src/state.rs         proyecto abierto, selección y acciones de edición
-src/workspace.rs     paneles y acomodos de cada espacio de trabajo
+src/guided.rs        contenido de Proyecto, Revisar y Memoria, y de Tableros y
+                     circuitos en ventanas angostas (se retira en R7)
 src/panels/          un archivo por panel: browser, schedule, properties,
                      procedure, diagram, report, quick
 src/widgets.rs       piezas compartidas: estados, propiedades, procedimiento
 src/theme.rs         paleta, tipografía e íconos
 ```
 
-Se prueba sin pantalla con `xvfb-run` y `--captura imagen.png`; `--espacio`,
-`--panel` y `--propiedades` eligen qué capturar.
+Se prueba sin pantalla con `xvfb-run` y `--captura imagen.png`; `--vista`,
+`--procedimiento`, `--dividir` y `--propiedades` eligen qué capturar.

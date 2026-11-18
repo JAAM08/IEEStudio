@@ -1,10 +1,9 @@
-//! Ventana principal: menús, espacios de trabajo, paneles acoplables y barra
-//! de estado alrededor de un único proyecto.
+//! Ventana principal: barra superior con las cinco vistas, regiones fijas y
+//! barra de estado alrededor de un único proyecto.
 
 use std::path::PathBuf;
 
 use eframe::egui::{self, Align, Layout, RichText};
-use egui_dock::{DockArea, DockState, Style};
 use egui_phosphor::regular as icon;
 use ieestudio_project::{example, Project};
 use serde::{Deserialize, Serialize};
@@ -13,20 +12,22 @@ use crate::chooser;
 use crate::commands::{Command, CommandPalette};
 use crate::files::{self, Filter, Inbox, Picked, Purpose, Saved};
 use crate::guided::{self, Step};
-use crate::panels::{schedule, Shared, Viewer};
+use crate::layout;
+use crate::panels::{schedule, Shared};
+use crate::shell::{self, Arrangement};
 use crate::state::{empty_project, Doc, Selection};
 use crate::symbols::Symbol;
 use crate::theme::{self, Palette};
+use crate::views::View;
 use crate::widgets::{muted, strong, verdict_chips};
-use crate::workspace::{self, Tab, Workspace};
 
 const STORAGE_KEY: &str = "ieestudio-interfaz-1";
-/// Ancho de los botones de la derecha de la barra superior de la vista
-/// guiada (cálculo rápido, buscar, vista avanzada y tema).
-const RIGHT_TOOLS: f32 = 230.0;
-/// Ancho aproximado de la barra de pasos completa y de la reducida a números.
-const FULL_STEPS: f32 = 530.0;
-const COMPACT_STEPS: f32 = 300.0;
+/// Ancho de los botones de la derecha de la barra superior (cálculo rápido,
+/// dos vistas, buscar y tema).
+const RIGHT_TOOLS: f32 = 190.0;
+/// Ancho aproximado de las cinco vistas con su nombre y reducidas a íconos.
+const FULL_VIEWS: f32 = 600.0;
+const COMPACT_VIEWS: f32 = 320.0;
 /// En el navegador, el proyecto abierto se guarda solo con esta clave, para
 /// no perder trabajo si se cierra la pestaña. Una clave por formato desde el
 /// 4: el 5 agrega la topología declarada (decisión 0030) y el 6 deja sin
@@ -64,23 +65,20 @@ struct Prefs {
     #[serde(default)]
     #[allow(dead_code)]
     accent: usize,
-    workspace: Workspace,
-    dock: DockState<Tab>,
     columns: schedule::Columns,
     diagram_zoom: f32,
     /// Proyectos abiertos o guardados hace poco; el primero se abre al
     /// arrancar.
     #[serde(default)]
     recent: Vec<PathBuf>,
-    /// Vista guiada por pasos (la de omisión) o avanzada con paneles.
-    #[serde(default = "yes")]
-    guided: bool,
+    /// Vista en la que se quedó. Las preferencias de versiones anteriores
+    /// traían el modo guiado o avanzado, el acomodo de los paneles y el paso;
+    /// ya no existen y se ignoran.
     #[serde(default)]
-    step: Step,
-}
-
-fn yes() -> bool {
-    true
+    view: View,
+    /// Dos vistas a la vez: el cuadro y el unifilar.
+    #[serde(default)]
+    split: bool,
 }
 
 /// Cuántos proyectos recientes se recuerdan.
@@ -114,8 +112,6 @@ struct Capture {
 pub struct App {
     doc: Doc,
     shared: Shared,
-    dock: DockState<Tab>,
-    workspace: Workspace,
     dark: bool,
     notice: Option<String>,
     /// En el navegador, el proyecto guardado que no se pudo leer: se copia a
@@ -142,10 +138,15 @@ pub struct App {
     /// Pantalla de inicio en lugar de los paneles: al arrancar sin nada que
     /// abrir, o cuando el usuario la pide.
     home: bool,
-    /// Vista guiada por pasos; si no, la avanzada con paneles acoplables.
-    guided: bool,
-    step: Step,
-    /// Cálculo rápido como ventana flotante, en la vista guiada.
+    /// Vista activa del marco.
+    view: View,
+    /// Contenido de «Tableros y circuitos» en ventanas sin inspector.
+    sub: Step,
+    /// Dos vistas a la vez, si la ventana es lo bastante ancha.
+    split: bool,
+    /// Panel de procedimiento abierto abajo.
+    procedure: bool,
+    /// Cálculo rápido como ventana flotante.
     quick_window: bool,
 }
 
@@ -154,10 +155,6 @@ pub struct Options {
     pub open: Option<PathBuf>,
     pub capture: Option<PathBuf>,
     pub light: bool,
-    pub workspace: Option<Workspace>,
-    pub focus: Option<Tab>,
-    /// Empieza sin paneles, para revisar esa pantalla.
-    pub no_panels: bool,
     /// Circuito o tablero que se selecciona al abrir, por su ID.
     pub select: Option<String>,
     /// Pestaña inicial de Propiedades: `datos`, `resultados` o `normativa`.
@@ -166,13 +163,20 @@ pub struct Options {
     pub home: bool,
     /// Empieza con la paleta de comandos abierta, para revisarla.
     pub palette: bool,
-    /// Paso de la vista guiada en el que se empieza.
-    pub step: Option<Step>,
-    /// Empieza en la vista avanzada, con paneles.
-    pub advanced: bool,
+    /// Vista en la que se empieza (`--vista`, y los `--paso` y `--espacio`
+    /// de antes).
+    pub view: Option<View>,
+    /// Contenido de «Tableros y circuitos» en ventanas angostas.
+    pub sub: Option<Step>,
+    /// Empieza con el panel de procedimiento abierto.
+    pub procedure: bool,
+    /// Empieza con dos vistas a la vez.
+    pub split: bool,
+    /// Empieza con el cálculo rápido abierto.
+    pub quick: bool,
     /// Empieza con la ventana «¿Qué vas a conectar?» abierta, para revisarla.
     pub chooser: bool,
-    /// Empieza con el unifilar a pantalla completa en la vista guiada.
+    /// Empieza en el unifilar, ajustado al ancho de la ventana.
     pub diagram: bool,
     /// Con `capture`: cuadros que se miden antes de tomar la imagen.
     pub measure: u32,
@@ -191,37 +195,11 @@ impl App {
                 .and_then(|text| serde_json::from_str(&text).ok())
         };
         let recent = prefs.as_ref().map(|p| p.recent.clone()).unwrap_or_default();
-        let (saved_guided, saved_step) = prefs
-            .as_ref()
-            .map_or((true, Step::Circuits), |p| (p.guided, p.step));
-        // Las opciones de la vista avanzada (espacio, panel, pestaña de
-        // propiedades) la piden; un paso pide la guiada.
-        let advanced = options.advanced
-            || options.properties.is_some()
-            || options.workspace.is_some()
-            || options.focus.is_some()
-            || options.no_panels;
-        let guided_view = options.step.is_some() || (!advanced && saved_guided);
-        let start_step = options.step.unwrap_or(saved_step);
-        let (dark, workspace, dock, columns, zoom) = match prefs {
-            Some(p) => (
-                p.dark,
-                p.workspace,
-                // Un acomodo guardado sin paneles se repone.
-                workspace::sanitize(p.dock, p.workspace),
-                p.columns,
-                p.diagram_zoom,
-            ),
-            None => {
-                let ws = options.workspace.unwrap_or(Workspace::Calculation);
-                (
-                    !options.light,
-                    ws,
-                    ws.layout(),
-                    schedule::Columns::default(),
-                    1.3,
-                )
-            }
+        let saved_view = prefs.as_ref().map(|p| p.view);
+        let saved_split = prefs.as_ref().is_some_and(|p| p.split);
+        let (dark, columns, zoom) = match prefs {
+            Some(p) => (p.dark, p.columns, p.diagram_zoom),
+            None => (!options.light, schedule::Columns::default(), 1.3),
         };
         let palette = Palette::new(dark);
         theme::apply(&cc.egui_ctx, &palette);
@@ -231,8 +209,6 @@ impl App {
         let mut app = App {
             doc: Doc::new(example::house(), None),
             shared,
-            dock,
-            workspace,
             dark,
             notice: None,
             unreadable: None,
@@ -253,9 +229,11 @@ impl App {
             ctx: cc.egui_ctx.clone(),
             commands: CommandPalette::default(),
             home: false,
-            guided: guided_view,
-            step: start_step,
-            quick_window: false,
+            view: options.view.or(saved_view).unwrap_or_default(),
+            sub: options.sub.unwrap_or(Step::Circuits),
+            split: options.split || saved_split,
+            procedure: options.procedure,
+            quick_window: options.quick,
         };
         app.doc.selection = Selection::Circuit(0, 1);
         // Abre lo que se pidió; si no, el último proyecto, si todavía existe.
@@ -316,19 +294,13 @@ impl App {
             Some("normativa") => crate::panels::properties::PropsTab::Normative,
             _ => crate::panels::properties::PropsTab::Inputs,
         };
-        if let Some(tab) = options.focus {
-            workspace::open(&mut app.dock, tab);
-        }
-        if options.no_panels {
-            for tab in Tab::ALL {
-                workspace::close(&mut app.dock, tab);
-            }
-        }
         if options.chooser {
             app.shared.choose_load = app.doc.panel_index();
         }
         if options.diagram {
-            app.shared.diagram_full = true;
+            app.view = View::Diagram;
+        }
+        if app.view == View::Diagram {
             app.shared.diagram_fit = true;
         }
         app
@@ -371,36 +343,11 @@ impl App {
             }
             Command::Quick => {
                 self.home = false;
-                if self.guided {
-                    self.quick_window = true;
-                } else {
-                    workspace::open(&mut self.dock, Tab::Quick);
-                }
+                self.quick_window = true;
             }
-            Command::Panel(tab) => {
-                self.home = false;
-                self.guided = false;
-                workspace::open(&mut self.dock, tab);
-            }
-            Command::Workspace(ws) => {
-                self.home = false;
-                self.guided = false;
-                self.set_workspace(ws);
-            }
-            Command::ResetWorkspace => {
-                self.home = false;
-                self.guided = false;
-                self.dock = self.workspace.layout();
-            }
-            Command::Step(step) => {
-                self.home = false;
-                self.guided = true;
-                self.step = step;
-            }
-            Command::ToggleView => {
-                self.home = false;
-                self.guided = !self.guided;
-            }
+            Command::View(view) => self.go_view(view),
+            Command::Procedure => self.toggle_procedure(),
+            Command::Split => self.split = !self.split,
             Command::ToggleTheme => {
                 self.dark = !self.dark;
                 let ctx = self.ctx.clone();
@@ -409,15 +356,42 @@ impl App {
             Command::Select(selection) => {
                 self.home = false;
                 self.doc.selection = selection;
-                if self.guided {
-                    self.step = match selection {
-                        Selection::Circuit(..) => Step::Circuits,
-                        _ => Step::Panels,
-                    };
-                } else {
-                    workspace::open(&mut self.dock, Tab::Schedule);
-                }
+                self.view = View::Schedule;
+                self.sub = match selection {
+                    Selection::Circuit(..) => Step::Circuits,
+                    _ => Step::Panels,
+                };
             }
+        }
+    }
+
+    /// Va a una vista del marco.
+    fn go_view(&mut self, view: View) {
+        self.home = false;
+        self.view = view;
+        if view == View::Diagram {
+            // Al abrir el unifilar se ajusta al ancho de la ventana.
+            self.shared.diagram_fit = true;
+        }
+    }
+
+    /// Va al contenido que pidió un paso de las vistas.
+    fn go_step(&mut self, step: Step) {
+        let (view, sub) = shell::target(step);
+        self.go_view(view);
+        if let Some(sub) = sub {
+            self.sub = sub;
+        }
+    }
+
+    /// Abre o cierra el panel de procedimiento; vive en las vistas de trabajo.
+    fn toggle_procedure(&mut self) {
+        self.home = false;
+        if !self.view.has_regions() {
+            self.view = View::Schedule;
+            self.procedure = true;
+        } else {
+            self.procedure = !self.procedure;
         }
     }
 
@@ -563,7 +537,7 @@ impl App {
         let count = self.doc.project.panels[panel].circuits.len();
         self.doc.selection = Selection::Circuit(panel, count - 1);
         self.doc.edited();
-        workspace::open(&mut self.dock, Tab::Schedule);
+        self.view = View::Schedule;
         self.notice = None;
         self.done = Some(if input.system != self.doc.project.source.system {
             format!("Circuito {id} agregado a {panel_id}. Ojo: el cálculo rápido usaba otro sistema; en el proyecto se calcula con el del proyecto.")
@@ -723,11 +697,6 @@ impl App {
 
     // ------------------------------------------------------------ paneles
 
-    fn set_workspace(&mut self, ws: Workspace) {
-        self.workspace = ws;
-        self.dock = ws.layout();
-    }
-
     /// Pide hacer algo que reemplaza el proyecto o cierra el programa. Si hay
     /// cambios sin guardar, primero pregunta.
     fn request(&mut self, action: Pending) {
@@ -743,7 +712,7 @@ impl App {
             Pending::New => {
                 self.set_project(empty_project(), None);
                 // Un proyecto nuevo empieza por sus datos generales.
-                self.step = Step::Project;
+                self.view = View::Project;
             }
             Pending::Open => self.open_dialog(),
             Pending::OpenPath(path) => self.load(path),
@@ -751,23 +720,6 @@ impl App {
             Pending::Quit => {
                 self.allow_close = true;
                 self.quit = true;
-            }
-        }
-    }
-
-    /// Casillas para abrir y cerrar cada panel, con su tecla.
-    fn panel_checkboxes(&mut self, ui: &mut egui::Ui) {
-        for tab in Tab::ALL {
-            let mut open = workspace::is_open(&self.dock, tab);
-            if ui
-                .add(egui::Checkbox::new(
-                    &mut open,
-                    format!("{}  {}", tab.icon(), tab.title()),
-                ))
-                .on_hover_text(tab.shortcut())
-                .changed()
-            {
-                workspace::toggle(&mut self.dock, tab);
             }
         }
     }
@@ -780,7 +732,7 @@ impl App {
 
     // ------------------------------------------------------------ barras
 
-    /// Opciones del menú Archivo; las comparten la vista guiada y la avanzada.
+    /// Opciones del menú Archivo.
     fn file_menu(&mut self, ui: &mut egui::Ui) {
         if ui
             .add(
@@ -926,36 +878,60 @@ impl App {
         }
     }
 
-    /// Barra superior de la vista guiada: marca, Archivo, los cinco pasos y
-    /// lo que siempre debe estar a la mano.
-    fn guided_bar(&mut self, ui: &mut egui::Ui) {
+    /// Barra superior: menú, marca y proyecto, deshacer y rehacer, las cinco
+    /// vistas y lo que siempre debe estar a la mano.
+    fn top_bar(&mut self, ui: &mut egui::Ui) {
         // En una ventana angosta no cabe todo en un renglón: la barra entera
         // se recorre de lado, sin encimar nada ni dejar botones fuera.
-        if crate::layout::bars_in_one_row(ui.available_width()) {
-            self.guided_bar_row(ui, false);
+        if layout::bars_in_one_row(ui.available_width()) {
+            self.top_bar_row(ui, false);
         } else {
             egui::ScrollArea::horizontal()
                 .id_salt("barra-superior")
-                .show(ui, |ui| self.guided_bar_row(ui, true));
+                .show(ui, |ui| self.top_bar_row(ui, true));
         }
     }
 
-    fn guided_bar_row(&mut self, ui: &mut egui::Ui, scrolling: bool) {
+    fn top_bar_row(&mut self, ui: &mut egui::Ui, scrolling: bool) {
         let p = self.shared.palette;
         ui.horizontal(|ui| {
+            // Menús sin marco, como en las aplicaciones de escritorio.
             ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
             ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+            ui.menu_button(RichText::new(icon::LIST).size(17.0), |ui| {
+                ui.menu_button("Archivo", |ui| self.file_menu(ui));
+                ui.menu_button("Edición", |ui| self.edit_menu(ui));
+                ui.menu_button("Ver", |ui| self.view_menu(ui));
+                ui.menu_button("Herramientas", |ui| self.tools_menu(ui));
+                ui.menu_button("Ayuda", |ui| self.help_menu(ui));
+            })
+            .response
+            .on_hover_text("Archivo, Edición, Ver, Herramientas y Ayuda");
             ui.label(RichText::new(icon::LIGHTNING).size(17.0).color(p.accent));
             ui.label(strong("IEEStudio").size(14.0));
             let dirty = if self.doc.dirty { " •" } else { "" };
+            let file = self
+                .doc
+                .path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned());
             ui.add(
                 egui::Label::new(muted(&p, format!("· {}{dirty}", self.doc.project.name)))
                     .truncate(),
             )
-            .on_hover_text("Proyecto abierto; • significa cambios sin guardar");
-            ui.add_space(6.0);
-            ui.menu_button("Archivo", |ui| self.file_menu(ui));
+            .on_hover_text(format!(
+                "{}; • significa cambios sin guardar",
+                file.unwrap_or_else(|| {
+                    // En el navegador el proyecto se guarda solo ahí.
+                    if files::WEB {
+                        "En este navegador".to_string()
+                    } else {
+                        "Sin guardar".to_string()
+                    }
+                })
+            ));
             if ui
                 .add_enabled(
                     self.doc.can_undo(),
@@ -977,52 +953,50 @@ impl App {
                 self.doc.redo();
             }
             ui.add_space(12.0);
-            // Los pasos completos necesitan unos 530 px y lo de la derecha
-            // 230: si no caben, los pasos se reducen a su número.
-            let compact = scrolling || ui.available_width() < 780.0;
-            // Si aun así no caben (ventana de menos de unos 900 px), se
-            // recorren de lado en lugar de quedar debajo de los botones de la
-            // derecha.
-            let room = crate::layout::remaining(ui.available_width(), RIGHT_TOOLS);
-            let need = if compact { COMPACT_STEPS } else { FULL_STEPS };
-            let current = if self.home { Step::ALL[0] } else { self.step };
+            // Las vistas completas necesitan unos 600 px y lo de la derecha
+            // 190: si no caben, las vistas se reducen a su ícono.
+            let compact = scrolling || ui.available_width() < FULL_VIEWS + RIGHT_TOOLS;
+            // Si aun así no caben, se recorren de lado en lugar de quedar
+            // debajo de los botones de la derecha.
+            let room = layout::remaining(ui.available_width(), RIGHT_TOOLS);
+            let need = if compact { COMPACT_VIEWS } else { FULL_VIEWS };
+            let current = if self.home { None } else { Some(self.view) };
             let chosen = if scrolling || room >= need {
-                guided::step_bar(ui, &p, current, &self.doc, compact)
+                shell::view_tabs(ui, &p, current, &self.doc, compact)
             } else {
                 egui::ScrollArea::horizontal()
-                    .id_salt("barra-de-pasos")
+                    .id_salt("barra-de-vistas")
                     .max_width(room)
                     .show(ui, |ui| {
-                        ui.horizontal(|ui| guided::step_bar(ui, &p, current, &self.doc, compact))
+                        ui.horizontal(|ui| shell::view_tabs(ui, &p, current, &self.doc, compact))
                             .inner
                     })
                     .inner
             };
-            if let Some(step) = chosen {
-                self.step = step;
-                self.home = false;
-                self.shared.diagram_full = false;
+            if let Some(view) = chosen {
+                self.go_view(view);
             }
             if scrolling {
                 ui.add_space(16.0);
-                self.guided_tools(ui, false);
+                self.top_tools(ui, false);
             } else {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    self.guided_tools(ui, true);
+                    self.top_tools(ui, true);
                 });
             }
         });
     }
 
-    /// Botones de la derecha de la barra guiada: cálculo rápido, buscar,
-    /// vista avanzada y tema, en ese orden de lectura.
-    fn guided_tools(&mut self, ui: &mut egui::Ui, right_to_left: bool) {
+    /// Botones de la derecha de la barra superior: tema, búsqueda, dos vistas,
+    /// procedimiento y cálculo rápido, en ese orden de derecha a izquierda.
+    fn top_tools(&mut self, ui: &mut egui::Ui, right_to_left: bool) {
         let p = self.shared.palette;
-        let order: [u8; 4] = if right_to_left {
-            [0, 1, 2, 3]
+        let order: [u8; 5] = if right_to_left {
+            [0, 1, 2, 3, 4]
         } else {
-            [3, 2, 1, 0]
+            [4, 3, 2, 1, 0]
         };
+        let window_width = ui.ctx().content_rect().width();
         for tool in order {
             match tool {
                 0 => {
@@ -1043,21 +1017,6 @@ impl App {
                 1 => {
                     if ui
                         .add(
-                            egui::Button::new(RichText::new(icon::LAYOUT).size(15.0).color(p.ink2))
-                                .frame(false),
-                        )
-                        .on_hover_text(
-                            "Vista avanzada: paneles acoplables, para quien ya domina el programa",
-                        )
-                        .clicked()
-                    {
-                        self.guided = false;
-                        self.home = false;
-                    }
-                }
-                2 => {
-                    if ui
-                        .add(
                             egui::Button::new(
                                 RichText::new(icon::MAGNIFYING_GLASS)
                                     .size(15.0)
@@ -1066,14 +1025,44 @@ impl App {
                             .frame(false),
                         )
                         .on_hover_text(
-                            "Buscar comandos, pasos, tableros y circuitos por su nombre (Ctrl+K)",
+                            "Buscar comandos, vistas, tableros y circuitos por su nombre (Ctrl+K)",
                         )
                         .clicked()
                     {
                         self.commands.toggle();
                     }
                 }
-                3 => {
+                2 if self.view.has_regions() => {
+                    let on = self.procedure;
+                    let color = if on { p.accent } else { p.ink2 };
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(icon::LIST_BULLETS).size(15.0).color(color),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text("Procedimiento: abrir o cerrar el panel de abajo (F7)")
+                        .clicked()
+                    {
+                        self.toggle_procedure();
+                    }
+                }
+                3 if self.view.has_regions() && window_width >= layout::SPLIT_FROM => {
+                    let on = self.split;
+                    let color = if on { p.accent } else { p.ink2 };
+                    if ui
+                        .add(
+                            egui::Button::new(RichText::new(icon::COLUMNS).size(15.0).color(color))
+                                .frame(false),
+                        )
+                        .on_hover_text("Dos vistas a la vez: el cuadro y el unifilar")
+                        .clicked()
+                    {
+                        self.split = !self.split;
+                    }
+                }
+                4 => {
                     ui.scope(|ui| {
                         let w = &mut ui.style_mut().visuals.widgets;
                         w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
@@ -1092,275 +1081,162 @@ impl App {
         }
     }
 
-    fn menu_bar(&mut self, ui: &mut egui::Ui) {
-        if self.guided {
-            self.guided_bar(ui);
-            return;
+    fn edit_menu(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .add_enabled(
+                self.doc.can_undo(),
+                egui::Button::new(format!("{}  Deshacer", icon::ARROW_COUNTER_CLOCKWISE))
+                    .shortcut_text("Ctrl+Z"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.doc.undo();
         }
+        if ui
+            .add_enabled(
+                self.doc.can_redo(),
+                egui::Button::new(format!("{}  Rehacer", icon::ARROW_CLOCKWISE))
+                    .shortcut_text("Ctrl+Y"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.doc.redo();
+        }
+        ui.separator();
+        let panel = self.doc.panel_index();
+        if ui
+            .add_enabled(
+                panel.is_some(),
+                egui::Button::new(format!("{}  Agregar circuito", icon::PLUS)),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.shared.choose_load = panel;
+        }
+        let on_circuit = matches!(self.doc.selection, Selection::Circuit(..));
+        if ui
+            .add_enabled(
+                on_circuit,
+                egui::Button::new(format!("{}  Duplicar circuito", icon::COPY))
+                    .shortcut_text("Ctrl+D"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.doc.duplicate_circuit();
+        }
+        if ui
+            .button(format!("{}  Agregar tablero", icon::SQUARES_FOUR))
+            .clicked()
+        {
+            ui.close();
+            self.doc.add_panel();
+        }
+        ui.separator();
+        let label = match self.doc.selection {
+            Selection::Circuit(..) => "Eliminar circuito",
+            Selection::Feeder(_) => "Eliminar tablero",
+            Selection::Secondary(_) => "Quitar el transformador",
+            Selection::Project => "Eliminar",
+        };
+        if ui
+            .add_enabled(
+                self.doc.selection != Selection::Project,
+                egui::Button::new(format!("{}  {label}", icon::TRASH)).shortcut_text("Supr"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.doc.remove_selected();
+        }
+    }
+
+    fn view_menu(&mut self, ui: &mut egui::Ui) {
         let p = self.shared.palette;
-        ui.horizontal(|ui| {
-            // Menús de texto sin marco, como en las aplicaciones de escritorio.
-            ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
-            ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
-            ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-            ui.label(RichText::new(icon::LIGHTNING).size(17.0).color(p.accent));
-            ui.label(strong("IEEStudio").size(14.0));
-            ui.add_space(10.0);
-
-            ui.menu_button("Archivo", |ui| self.file_menu(ui));
-
-            ui.menu_button("Edición", |ui| {
-                if ui
-                    .add_enabled(
-                        self.doc.can_undo(),
-                        egui::Button::new(format!("{}  Deshacer", icon::ARROW_COUNTER_CLOCKWISE))
-                            .shortcut_text("Ctrl+Z"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.doc.undo();
-                }
-                if ui
-                    .add_enabled(
-                        self.doc.can_redo(),
-                        egui::Button::new(format!("{}  Rehacer", icon::ARROW_CLOCKWISE))
-                            .shortcut_text("Ctrl+Y"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.doc.redo();
-                }
-                ui.separator();
-                let panel = self.doc.panel_index();
-                if ui
-                    .add_enabled(
-                        panel.is_some(),
-                        egui::Button::new(format!("{}  Agregar circuito", icon::PLUS)),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.shared.choose_load = panel;
-                }
-                let on_circuit = matches!(self.doc.selection, Selection::Circuit(..));
-                if ui
-                    .add_enabled(
-                        on_circuit,
-                        egui::Button::new(format!("{}  Duplicar circuito", icon::COPY))
-                            .shortcut_text("Ctrl+D"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.doc.duplicate_circuit();
-                }
-                if ui
-                    .button(format!("{}  Agregar tablero", icon::SQUARES_FOUR))
-                    .clicked()
-                {
-                    ui.close();
-                    self.doc.add_panel();
-                }
-                ui.separator();
-                let label = match self.doc.selection {
-                    Selection::Circuit(..) => "Eliminar circuito",
-                    Selection::Feeder(_) => "Eliminar tablero",
-                    Selection::Secondary(_) => "Quitar el transformador",
-                    Selection::Project => "Eliminar",
-                };
-                if ui
-                    .add_enabled(
-                        self.doc.selection != Selection::Project,
-                        egui::Button::new(format!("{}  {label}", icon::TRASH))
-                            .shortcut_text("Supr"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.doc.remove_selected();
-                }
-            });
-
-            ui.menu_button("Ver", |ui| {
-                let mut restyle = false;
-                restyle |= ui
-                    .radio_value(&mut self.dark, true, "Tema oscuro")
-                    .changed();
-                restyle |= ui
-                    .radio_value(&mut self.dark, false, "Tema claro")
-                    .changed();
-                if restyle {
-                    self.restyle(ui.ctx());
-                }
-                ui.separator();
-                ui.menu_button("Paneles", |ui| self.panel_checkboxes(ui));
-                if ui
-                    .button(format!("Restablecer «{}»", self.workspace.title()))
-                    .on_hover_text("Vuelve a acomodar los paneles como al principio")
-                    .clicked()
-                {
-                    ui.close();
-                    self.dock = self.workspace.layout();
-                }
-            });
-
-            ui.menu_button("Herramientas", |ui| {
-                if ui
-                    .add(
-                        egui::Button::new(format!(
-                            "{}  Cálculo rápido de un circuito",
-                            icon::CALCULATOR
-                        ))
-                        .shortcut_text("F8"),
-                    )
-                    .on_hover_text("Fuera del proyecto: no cambia el proyecto abierto")
-                    .clicked()
-                {
-                    ui.close();
-                    workspace::open(&mut self.dock, Tab::Quick);
-                }
-            });
-
-            ui.menu_button("Ventana", |ui| {
-                self.panel_checkboxes(ui);
-                ui.separator();
-                ui.label(muted(&p, "Espacio de trabajo"));
-                for ws in Workspace::ALL {
-                    if ui.radio(self.workspace == ws, ws.title()).clicked() {
-                        ui.close();
-                        self.set_workspace(ws);
-                    }
-                }
-                if ui
-                    .button(format!("Restablecer «{}»", self.workspace.title()))
-                    .clicked()
-                {
-                    ui.close();
-                    self.dock = self.workspace.layout();
-                }
-            });
-
-            ui.menu_button("Ayuda", |ui| {
-                if ui
-                    .add(
-                        egui::Button::new(format!("{}  Buscar un comando", icon::MAGNIFYING_GLASS))
-                            .shortcut_text("Ctrl+K"),
-                    )
-                    .clicked()
-                {
-                    ui.close();
-                    self.commands.toggle();
-                }
-                if ui.button("Acerca de IEEStudio").clicked() {
-                    ui.close();
-                    self.about = true;
-                }
-            });
-
-            // Lo que más se usa fuera de los menús: el cálculo de un circuito
-            // suelto y la búsqueda de comandos.
-            ui.add_space(14.0);
+        let mut restyle = false;
+        restyle |= ui
+            .radio_value(&mut self.dark, true, "Tema oscuro")
+            .changed();
+        restyle |= ui
+            .radio_value(&mut self.dark, false, "Tema claro")
+            .changed();
+        if restyle {
+            self.restyle(ui.ctx());
+        }
+        ui.separator();
+        ui.label(muted(&p, "Ir a"));
+        for view in View::ALL {
             if ui
-                .button(RichText::new(format!("{}  Vista guiada", icon::LIST_NUMBERS)).color(p.accent_text))
-                .on_hover_text("Volver a los cinco pasos: Proyecto, Tableros, Circuitos, Revisar y Memoria")
+                .add(
+                    egui::Button::new(format!("{}  {}", view.icon(), view.title()))
+                        .shortcut_text(view.shortcut()),
+                )
                 .clicked()
             {
-                self.guided = true;
+                ui.close();
+                self.go_view(view);
             }
-            ui.scope(|ui| {
-                let w = &mut ui.style_mut().visuals.widgets;
-                w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
-                w.inactive.weak_bg_fill = p.panel;
-                if ui
-                    .button(format!("{}  Cálculo rápido", icon::CALCULATOR))
-                    .on_hover_text("Un circuito suelto, sin proyecto: caída de tensión, conductor e interruptor con su procedimiento (F8)")
-                    .clicked()
-                {
-                    self.run_command(Command::Quick);
-                }
-                let search = if ui.available_width() < 720.0 {
-                    icon::MAGNIFYING_GLASS.to_string()
-                } else {
-                    format!("{}  Buscar   Ctrl+K", icon::MAGNIFYING_GLASS)
-                };
-                if ui
-                    .button(RichText::new(search).color(p.ink2))
-                    .on_hover_text("Buscar comandos, paneles, tableros y circuitos por su nombre (Ctrl+K)")
-                    .clicked()
-                {
-                    self.commands.toggle();
-                }
-            });
+        }
+        ui.separator();
+        if ui
+            .add(
+                egui::Button::new(format!("{}  Procedimiento", icon::LIST_BULLETS))
+                    .selected(self.procedure)
+                    .shortcut_text("F7"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.toggle_procedure();
+        }
+        if ui
+            .add(
+                egui::Button::new(format!("{}  Dos vistas a la vez", icon::COLUMNS))
+                    .selected(self.split),
+            )
+            .on_hover_text("El cuadro y el unifilar lado a lado, en ventanas de 1360 px o más")
+            .clicked()
+        {
+            ui.close();
+            self.split = !self.split;
+        }
+    }
 
-            // Espacios de trabajo a la derecha, como en las aplicaciones de Adobe.
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                // Tema claro u oscuro a un clic, como en las aplicaciones de Adobe.
-                let (glyph, tip) = if self.dark {
-                    (icon::SUN, "Cambiar a tema claro")
-                } else {
-                    (icon::MOON, "Cambiar a tema oscuro")
-                };
-                if ui
-                    .add(egui::Button::new(RichText::new(glyph).size(15.0)).frame(false))
-                    .on_hover_text(tip)
-                    .clicked()
-                {
-                    self.dark = !self.dark;
-                    self.restyle(ui.ctx());
-                }
-                ui.add_space(10.0);
-                for ws in Workspace::ALL.iter().rev() {
-                    let selected = self.workspace == *ws;
-                    let text = if selected {
-                        RichText::new(ws.title()).color(p.ink)
-                    } else {
-                        RichText::new(ws.title()).color(p.ink2)
-                    };
-                    let response = ui.add(egui::Button::new(text).frame(false));
-                    if selected {
-                        let r = response.rect;
-                        ui.painter().hline(
-                            r.x_range(),
-                            r.bottom() + 3.0,
-                            egui::Stroke::new(2.0, p.accent),
-                        );
-                    }
-                    if response.clicked() && !selected {
-                        self.set_workspace(*ws);
-                    }
-                }
-                ui.label(muted(&p, icon::LAYOUT));
-                ui.add_space(16.0);
-                let file = self
-                    .doc
-                    .path
-                    .as_ref()
-                    .and_then(|p| p.file_name())
-                    .map_or_else(
-                        // En el navegador el proyecto se guarda solo ahí.
-                        || {
-                            if files::WEB {
-                                "en este navegador"
-                            } else {
-                                "sin guardar"
-                            }
-                            .to_string()
-                        },
-                        |n| n.to_string_lossy().into_owned(),
-                    );
-                let dirty = if self.doc.dirty { " •" } else { "" };
-                // Solo lo que cabe: en una ventana angosta el nombre no se
-                // encima con los botones de la izquierda.
-                if ui.available_width() > 260.0 {
-                    ui.label(muted(&p, format!("{file}{dirty}")));
-                }
-                if ui.available_width() > 110.0 {
-                    ui.add(egui::Label::new(strong(&self.doc.project.name)).truncate());
-                }
-            });
-        });
+    fn tools_menu(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .add(
+                egui::Button::new(format!(
+                    "{}  Cálculo rápido de un circuito",
+                    icon::CALCULATOR
+                ))
+                .shortcut_text("F8"),
+            )
+            .on_hover_text("Fuera del proyecto: no cambia el proyecto abierto")
+            .clicked()
+        {
+            ui.close();
+            self.run_command(Command::Quick);
+        }
+    }
+
+    fn help_menu(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .add(
+                egui::Button::new(format!("{}  Buscar un comando", icon::MAGNIFYING_GLASS))
+                    .shortcut_text("Ctrl+K"),
+            )
+            .clicked()
+        {
+            ui.close();
+            self.commands.toggle();
+        }
+        if ui.button("Acerca de IEEStudio").clicked() {
+            ui.close();
+            self.about = true;
+        }
     }
 
     fn status_bar(&mut self, ui: &mut egui::Ui, window_width: f32) {
@@ -1368,6 +1244,10 @@ impl App {
         // En una ventana angosta el veredicto va en su propio renglón; en uno
         // solo se encimaba con la ruta de la izquierda.
         let two_rows = !crate::layout::bars_in_one_row(window_width);
+        // «Siguiente» ofrece la vista que sigue en la ruta de trabajo, sin
+        // obligar el orden.
+        let next = if self.home { None } else { self.view.next() };
+        let mut go_next = false;
         ui.horizontal(|ui| {
             let crumbs = self.doc.breadcrumb();
             for (i, part) in crumbs.iter().enumerate() {
@@ -1389,12 +1269,24 @@ impl App {
             }
             if !two_rows {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if let Some(next) = next {
+                        go_next |= next_button(ui, &p, next);
+                        ui.add_space(8.0);
+                    }
                     self.status_verdict(ui, &p);
                 });
             }
         });
         if two_rows {
-            ui.horizontal_wrapped(|ui| self.status_verdict(ui, &p));
+            ui.horizontal_wrapped(|ui| {
+                self.status_verdict(ui, &p);
+                if let Some(next) = next {
+                    go_next |= next_button(ui, &p, next);
+                }
+            });
+        }
+        if let (true, Some(next)) = (go_next, next) {
+            self.go_view(next);
         }
     }
 
@@ -1433,9 +1325,8 @@ impl App {
                 match symbol {
                     Symbol::Load(kind) => {
                         self.doc.add_circuit_of(panel, kind);
-                        if self.guided {
-                            self.step = Step::Circuits;
-                        }
+                        self.view = View::Schedule;
+                        self.sub = Step::Circuits;
                         // La descripción queda lista para escribir.
                         crate::panels::properties::focus_description(ctx);
                     }
@@ -1447,9 +1338,8 @@ impl App {
                             panels[k].id, panels[panel].id
                         ));
                         // Su alimentador se captura en la ficha del tablero.
-                        if self.guided {
-                            self.step = Step::Panels;
-                        }
+                        self.view = View::Schedule;
+                        self.sub = Step::Panels;
                     }
                 }
             }
@@ -1497,61 +1387,19 @@ impl App {
                 self.doc.remove_selected();
             }
         }
-        let keys = [
-            Key::F2,
-            Key::F3,
-            Key::F4,
-            Key::F5,
-            Key::F6,
-            Key::F7,
-            Key::F8,
-        ];
-        for (key, tab) in keys.into_iter().zip(Tab::ALL) {
+        // F2 a F6: las cinco vistas; F7, el procedimiento; F8, el cálculo rápido.
+        let keys = [Key::F2, Key::F3, Key::F4, Key::F5, Key::F6];
+        for (key, view) in keys.into_iter().zip(View::ALL) {
             if pressed(Modifiers::NONE, key) {
-                workspace::toggle(&mut self.dock, tab);
+                self.go_view(view);
             }
         }
-    }
-
-    fn dock_style(&self, ui: &egui::Ui) -> Style {
-        let p = &self.shared.palette;
-        let mut style = Style::from_egui(ui.style().as_ref());
-        style.dock_area_padding = None;
-        style.main_surface_border_stroke = egui::Stroke::NONE;
-        style.separator.width = 2.0;
-        style.separator.color_idle = p.bg;
-        style.separator.color_hovered = p.ink3;
-        style.separator.color_dragged = p.accent;
-        style.tab_bar.bg_fill = p.bg;
-        style.tab_bar.height = 28.0;
-        style.tab_bar.hline_color = p.bg;
-        style.tab_bar.corner_radius = egui::CornerRadius::ZERO;
-        style.tab.spacing = 2.0;
-        style.tab.hline_below_active_tab_name = true;
-        style.tab.tab_body.bg_fill = p.panel;
-        style.tab.tab_body.stroke = egui::Stroke::NONE;
-        style.tab.tab_body.inner_margin = egui::Margin::ZERO;
-        style.tab.tab_body.corner_radius = egui::CornerRadius::ZERO;
-        for (s, bg, text) in [
-            (&mut style.tab.active, p.panel, p.ink),
-            (&mut style.tab.focused, p.panel, p.ink),
-            (&mut style.tab.inactive, p.bg, p.ink2),
-            (&mut style.tab.hovered, p.raise, p.ink),
-        ] {
-            s.bg_fill = bg;
-            s.text_color = text;
-            s.outline_color = egui::Color32::TRANSPARENT;
-            s.corner_radius = egui::CornerRadius {
-                nw: 3,
-                ne: 3,
-                sw: 0,
-                se: 0,
-            };
+        if pressed(Modifiers::NONE, Key::F7) {
+            self.toggle_procedure();
         }
-        style.buttons.close_tab_color = p.ink3;
-        style.buttons.close_tab_active_color = p.ink;
-        style.overlay.selection_color = p.accent.gamma_multiply(0.25);
-        style
+        if pressed(Modifiers::NONE, Key::F8) {
+            self.run_command(Command::Quick);
+        }
     }
 
     fn about_window(&mut self, ctx: &egui::Context) {
@@ -1704,7 +1552,7 @@ impl App {
                     .fill(p.bg)
                     .inner_margin(egui::Margin::symmetric(10, 5)),
             )
-            .show(ui, |ui| self.menu_bar(ui));
+            .show(ui, |ui| self.top_bar(ui));
         let window_width = ui.available_width();
         egui::Panel::bottom("estado")
             .frame(
@@ -1714,60 +1562,43 @@ impl App {
             )
             .show(ui, |ui| self.status_bar(ui, window_width));
 
-        let style = self.dock_style(ui);
         let revision = self.doc.revision;
-        let mut viewer = Viewer {
-            doc: &mut self.doc,
-            shared: &mut self.shared,
-            export_report: false,
-        };
-        let empty = workspace::main_is_empty(&self.dock);
-        let mut restore = None;
         let mut start = None;
         let home = self.home;
         let recent = self.recent.clone();
-        let guided_view = self.guided;
-        let step = self.step;
-        let mut guided_out = (None, None);
+        let mut arrangement = Arrangement {
+            view: self.view,
+            sub: self.sub,
+            regions: layout::regions(window_width, self.split),
+            procedure: self.procedure,
+        };
+        let mut outcome = None;
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(p.bg))
             .show(ui, |ui| {
                 if home {
-                    start = home_screen(ui, &p, &recent, &viewer.doc.project.name);
+                    start = home_screen(ui, &p, &recent, &self.doc.project.name);
                     return;
                 }
-                if guided_view {
-                    guided_out = guided::show(ui, step, viewer.doc, viewer.shared);
-                    return;
-                }
-                let rect = ui.max_rect();
-                DockArea::new(&mut self.dock)
-                    .style(style)
-                    .show_add_buttons(false)
-                    .show_leaf_collapse_buttons(false)
-                    .show_leaf_close_all_buttons(false)
-                    .show_inside(ui, &mut viewer);
-                if empty {
-                    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
-                    restore = no_panels(&mut child, &p, self.workspace);
-                }
+                outcome = Some(shell::show_view(
+                    ui,
+                    &mut arrangement,
+                    &mut self.doc,
+                    &mut self.shared,
+                ));
             });
-
-        match restore {
-            Some(Restore::Workspace) => self.dock = self.workspace.layout(),
-            Some(Restore::Panel(tab)) => workspace::open(&mut self.dock, tab),
-            None => {}
-        }
-        let export = viewer.export_report;
-        let (go, request) = guided_out;
-        if let Some(step) = go {
-            self.step = step;
-        }
-        match request {
-            Some(guided::Export::Pdf) => self.export_pdf(false),
-            Some(guided::Export::Excel) => self.export_excel(),
-            Some(guided::Export::Dxf) => self.export_dxf(),
-            None => {}
+        self.sub = arrangement.sub;
+        self.procedure = arrangement.procedure;
+        if let Some(outcome) = outcome {
+            if let Some(step) = outcome.go {
+                self.go_step(step);
+            }
+            match outcome.request {
+                Some(guided::Export::Pdf) => self.export_pdf(false),
+                Some(guided::Export::Excel) => self.export_excel(),
+                Some(guided::Export::Dxf) => self.export_dxf(),
+                None => {}
+            }
         }
         match start {
             Some(Start::New) => self.request(Pending::New),
@@ -1781,9 +1612,6 @@ impl App {
         if self.doc.revision != revision {
             self.done = None;
         }
-        if export {
-            self.export_pdf(false);
-        }
         if self.pending.is_none() {
             if let Some(command) = self.commands.show(&ctx, &p, &self.doc) {
                 self.run_command(command);
@@ -1793,8 +1621,18 @@ impl App {
         self.about_window(&ctx);
         self.confirm_window(&ctx);
         self.import_window(&ctx);
-        if let Some(tab) = self.shared.open_tab.take() {
-            workspace::open(&mut self.dock, tab);
+        if std::mem::take(&mut self.shared.open_procedure) {
+            self.home = false;
+            self.view = if self.view.has_regions() {
+                self.view
+            } else {
+                View::Schedule
+            };
+            self.procedure = true;
+        }
+        // Un panel pidió el unifilar completo: se pasa a esa vista.
+        if std::mem::take(&mut self.shared.diagram_full) {
+            self.view = View::Diagram;
         }
         if let Some(done) = self.shared.done.take() {
             self.notice = None;
@@ -1812,10 +1650,8 @@ impl App {
         }
         if let Some(input) = self.shared.quick.take_request() {
             self.quick_to_project(&input);
-            if self.guided {
-                self.quick_window = false;
-                self.step = Step::Circuits;
-            }
+            self.quick_window = false;
+            self.sub = Step::Circuits;
         }
         // El historial registra un cambio cuando la interacción terminó.
         let settled = !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none());
@@ -1848,13 +1684,11 @@ impl eframe::App for App {
         let prefs = Prefs {
             dark: self.dark,
             accent: 0,
-            workspace: self.workspace,
-            dock: self.dock.clone(),
             columns: self.shared.columns.clone(),
             diagram_zoom: self.shared.diagram_zoom,
             recent: self.recent.clone(),
-            guided: self.guided,
-            step: self.step,
+            view: self.view,
+            split: self.split,
         };
         if let Ok(text) = serde_json::to_string(&prefs) {
             storage.set_string(STORAGE_KEY, text);
@@ -1868,64 +1702,21 @@ impl eframe::App for App {
     }
 }
 
-/// Qué volver a abrir desde la pantalla sin paneles.
-enum Restore {
-    Workspace,
-    Panel(Tab),
-}
-
-/// Pantalla para cuando el usuario cerró todos los paneles: explica cómo
-/// volver y ofrece hacerlo con un clic.
-fn no_panels(ui: &mut egui::Ui, p: &Palette, ws: Workspace) -> Option<Restore> {
-    let mut chosen = None;
-    ui.with_layout(Layout::top_down(Align::Center), |ui| {
-        ui.add_space(ui.available_height() * 0.28);
-        ui.label(RichText::new(icon::SQUARES_FOUR).size(34.0).color(p.ink3));
-        ui.add_space(4.0);
-        ui.label(strong("No hay paneles abiertos").size(16.0));
-        ui.label(muted(
-            p,
-            "Los paneles se abren desde el menú Ventana o con las teclas F2 a F8.",
-        ));
-        ui.add_space(12.0);
-        let button = egui::Button::new(
+/// El botón «Siguiente: …» de la barra de estado. `true` si se pulsó.
+fn next_button(ui: &mut egui::Ui, p: &Palette, next: View) -> bool {
+    ui.add(
+        egui::Button::new(
             RichText::new(format!(
-                "{}  Restablecer el espacio «{}»",
-                icon::ARROW_COUNTER_CLOCKWISE,
-                ws.title()
+                "Siguiente: {}  {}",
+                next.title(),
+                icon::ARROW_RIGHT
             ))
             .color(p.on_accent),
         )
-        .fill(p.accent);
-        if ui.add(button).clicked() {
-            chosen = Some(Restore::Workspace);
-        }
-        ui.add_space(10.0);
-        ui.label(muted(p, "o abre solo un panel:"));
-        ui.add_space(2.0);
-        // Centra la fila de botones midiendo primero su ancho.
-        let id = ui.id().with("ancho-botones");
-        let width: f32 = ui.ctx().data(|d| d.get_temp(id)).unwrap_or(600.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(width, 26.0),
-            Layout::left_to_right(Align::Center),
-            |ui| {
-                let start = ui.cursor().left();
-                for tab in Tab::ALL {
-                    if ui
-                        .button(format!("{} {}", tab.icon(), tab.title()))
-                        .on_hover_text(tab.shortcut())
-                        .clicked()
-                    {
-                        chosen = Some(Restore::Panel(tab));
-                    }
-                }
-                let used = ui.cursor().left() - start;
-                ui.ctx().data_mut(|d| d.insert_temp(id, used));
-            },
-        );
-    });
-    chosen
+        .fill(p.accent),
+    )
+    .on_hover_text(format!("Ir a {} ({})", next.title(), next.shortcut()))
+    .clicked()
 }
 
 /// Qué se eligió en la pantalla de inicio.
@@ -2106,4 +1897,49 @@ fn frame_report(times: &[f64]) -> String {
         at(0.95),
         sorted.last().copied().unwrap_or(0.0)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Las preferencias que dejó una versión con modo guiado y avanzado traen
+    // campos que ya no existen: se leen sin error y se ignoran.
+    #[test]
+    fn preferences_from_before_the_single_frame_still_load() {
+        let old = serde_json::json!({
+            "dark": false,
+            "accent": 2,
+            "workspace": "Diagram",
+            "dock": { "surfaces": [], "focused_surface": null },
+            "columns": serde_json::to_value(schedule::Columns::default()).unwrap(),
+            "diagram_zoom": 0.9,
+            "recent": ["/tmp/casa.iees"],
+            "guided": false,
+            "step": "Review"
+        });
+        let prefs: Prefs = serde_json::from_value(old).expect("se lee");
+        assert!(!prefs.dark);
+        assert_eq!(prefs.recent.len(), 1);
+        // Sin vista guardada, se abre la de trabajo.
+        assert_eq!(prefs.view, View::Schedule);
+        assert!(!prefs.split);
+    }
+
+    #[test]
+    fn the_view_and_the_split_are_remembered() {
+        let prefs = Prefs {
+            dark: true,
+            accent: 0,
+            columns: schedule::Columns::default(),
+            diagram_zoom: 1.3,
+            recent: Vec::new(),
+            view: View::Review,
+            split: true,
+        };
+        let text = serde_json::to_string(&prefs).unwrap();
+        let back: Prefs = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.view, View::Review);
+        assert!(back.split);
+    }
 }
