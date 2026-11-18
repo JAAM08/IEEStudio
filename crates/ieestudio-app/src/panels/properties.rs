@@ -11,6 +11,7 @@ use ieestudio_project::{
 use ieestudio_rules::{cite_all, Profile, Rule};
 
 use super::Shared;
+use crate::layout;
 use crate::state::{set_load_kind, Doc, Selection};
 use crate::theme::Palette;
 use crate::widgets::{
@@ -53,6 +54,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     ui.horizontal(|ui| {
         ui.add(egui::Label::new(strong(title).size(14.0)).truncate());
     });
+    // Lo que se puede hacer con el elemento, en su ficha: antes vivía en la
+    // barra contextual del cuadro de cargas.
+    let mut act = None;
     if status.is_some() || kind.is_some() {
         ui.horizontal(|ui| {
             if let Some(s) = status {
@@ -61,7 +65,32 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             if let Some(k) = kind {
                 crate::widgets::tag(ui, &p, k);
             }
+            // Los botones van al final del renglón sin pedir más ancho del
+            // que hay: un acomodo de derecha a izquierda aquí ensanchaba el
+            // inspector.
+            ui.add_space(layout::remaining(ui.available_width(), ACTIONS_W));
+            act = ficha_actions(ui, &p, doc.selection);
         });
+    }
+    if let Some(item) = doc.selected_run().cloned() {
+        if let Some(a) = problem_box(ui, &p, &item) {
+            act = Some(a);
+        }
+    }
+    match act {
+        Some(Act::Duplicate) => doc.duplicate_circuit(),
+        Some(Act::Remove) => {
+            doc.remove_selected();
+            return;
+        }
+        Some(Act::Procedure) => shared.open_procedure = true,
+        Some(Act::UseProposed) => {
+            if let Some(ov) = doc.selected_overrides_mut() {
+                ov.size = None;
+                doc.edited();
+            }
+        }
+        None => {}
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {
@@ -124,6 +153,116 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         });
 }
 
+/// Lo que se pidió desde el encabezado de la ficha.
+enum Act {
+    Duplicate,
+    Remove,
+    Procedure,
+    UseProposed,
+}
+
+/// Ancho de los botones de la ficha.
+const ACTIONS_W: f32 = 104.0;
+
+/// Botones de la ficha: procedimiento, duplicar (solo circuitos) y eliminar.
+fn ficha_actions(ui: &mut egui::Ui, p: &Palette, selection: Selection) -> Option<Act> {
+    let mut act = None;
+    let remove = match selection {
+        Selection::Circuit(..) => "Eliminar el circuito (Supr). Se puede deshacer con Ctrl+Z.",
+        Selection::Feeder(_) => "Eliminar el tablero. Sus subtableros pasan al tablero de donde se alimentaba. Se puede deshacer con Ctrl+Z.",
+        Selection::Secondary(_) => "Quitar el transformador intermedio. Se puede deshacer con Ctrl+Z.",
+        Selection::Project => return None,
+    };
+    let small =
+        |glyph: &str, color| egui::Button::new(RichText::new(glyph).color(color)).frame(false);
+    if ui
+        .add(small(icon::LIST_BULLETS, p.ink2))
+        .on_hover_text("Ver cómo se calculó, paso a paso, con su referencia (F7)")
+        .clicked()
+    {
+        act = Some(Act::Procedure);
+    }
+    if matches!(selection, Selection::Circuit(..))
+        && ui
+            .add(small(icon::COPY, p.ink2))
+            .on_hover_text("Duplicar el circuito (Ctrl+D)")
+            .clicked()
+    {
+        act = Some(Act::Duplicate);
+    }
+    if ui
+        .add(small(icon::TRASH, p.bad))
+        .on_hover_text(remove)
+        .clicked()
+    {
+        act = Some(Act::Remove);
+    }
+    act
+}
+
+/// Lo que impide que el tramo cumpla, en palabras, con su arreglo a la mano:
+/// volver al calibre propuesto y ver cómo se calculó.
+fn problem_box(ui: &mut egui::Ui, p: &Palette, item: &RunResult) -> Option<Act> {
+    let check = crate::widgets::main_problem(item)?;
+    let mut act = None;
+    let (color, head) = match check.status {
+        Status::Fails => (p.bad, format!("No cumple: {}", check.name.to_lowercase())),
+        _ => (
+            p.warn,
+            format!("Sin evaluar: {}", check.name.to_lowercase()),
+        ),
+    };
+    let others = item
+        .checks
+        .iter()
+        .filter(|k| k.status != Status::Complies)
+        .count();
+    ui.add_space(4.0);
+    egui::Frame::new()
+        .fill(color.gamma_multiply(0.10))
+        .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.55)))
+        .corner_radius(crate::theme::RADIUS_CARD)
+        .inner_margin(egui::Margin::symmetric(10, 8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(
+                RichText::new(head)
+                    .color(color)
+                    .family(crate::theme::semibold()),
+            );
+            ui.add(egui::Label::new(crate::widgets::sentence(&check.detail)).wrap());
+            if let Some(cite) = cite_all(&check.references) {
+                ui.label(RichText::new(cite).size(11.5).color(p.info));
+            }
+            if others > 1 {
+                ui.label(
+                    muted(
+                        p,
+                        format!("Y {} más en Normativa y en Revisar.", others - 1),
+                    )
+                    .size(11.5),
+                );
+            }
+            ui.horizontal_wrapped(|ui| {
+                if let Some(rec) = crate::widgets::proposed_instead(item) {
+                    if crate::widgets::primary_button(
+                        ui,
+                        p,
+                        &format!("Usar {} (propuesto)", size_label(&rec)),
+                    )
+                    .clicked()
+                    {
+                        act = Some(Act::UseProposed);
+                    }
+                }
+                if ui.button("Ver cómo se calculó").clicked() {
+                    act = Some(Act::Procedure);
+                }
+            });
+        });
+    act
+}
+
 // ---------------------------------------------------------------- datos
 
 fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
@@ -182,7 +321,7 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
     changed |=
         crate::widgets::topology_row(ui, p, "topologia", &mut project.source.system, tolerance);
     section(ui, p, "Acometida y cortocircuito");
-    changed |= fault_study_toggle(ui, &mut project.settings.fault_study);
+    changed |= fault_study_switch(ui, p, &mut project.settings.fault_study);
     changed |= source_inputs(ui, p, &mut project.source, study.as_ref());
 
     section(ui, p, "Criterios de diseño");
@@ -192,14 +331,79 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
 
 /// Criterios de diseño del proyecto: límites de caída, ambiente, conductor,
 /// canalización y tablas opcionales.
-/// Encender o apagar el cálculo de cortocircuito del proyecto. Apagado, la
-/// capacidad interruptiva queda fuera de alcance y la memoria lo anota.
-pub(crate) fn fault_study_toggle(ui: &mut egui::Ui, on: &mut bool) -> bool {
-    ui.checkbox(on, "Revisar la capacidad interruptiva (cálculo de cortocircuito)")
-        .on_hover_text(
-            "Estima la corriente de falla en cada tablero y la compara con los kA de sus interruptores. Apagado, la capacidad interruptiva queda fuera de alcance: la memoria, Revisar y la línea de comandos lo dicen y requiere un estudio de cortocircuito.",
+/// Encender o apagar la verificación de capacidad interruptiva (decisión
+/// 0032). Apagarla pide confirmación: queda fuera de alcance y así se anota
+/// en la memoria, pero no se borra ningún dato. Devuelve `true` si cambió.
+pub(crate) fn fault_study_switch(ui: &mut egui::Ui, p: &Palette, on: &mut bool) -> bool {
+    let asking_id = egui::Id::new("confirmar-apagar-capacidad-interruptiva");
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        let response = crate::widgets::switch(ui, p, *on).on_hover_text(if *on {
+            "Encendida: estima la corriente de falla en cada tablero y la compara con los kA de sus interruptores"
+        } else {
+            "Apagada: la capacidad interruptiva queda fuera de alcance"
+        });
+        if response.clicked() {
+            if *on {
+                ui.ctx().data_mut(|d| d.insert_temp(asking_id, true));
+            } else {
+                *on = true;
+                changed = true;
+            }
+        }
+        ui.label(strong("Verificación de capacidad interruptiva"));
+    });
+    ui.label(
+        muted(
+            p,
+            "Estimación conservadora y limitada; no sustituye un estudio integral de cortocircuito.",
         )
-        .changed()
+        .size(12.0),
+    );
+    if !*on {
+        ui.label(
+            RichText::new(
+                "Apagada: la capacidad interruptiva queda fuera de alcance y la memoria lo anota.",
+            )
+            .color(p.warn)
+            .size(12.0),
+        );
+    }
+    let asking: bool = ui.ctx().data(|d| d.get_temp(asking_id)).unwrap_or(false);
+    if asking {
+        let mut answer = None;
+        let modal = egui::Modal::new(asking_id.with("ventana")).show(ui.ctx(), |ui| {
+            ui.set_width(440.0);
+            ui.label(strong("¿Apagar la verificación de capacidad interruptiva?").size(15.0));
+            ui.add_space(6.0);
+            ui.add(
+                egui::Label::new(
+                    "La capacidad interruptiva quedará fuera de alcance y así se anotará en la memoria. No se borra ningún dato de la fuente, los transformadores ni los interruptores.",
+                )
+                .wrap(),
+            );
+            ui.add_space(10.0);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if crate::widgets::primary_button(ui, p, "Apagarla").clicked() {
+                    answer = Some(true);
+                }
+                if ui.button("Cancelar").clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        if modal.should_close() && answer.is_none() {
+            answer = Some(false);
+        }
+        if let Some(off) = answer {
+            ui.ctx().data_mut(|d| d.remove::<bool>(asking_id));
+            if off {
+                *on = false;
+                changed = true;
+            }
+        }
+    }
+    changed
 }
 
 /// Tolerancia de la relación de tensiones del perfil del proyecto.
@@ -314,6 +518,10 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
     let others = doc.feeder_candidates(i);
     let source_name = doc.project.source.name.clone();
     let settings = doc.project.settings.clone();
+    let current_size = doc
+        .panel_result(i)
+        .and_then(|r| r.feeder.run.as_ref())
+        .map(|r| r.size.clone());
     let id_problem = doc.panel_id_problem(i);
     let old_id = doc.project.panels[i].id.clone();
     let building = doc
@@ -652,7 +860,14 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         });
         changed = true;
     }
-    changed |= decisions(ui, p, &mut panel.feeder.overrides, "alim", &settings);
+    changed |= decisions(
+        ui,
+        p,
+        &mut panel.feeder.overrides,
+        "alim",
+        &settings,
+        current_size.as_ref(),
+    );
     if show_secondary {
         doc.selection = Selection::Secondary(i);
     }
@@ -663,6 +878,11 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
 fn secondary_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> bool {
     let mut changed = false;
     let settings = doc.project.settings.clone();
+    let current_size = doc
+        .panel_result(i)
+        .and_then(|r| r.secondary.as_ref())
+        .and_then(|r| r.run.as_ref())
+        .map(|r| r.size.clone());
     let Some(t) = doc.project.panels[i].transformer.as_mut() else {
         return false;
     };
@@ -685,7 +905,14 @@ fn secondary_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> 
     changed |= ui
         .checkbox(&mut t.secondary_has_neutral, "Lleva neutro")
         .changed();
-    changed |= decisions(ui, p, &mut t.secondary_overrides, "secundario", &settings);
+    changed |= decisions(
+        ui,
+        p,
+        &mut t.secondary_overrides,
+        "secundario",
+        &settings,
+        current_size.as_ref(),
+    );
     changed
 }
 
@@ -741,6 +968,11 @@ pub(crate) fn circuit_form(
 ) -> bool {
     let mut changed = false;
     let settings = doc.project.settings.clone();
+    let current_size = doc
+        .panel_result(i)
+        .and_then(|r| r.circuits.get(c))
+        .and_then(|r| r.run.as_ref())
+        .map(|r| r.size.clone());
     let id_problem = doc.circuit_id_problem(i, c);
     // Potencia calculada de un motor o compresor, para mostrarla.
     let computed_w = doc
@@ -911,7 +1143,14 @@ pub(crate) fn circuit_form(
     if !guided {
         section(ui, p, "Interruptor (catálogo)");
         changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
-        changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
+        changed |= decisions(
+            ui,
+            p,
+            &mut circuit.overrides,
+            &format!("c{c}"),
+            &settings,
+            current_size.as_ref(),
+        );
         return changed;
     }
     ui.add_space(6.0);
@@ -934,7 +1173,7 @@ pub(crate) fn circuit_form(
                 .checkbox(&mut circuit.has_neutral, "Lleva neutro")
                 .changed();
         }
-        changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings);
+        changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings, current_size.as_ref());
     });
     egui::CollapsingHeader::new(RichText::new("Interruptor (catálogo)").color(p.ink2))
         .id_salt(("catalogo", i, c))
@@ -1488,9 +1727,10 @@ fn decisions(
     ov: &mut Overrides,
     id: &str,
     project: &ieestudio_project::Settings,
+    current_size: Option<&Size>,
 ) -> bool {
     let mut changed = false;
-    section(ui, p, "Decisiones de diseño (opcional)");
+    section(ui, p, "Ajustes manuales (opcional)");
     ui.label(
         muted(
             p,
@@ -1523,6 +1763,20 @@ fn decisions(
             });
         if ov.size.is_some() {
             changed |= reset_button(ui, "Que lo proponga IEEStudio", || ov.size = None);
+        } else if let Some(size) = current_size {
+            // Fijar en un clic el calibre que resultó, como hacía la barra
+            // contextual del cuadro.
+            if ui
+                .add(egui::Button::new(icon::LOCK_SIMPLE).frame(false))
+                .on_hover_text(format!(
+                    "Fijar {}: se conserva aunque cambien los datos y IEEStudio lo sigue verificando",
+                    size_label(size)
+                ))
+                .clicked()
+            {
+                ov.size = Some(size.clone());
+                changed = true;
+            }
         }
     });
     property(ui, p, "Interruptor", |ui| {

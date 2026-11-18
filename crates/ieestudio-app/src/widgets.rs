@@ -1,6 +1,6 @@
 //! Piezas de interfaz que comparten todos los paneles.
 
-use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke};
+use eframe::egui::{self, Align, Color32, Layout, RichText, Sense, Stroke, Vec2};
 use egui_phosphor::regular as icon;
 use ieestudio_core::{CircuitKind, ConduitType, Insulation, Material, MotorType, System};
 use ieestudio_project::verdict::{Calculation, Compliance, Verdict};
@@ -491,6 +491,52 @@ fn pill(ui: &mut egui::Ui, text: RichText, tint: Color32) -> egui::Response {
     response
 }
 
+/// Control segmentado: opciones de las que siempre hay una elegida, como el
+/// juego de columnas o el filtro del cuadro. Devuelve `true` si cambió.
+pub fn segmented<T: PartialEq + Copy>(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    value: &mut T,
+    options: &[(T, &str, &str)],
+) -> bool {
+    let mut changed = false;
+    egui::Frame::new()
+        .fill(p.bg)
+        .stroke(Stroke::new(1.0, p.line))
+        .corner_radius(crate::theme::RADIUS_CONTROL)
+        .inner_margin(egui::Margin::same(2))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                for (option, label, tip) in options {
+                    let on = *value == *option;
+                    let text = RichText::new(*label).color(if on { p.ink } else { p.ink2 });
+                    let button = egui::Button::new(if on { text.family(semibold()) } else { text })
+                        .fill(if on { p.raise } else { Color32::TRANSPARENT })
+                        .stroke(Stroke::NONE)
+                        .corner_radius(crate::theme::RADIUS_CONTROL - 2)
+                        .min_size(egui::vec2(0.0, 22.0));
+                    let response = ui.add(button);
+                    let response = if tip.is_empty() {
+                        response
+                    } else {
+                        response.on_hover_text(*tip)
+                    };
+                    if response.clicked() && !on {
+                        *value = *option;
+                        changed = true;
+                    }
+                }
+            });
+        });
+    changed
+}
+
+/// Botón de la acción principal de una vista: el único amarillo.
+pub fn primary_button(ui: &mut egui::Ui, p: &Palette, text: &str) -> egui::Response {
+    ui.add(egui::Button::new(RichText::new(text).color(p.on_accent)).fill(p.accent))
+}
+
 /// Etiqueta de estado: ícono, texto y color sobre un fondo tenue con borde.
 /// Es la forma de mostrar un estado en tablas y tarjetas (R2).
 pub fn status_chip(ui: &mut egui::Ui, p: &Palette, status: Status) -> egui::Response {
@@ -926,6 +972,159 @@ pub fn trace_ui(
             ui.add_space(2.0);
         }
     });
+}
+
+/// Primera verificación que impide que el tramo cumpla: la que no cumple, o
+/// si no hay, la que quedó sin evaluar.
+pub fn main_problem(item: &ieestudio_project::RunResult) -> Option<&ieestudio_project::Check> {
+    item.checks
+        .iter()
+        .find(|c| c.status == Status::Fails)
+        .or_else(|| {
+            item.checks
+                .iter()
+                .find(|c| c.status == Status::NotEvaluated)
+        })
+}
+
+/// El calibre que propone IEEStudio cuando el usuario fijó otro.
+pub fn proposed_instead(item: &ieestudio_project::RunResult) -> Option<ieestudio_core::Size> {
+    let run = item.run.as_ref()?;
+    match &run.recommended_size {
+        Some(rec) if run.forced && rec != &run.size => Some(rec.clone()),
+        _ => None,
+    }
+}
+
+/// Un texto como oración: con mayúscula inicial y punto final.
+pub fn sentence(text: &str) -> String {
+    capitalize(text.trim_end_matches('.')) + "."
+}
+
+pub fn page_title(ui: &mut egui::Ui, p: &Palette, title: &str, subtitle: &str) {
+    ui.label(strong(title).size(24.0));
+    ui.add_space(2.0);
+    ui.label(muted(p, subtitle));
+    ui.add_space(14.0);
+}
+
+pub fn label_caps(ui: &mut egui::Ui, p: &Palette, text: &str) {
+    ui.label(
+        RichText::new(text.to_uppercase())
+            .size(11.0)
+            .color(p.ink2)
+            .family(semibold()),
+    );
+}
+
+/// Tarjeta seleccionable: título y una línea debajo.
+pub fn choice(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    on: bool,
+    title: &str,
+    sub: &str,
+    width: f32,
+) -> bool {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 62.0), Sense::click());
+    let hovered = response.hovered();
+    ui.painter().rect(
+        rect,
+        7.0,
+        if on || hovered { p.raise } else { p.panel },
+        egui::Stroke::new(
+            if on { 1.5 } else { 1.0 },
+            if on {
+                p.accent
+            } else if hovered {
+                p.ink3
+            } else {
+                p.line
+            },
+        ),
+        egui::StrokeKind::Inside,
+    );
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(rect.shrink2(Vec2::new(14.0, 11.0)))
+            .layout(Layout::top_down(Align::Min)),
+    );
+    child.label(strong(title));
+    child.label(muted(p, sub).size(12.0));
+    response
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+        .clicked()
+}
+
+/// Columna centrada de ancho máximo, para formularios.
+pub fn centered(ui: &mut egui::Ui, max_width: f32, add: impl FnOnce(&mut egui::Ui)) {
+    let width = ui.available_width().min(max_width).max(0.0);
+    let left = ((ui.available_width() - width) / 2.0).max(0.0);
+    ui.horizontal_top(|ui| {
+        ui.add_space(left);
+        ui.vertical(|ui| {
+            ui.set_width(width);
+            add(ui);
+        });
+    });
+}
+
+pub fn text_field(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    label: &str,
+    value: &mut String,
+    hint: &str,
+) -> bool {
+    let mut changed = false;
+    ui.vertical(|ui| {
+        label_caps(ui, p, label);
+        changed = ui
+            .add(
+                egui::TextEdit::singleline(value)
+                    .hint_text(hint)
+                    .desired_width(f32::INFINITY)
+                    .margin(egui::Margin::symmetric(8, 6)),
+            )
+            .changed();
+    });
+    changed
+}
+
+/// `1,800`: miles con coma, sin decimales.
+pub fn thousands(value: f64) -> String {
+    let digits = format!("{:.0}", value.abs());
+    let mut out = String::new();
+    for (k, ch) in digits.chars().enumerate() {
+        if k > 0 && (digits.len() - k) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    if value < 0.0 {
+        format!("-{out}")
+    } else {
+        out
+    }
+}
+
+/// Interruptor de encendido y apagado, para opciones de alcance. Responde
+/// al clic; quien lo usa decide qué pasa.
+pub fn switch(ui: &mut egui::Ui, p: &Palette, on: bool) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(34.0, 18.0), Sense::click());
+    let painter = ui.painter();
+    painter.rect_filled(rect, 9.0, if on { p.accent } else { p.line });
+    let x = if on {
+        rect.right() - 9.0
+    } else {
+        rect.left() + 9.0
+    };
+    painter.circle_filled(
+        egui::pos2(x, rect.center().y),
+        6.5,
+        if on { p.on_accent } else { p.ink2 },
+    );
+    response.on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
 #[cfg(test)]

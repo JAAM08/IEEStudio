@@ -96,7 +96,6 @@ pub fn view_tabs(
 /// Revisar que se arregla en el calibre de un circuito).
 pub fn target(step: Step) -> (View, Option<Step>) {
     match step {
-        Step::Project => (View::Project, None),
         Step::Panels | Step::Circuits => (View::Schedule, Some(step)),
         Step::Review => (View::Review, None),
         Step::Report => (View::Report, None),
@@ -126,7 +125,22 @@ pub fn show_view(
     shared: &mut Shared,
 ) -> Outcome {
     let (go, request) = match arr.view {
-        View::Project => guided::view(ui, Step::Project, doc, shared),
+        View::Project => {
+            let mut go = None;
+            egui::CentralPanel::default()
+                .frame(
+                    egui::Frame::new()
+                        .fill(shared.palette.bg)
+                        .inner_margin(egui::Margin::symmetric(16, 0)),
+                )
+                .show(ui, |ui| {
+                    if let Some(i) = crate::panels::project::show(ui, doc, shared) {
+                        doc.selection = crate::state::Selection::Feeder(i);
+                        go = Some(Step::Panels);
+                    }
+                });
+            (go, None)
+        }
         View::Review => guided::view(ui, Step::Review, doc, shared),
         View::Report => guided::view(ui, Step::Report, doc, shared),
         View::Schedule | View::Diagram => workbench(ui, arr, doc, shared),
@@ -253,13 +267,7 @@ mod tests {
 
     #[test]
     fn every_step_lands_on_one_of_the_five_views() {
-        for step in [
-            Step::Project,
-            Step::Panels,
-            Step::Circuits,
-            Step::Review,
-            Step::Report,
-        ] {
+        for step in [Step::Panels, Step::Circuits, Step::Review, Step::Report] {
             let (view, sub) = target(step);
             assert!(View::ALL.contains(&view));
             // Solo «Tableros y circuitos» recuerda a cuál de sus dos contenidos
