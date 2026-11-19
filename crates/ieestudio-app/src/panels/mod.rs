@@ -102,7 +102,7 @@ pub struct Viewer<'a> {
 
 fn padded(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     egui::Frame::new()
-        .inner_margin(egui::Margin::symmetric(10, 8))
+        .inner_margin(egui::Margin::symmetric(8, 8))
         .show(ui, add);
 }
 

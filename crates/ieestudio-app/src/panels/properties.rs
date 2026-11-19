@@ -52,7 +52,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         }
     };
     ui.horizontal(|ui| {
-        ui.add(egui::Label::new(strong(title).size(14.0)).truncate());
+        ui.add(egui::Label::new(strong(title).size(crate::theme::HEAD)).truncate());
     });
     // Lo que se puede hacer con el elemento, en su ficha: antes vivía en la
     // barra contextual del cuadro de cargas.
@@ -92,9 +92,12 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         }
         None => {}
     }
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        for (tab, label, tip) in [
+    ui.add_space(crate::theme::SP2);
+    crate::widgets::segmented(
+        ui,
+        &p,
+        &mut shared.props_tab,
+        &[
             (PropsTab::Inputs, "Datos", "Lo que capturaste"),
             (PropsTab::Results, "Resultados", "Lo que calculó IEEStudio"),
             (
@@ -102,12 +105,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                 "Normativa",
                 "Lo que se verificó y dónde lo dice la norma",
             ),
-        ] {
-            ui.selectable_value(&mut shared.props_tab, tab, label)
-                .on_hover_text(tip);
-        }
-    });
-    ui.separator();
+        ],
+    );
+    ui.add_space(crate::theme::SP1);
 
     egui::ScrollArea::vertical()
         .id_salt("propiedades")
@@ -217,12 +217,12 @@ fn problem_box(ui: &mut egui::Ui, p: &Palette, item: &RunResult) -> Option<Act> 
         .iter()
         .filter(|k| k.status != Status::Complies)
         .count();
-    ui.add_space(4.0);
+    ui.add_space(crate::theme::SP1);
     egui::Frame::new()
         .fill(color.gamma_multiply(0.10))
         .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.55)))
         .corner_radius(crate::theme::RADIUS_CARD)
-        .inner_margin(egui::Margin::symmetric(10, 8))
+        .inner_margin(egui::Margin::symmetric(8, 8))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.label(
@@ -232,7 +232,11 @@ fn problem_box(ui: &mut egui::Ui, p: &Palette, item: &RunResult) -> Option<Act> 
             );
             ui.add(egui::Label::new(crate::widgets::sentence(&check.detail)).wrap());
             if let Some(cite) = cite_all(&check.references) {
-                ui.label(RichText::new(cite).size(11.5).color(p.info));
+                ui.label(
+                    RichText::new(cite)
+                        .size(crate::theme::SECONDARY)
+                        .color(p.info),
+                );
             }
             if others > 1 {
                 ui.label(
@@ -240,7 +244,7 @@ fn problem_box(ui: &mut egui::Ui, p: &Palette, item: &RunResult) -> Option<Act> 
                         p,
                         format!("Y {} más en Normativa y en Revisar.", others - 1),
                     )
-                    .size(11.5),
+                    .size(crate::theme::SECONDARY),
                 );
             }
             ui.horizontal_wrapped(|ui| {
@@ -277,7 +281,9 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
         ui.label("NOM-001-SEDE-2012");
     });
     section(ui, p, "Datos de la obra");
-    ui.label(muted(p, "Aparecen en la memoria; no intervienen en el cálculo.").size(11.0));
+    ui.label(
+        muted(p, "Aparecen en la memoria; no intervienen en el cálculo.").size(crate::theme::FOOT),
+    );
     let info = &mut project.info;
     for (label, value, hint) in [
         ("Cliente", &mut info.client, "Propietario o razón social"),
@@ -307,7 +313,7 @@ fn project_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette) -> bool {
                 p,
                 "Sin el tipo de inmueble, los alimentadores con alumbrado o contactos quedan sin evaluar.",
             )
-            .size(11.0),
+            .size(crate::theme::FOOT),
         );
     }
     section(ui, p, "Suministro");
@@ -358,7 +364,7 @@ pub(crate) fn fault_study_switch(ui: &mut egui::Ui, p: &Palette, on: &mut bool) 
             p,
             "Estimación conservadora y limitada; no sustituye un estudio integral de cortocircuito.",
         )
-        .size(12.0),
+        .size(crate::theme::SECONDARY),
     );
     if !*on {
         ui.label(
@@ -366,7 +372,7 @@ pub(crate) fn fault_study_switch(ui: &mut egui::Ui, p: &Palette, on: &mut bool) 
                 "Apagada: la capacidad interruptiva queda fuera de alcance y la memoria lo anota.",
             )
             .color(p.warn)
-            .size(12.0),
+            .size(crate::theme::SECONDARY),
         );
     }
     let asking: bool = ui.ctx().data(|d| d.get_temp(asking_id)).unwrap_or(false);
@@ -374,15 +380,15 @@ pub(crate) fn fault_study_switch(ui: &mut egui::Ui, p: &Palette, on: &mut bool) 
         let mut answer = None;
         let modal = egui::Modal::new(asking_id.with("ventana")).show(ui.ctx(), |ui| {
             ui.set_width(440.0);
-            ui.label(strong("¿Apagar la verificación de capacidad interruptiva?").size(15.0));
-            ui.add_space(6.0);
+            ui.label(strong("¿Apagar la verificación de capacidad interruptiva?").size(crate::theme::HEAD));
+            ui.add_space(crate::theme::SP2);
             ui.add(
                 egui::Label::new(
                     "La capacidad interruptiva quedará fuera de alcance y así se anotará en la memoria. No se borra ningún dato de la fuente, los transformadores ni los interruptores.",
                 )
                 .wrap(),
             );
-            ui.add_space(10.0);
+            ui.add_space(crate::theme::SP3);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if crate::widgets::primary_button(ui, p, "Apagarla").clicked() {
                     answer = Some(true);
@@ -614,7 +620,7 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
             ieestudio_project::fault::IssueKind::Invalid => ("Dato inválido", p.bad),
             _ => ("Sin falla", p.warn),
         };
-        ui.add_space(4.0);
+        ui.add_space(crate::theme::SP1);
         ui.add(
             egui::Label::new(
                 RichText::new(format!(
@@ -624,13 +630,13 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
                     issue.reason
                 ))
                 .color(color)
-                .size(11.5),
+                .size(crate::theme::SECONDARY),
             )
             .wrap(),
         );
     }
     if let Some(bus) = &fault {
-        ui.add_space(4.0);
+        ui.add_space(crate::theme::SP1);
         fault_box(
             ui,
             p,
@@ -642,14 +648,14 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         crate::widgets::trace_ui(ui, p, ("barras", i), trace);
         // La verificación del tablero: sus interruptores contra esa falla.
         if let Some(group) = &group {
-            ui.add_space(4.0);
+            ui.add_space(crate::theme::SP1);
             let color = crate::widgets::status_color(p, group.status);
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new(crate::widgets::status_icon(group.status)).color(color));
                 ui.add(
                     egui::Label::new(
                         RichText::new(crate::widgets::capitalize(&group.summary()) + ".")
-                            .size(12.0)
+                            .size(crate::theme::SECONDARY)
                             .color(if group.status == Status::Complies {
                                 p.ink2
                             } else {
@@ -693,7 +699,7 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
             egui::Label::new(
                 RichText::new(format!("{} {}.", icon::WARNING, flag.text()))
                     .color(p.warn)
-                    .size(11.5),
+                    .size(crate::theme::ICON),
             )
             .wrap(),
         );
@@ -812,7 +818,7 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
                 p,
                 "Un factor propio menor que 1 deja el alimentador sin evaluar: el artículo 220 no lo respalda por sí mismo.",
             )
-            .size(11.0),
+            .size(crate::theme::FOOT),
         );
     }
 
@@ -822,7 +828,7 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
             p,
             "Superficie de piso que alimentan los circuitos de este tablero, para la carga mínima de alumbrado (220-12). Las de sus subtableros se suman solas.",
         )
-        .size(11.0),
+        .size(crate::theme::FOOT),
     );
     let mut remove = None;
     for (k, area) in panel.areas.iter_mut().enumerate() {
@@ -846,7 +852,7 @@ pub(crate) fn feeder_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: us
         property(ui, p, "Tipo", |ui| {
             changed |= occupancy_combo(ui, ("area", k), &mut area.occupancy, true, &building);
         });
-        ui.add_space(4.0);
+        ui.add_space(crate::theme::SP1);
     }
     if let Some(k) = remove {
         panel.areas.remove(k);
@@ -892,7 +898,7 @@ fn secondary_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize) -> 
             p,
             "Del transformador al tablero. Su interruptor protege estos conductores; la caída de tensión del tablero se cuenta desde aquí.",
         )
-        .size(11.0),
+        .size(crate::theme::FOOT),
     );
     property(ui, p, "Longitud", |ui| {
         changed |= blank_number(
@@ -1153,7 +1159,7 @@ pub(crate) fn circuit_form(
         );
         return changed;
     }
-    ui.add_space(6.0);
+    ui.add_space(crate::theme::SP2);
     egui::CollapsingHeader::new(
         RichText::new("Opciones avanzadas").color(p.ink2),
     )
@@ -1164,7 +1170,7 @@ pub(crate) fn circuit_form(
                 p,
                 "Identificador, factor de potencia, carga continua, neutro, cable o interruptor fijados, material y tubería.",
             )
-            .size(11.0),
+            .size(crate::theme::FOOT),
         );
         changed |= id_field(ui, p, &mut circuit.id, None);
         changed |= load_details(ui, p, &mut circuit.load, equipment);
@@ -1183,7 +1189,7 @@ pub(crate) fn circuit_form(
                     p,
                     "Marco, capacidad interruptiva, modelo, marca y posición: aparecen en el unifilar.",
                 )
-                .size(11.0),
+                .size(crate::theme::FOOT),
             );
             changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
         });
@@ -1354,7 +1360,7 @@ pub(crate) fn source_inputs(
                             profile.clause(ieestudio_rules::Rule::TransformerImpedanceLimits)
                         ),
                     )
-                    .size(11.5),
+                    .size(crate::theme::SECONDARY),
                 );
             }
             Err(why) => {
@@ -1362,7 +1368,7 @@ pub(crate) fn source_inputs(
                     egui::Label::new(
                         RichText::new(format!("{} Sin impedancia: {why}.", icon::WARNING))
                             .color(p.warn)
-                            .size(12.0),
+                            .size(crate::theme::ICON),
                     )
                     .wrap(),
                 );
@@ -1371,7 +1377,7 @@ pub(crate) fn source_inputs(
     }
     match study.and_then(|s| s.source.as_ref()) {
         Some(bus) => {
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             fault_box(ui, p, "Corriente de falla en el punto de conexión", bus);
         }
         None => {
@@ -1390,7 +1396,14 @@ pub(crate) fn source_inputs(
                     p.ink2,
                 ),
             };
-            ui.add(egui::Label::new(RichText::new(text).color(color).size(11.5)).wrap());
+            ui.add(
+                egui::Label::new(
+                    RichText::new(text)
+                        .color(color)
+                        .size(crate::theme::SECONDARY),
+                )
+                .wrap(),
+            );
         }
     }
     changed
@@ -1409,13 +1422,13 @@ pub(crate) fn fault_box(
         .fill(p.bg)
         .stroke(egui::Stroke::new(1.0, p.line))
         .corner_radius(crate::theme::RADIUS_CARD)
-        .inner_margin(egui::Margin::symmetric(10, 8))
+        .inner_margin(egui::Margin::symmetric(8, 8))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(RichText::new(title).size(11.5).color(p.ink2));
+            ui.label(RichText::new(title).size(crate::theme::SECONDARY).color(p.ink2));
             ui.label(
                 RichText::new(format!("{} {:.2} kA", icon::LIGHTNING, bus.total_ka))
-                    .size(16.0)
+                    .size(crate::theme::ICON_BAR)
                     .strong(),
             );
             let mut origin = match &bus.origin {
@@ -1434,14 +1447,14 @@ pub(crate) fn fault_box(
                     ln.factor, ln.line_to_line_ka
                 ));
             }
-            ui.add(egui::Label::new(muted(p, origin).size(11.5)).wrap());
+            ui.add(egui::Label::new(muted(p, origin).size(crate::theme::SECONDARY)).wrap());
             if let Some(m) = bus.motors.as_ref().filter(|_| bus.motor_ka > 0.0) {
                 // La aportación de los motores, a la vista.
                 let response = egui::Frame::new()
                     .fill(p.accent.gamma_multiply(0.10))
                     .stroke(egui::Stroke::new(1.0, p.accent.gamma_multiply(0.5)))
                     .corner_radius(crate::theme::RADIUS_CONTROL)
-                    .inner_margin(egui::Margin::symmetric(8, 6))
+                    .inner_margin(egui::Margin::symmetric(8, 8))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         ui.label(
@@ -1473,7 +1486,7 @@ pub(crate) fn fault_box(
                                     bus.total_ka
                                 ))
                                 .monospace()
-                                .size(11.5),
+                                .size(crate::theme::SECONDARY),
                             )
                             .wrap(),
                         );
@@ -1482,7 +1495,7 @@ pub(crate) fn fault_box(
                                 p,
                                 "Los motores en marcha también alimentan la falla. Los de esta tensión aportan completos; los de otra tensión llegan a través de la impedancia de su transformador.",
                             )
-                            .size(11.0),
+                            .size(crate::theme::FOOT),
                         );
                     })
                     .response;
@@ -1517,12 +1530,12 @@ pub(crate) fn fault_box(
                             bus.incomplete.join("; ")
                         ))
                         .color(p.warn)
-                        .size(11.5),
+                        .size(crate::theme::SECONDARY),
                     )
                     .wrap(),
                 );
             }
-            egui::CollapsingHeader::new(RichText::new("Cómo se calculó").size(12.0).color(p.ink2))
+            egui::CollapsingHeader::new(RichText::new("Cómo se calculó").size(crate::theme::SECONDARY).color(p.ink2))
                 .id_salt(("falla", title))
                 .show(ui, |ui| {
                     crate::widgets::steps_ui(ui, p, ("pasos-falla", bus.total_ka.to_bits()), &bus.steps, None);
@@ -1548,7 +1561,7 @@ pub(crate) fn breaker_inputs(
         changed |= optional_number(ui, &mut data.interrupting_ka, 10.0, " kA");
         if data.interrupting_ka.is_none() {
             if let Some(ka) = board_ka {
-                ui.label(muted(p, format!("{ka} kA del tablero")).size(11.0));
+                ui.label(muted(p, format!("{ka} kA del tablero")).size(crate::theme::FOOT));
             }
         }
     })
@@ -1684,7 +1697,7 @@ fn compressor_inputs(ui: &mut egui::Ui, p: &Palette, plate: &mut CompressorLoad)
             p,
             "Basta la corriente de carga nominal, o la ampacidad mínima y la protección máxima.",
         )
-        .size(11.0),
+        .size(crate::theme::FOOT),
     );
     for (label, value, default, tip) in [
         (
@@ -1736,7 +1749,7 @@ fn decisions(
             p,
             "Si no fijas nada, IEEStudio propone el menor valor que cumple.",
         )
-        .size(11.0),
+        .size(crate::theme::FOOT),
     );
     property(ui, p, "Calibre", |ui| {
         let text = ov
@@ -1935,11 +1948,11 @@ fn traced_section(
         .iter()
         .filter(|c| names.contains(&c.name.as_str()))
         .collect();
-    ui.add_space(8.0);
+    ui.add_space(crate::theme::SP2);
     ui.horizontal(|ui| {
         ui.label(
-            RichText::new(title.to_uppercase())
-                .size(10.5)
+            RichText::new(title)
+                .size(crate::theme::FOOT)
                 .color(p.ink3)
                 .family(crate::theme::semibold()),
         );
@@ -1972,7 +1985,7 @@ fn traced_section(
                 .add(
                     egui::Button::new(
                         RichText::new(format!("{} {}", crate::widgets::status_icon(status), cite))
-                            .size(11.0)
+                            .size(crate::theme::FOOT)
                             .color(crate::widgets::status_color(p, status)),
                     )
                     .frame(false)
@@ -1986,7 +1999,7 @@ fn traced_section(
             }
         });
     });
-    ui.add_space(1.0);
+    ui.add_space(2.0);
 }
 
 fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab) -> bool {
@@ -2001,7 +2014,7 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab
                 icon::LOCK_SIMPLE
             ),
         )
-        .size(11.0),
+        .size(crate::theme::ICON),
     );
     if let Selection::Feeder(i) = doc.selection {
         if let Some(panel) = doc.panel_result(i).cloned() {
@@ -2156,13 +2169,13 @@ fn run_results(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, tab: &mut PropsTab
         for c in others {
             ui.horizontal(|ui| {
                 crate::widgets::fixed_label(ui, p, &c.name);
-                ui.label(status_text(p, c.status).size(12.0))
+                ui.label(status_text(p, c.status).size(crate::theme::SECONDARY))
                     .on_hover_text(&c.detail);
             });
             if let Some(cite) = cite_all(&c.references) {
                 ui.label(
                     RichText::new(format!("{} {cite}", icon::BOOK_OPEN))
-                        .size(10.5)
+                        .size(crate::theme::ICON)
                         .color(p.info),
                 );
             }
@@ -2190,7 +2203,7 @@ fn demand_results(ui: &mut egui::Ui, p: &Palette, panel: &ieestudio_project::Pan
     // Una suma parcial no es la carga del tablero (pendiente 19).
     if let Some(why) = &panel.load_unknown {
         section(ui, p, "Carga (artículo 220)");
-        ui.label(muted(p, format!("Sin conocer: {why}.")).size(11.5));
+        ui.label(muted(p, format!("Sin conocer: {why}.")).size(crate::theme::SECONDARY));
         return;
     }
     if panel.demand.is_empty() {
@@ -2204,7 +2217,7 @@ fn demand_results(ui: &mut egui::Ui, p: &Palette, panel: &ieestudio_project::Pan
                 ui.label(RichText::new(format!("{:.0} VA", line.demanded_va)).monospace());
             });
         });
-        ui.label(muted(p, &line.detail).size(11.0));
+        ui.label(muted(p, &line.detail).size(crate::theme::FOOT));
         ui.add_space(2.0);
     }
     result_row(
@@ -2246,7 +2259,7 @@ fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
             Status::NotEvaluated => p.warn,
         };
         ui.label(RichText::new(detail).color(color));
-        ui.add_space(4.0);
+        ui.add_space(crate::theme::SP1);
     }
     if !result.verdict.out_of_scope.is_empty() {
         section(ui, p, "Fuera de alcance");
@@ -2255,12 +2268,14 @@ fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
                 p,
                 "La norma lo pide, pero IEEStudio no lo verifica. Resuélvelo con otro estudio antes de firmar.",
             )
-            .size(11.0),
+            .size(crate::theme::FOOT),
         );
         for item in &result.verdict.out_of_scope {
             ui.label(RichText::new(format!("{} {}", icon::INFO, item.label())).color(p.ink2));
-            ui.label(muted(p, crate::widgets::capitalize(&item.resolve_with)).size(11.0));
-            ui.add_space(4.0);
+            ui.label(
+                muted(p, crate::widgets::capitalize(&item.resolve_with)).size(crate::theme::ICON),
+            );
+            ui.add_space(crate::theme::SP1);
         }
     }
     section(ui, p, "Acometida");
@@ -2282,11 +2297,13 @@ fn project_results(ui: &mut egui::Ui, doc: &Doc, p: &Palette) {
                         size_label(&gec.aluminum_size)
                     ),
                 )
-                .size(11.0),
+                .size(crate::theme::FOOT),
             );
         }
         None => {
-            ui.label(muted(p, "Sin alimentador calculado desde la fuente.").size(11.0));
+            ui.label(
+                muted(p, "Sin alimentador calculado desde la fuente.").size(crate::theme::FOOT),
+            );
         }
     }
     section(ui, p, "Tableros");
@@ -2327,11 +2344,11 @@ fn checks(ui: &mut egui::Ui, p: &Palette, item: &RunResult) {
         if let Some(cite) = cite_all(&check.references) {
             ui.label(
                 RichText::new(format!("{} {cite}", icon::BOOK_OPEN))
-                    .size(11.0)
+                    .size(crate::theme::ICON)
                     .color(p.info),
             );
         }
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
     }
     ui.separator();
     ui.label(
@@ -2339,7 +2356,7 @@ fn checks(ui: &mut egui::Ui, p: &Palette, item: &RunResult) {
             p,
             "Cumple significa que pasó la verificación del programa. La aprobación profesional corresponde a quien firma el proyecto.",
         )
-        .size(11.0),
+        .size(crate::theme::FOOT),
     );
 }
 

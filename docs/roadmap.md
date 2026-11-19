@@ -118,6 +118,12 @@
   con «Agregar»; una ficha con lo que no cumple, su arreglo y los ajustes
   manuales; verificación de capacidad interruptiva con confirmación;
   importación de Excel en tres pasos.
+- Rediseño 2026, etapa R4.5 (`rediseno-2026-r4-5-lenguaje-visual.md` y
+  `sistema-visual.md`): lenguaje visual para todo IEEStudio con escala
+  tipográfica de cinco tamaños, retícula de 4 y 8 px, tres superficies con
+  sombra solo en lo flotante, barra de vistas en cápsula, navegador integrado
+  al cromo, ficha en grupos de campos y barra de estado discreta. Obligatorio
+  para R5, R6 y R7.
 
 ## Pendiente, en orden
 

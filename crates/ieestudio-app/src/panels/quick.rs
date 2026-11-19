@@ -37,7 +37,7 @@ impl Default for QuickView {
 }
 
 fn caption(p: &Palette, text: &str) -> RichText {
-    RichText::new(text.to_uppercase()).small().color(p.ink2)
+    RichText::new(text).small().color(p.ink2)
 }
 
 fn card(p: &Palette) -> egui::Frame {
@@ -76,7 +76,7 @@ impl QuickView {
 
     pub fn ui(&mut self, ui: &mut egui::Ui, p: &Palette) {
         egui::Panel::top("rapido-aviso")
-            .frame(egui::Frame::new().fill(p.raise).inner_margin(egui::Margin::symmetric(10, 5)))
+            .frame(egui::Frame::new().fill(p.raise).inner_margin(egui::Margin::symmetric(8, 4)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
@@ -106,7 +106,7 @@ impl QuickView {
             .frame(
                 egui::Frame::new()
                     .fill(p.raise)
-                    .inner_margin(egui::Margin::symmetric(10, 4)),
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
             )
             .show(ui, |ui| {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -146,7 +146,7 @@ impl QuickView {
                     .show(ui, |ui| {
                         self.procedure(ui, p);
                         if !wide {
-                            ui.add_space(12.0);
+                            ui.add_space(crate::theme::SP3);
                             changed |= self.recommendations(ui, p);
                         }
                         self.steps(ui, p);
@@ -166,12 +166,12 @@ impl QuickView {
         ui.label(
             RichText::new("Circuito")
                 .family(theme::semibold())
-                .size(18.0),
+                .size(crate::theme::TITLE),
         );
         ui.label(muted(
             "Corriente, protección y caída de tensión de un solo circuito, sin proyecto.",
         ));
-        ui.add_space(10.0);
+        ui.add_space(crate::theme::SP3);
 
         egui::Grid::new("rapido-grid")
             .num_columns(2)
@@ -213,7 +213,7 @@ impl QuickView {
                 ui.end_row();
                 if let Some(text) = moved.as_deref() {
                     ui.label("");
-                    ui.add(egui::Label::new(RichText::new(text).color(p.warn).size(11.5)).wrap());
+                    ui.add(egui::Label::new(RichText::new(text).color(p.warn).size(crate::theme::SECONDARY)).wrap());
                     ui.end_row();
                 }
                 if input.system.line_to_neutral_v.is_none() && input.has_neutral {
@@ -381,7 +381,7 @@ impl QuickView {
                 ui.end_row();
             });
 
-        ui.add_space(8.0);
+        ui.add_space(crate::theme::SP2);
         let mut adjust = input.resistance_temperature_c.is_some();
         if ui
             .checkbox(&mut adjust, "Ajustar resistencia por temperatura")
@@ -410,7 +410,7 @@ impl QuickView {
                         RichText::new("— Sin evaluar")
                             .color(p.warn)
                             .family(theme::semibold())
-                            .size(18.0),
+                            .size(crate::theme::TITLE),
                     );
                     ui.label(muted(format!("No se pudo calcular: {message}.")));
                 });
@@ -423,7 +423,11 @@ impl QuickView {
             _ => (p.bad, format!("✖ Excede el límite de {limit:.2} %")),
         };
         let size = size_label(&self.input.size);
-        let big = |t: String| RichText::new(t).family(theme::semibold()).size(30.0);
+        let big = |t: String| {
+            RichText::new(t)
+                .family(theme::semibold())
+                .size(crate::theme::VIEW_TITLE)
+        };
 
         let card0 = |ui: &mut egui::Ui| {
             ui.vertical(|ui| {
@@ -528,14 +532,14 @@ impl QuickView {
             });
         } else {
             card0(ui);
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             card1(ui);
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             card2(ui);
         }
 
         for warning in &r.warnings {
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             ui.label(RichText::new(format!("Aviso · {warning}")).color(p.warn));
         }
     }
@@ -544,7 +548,7 @@ impl QuickView {
         let Ok(r) = &self.result else {
             return;
         };
-        ui.add_space(14.0);
+        ui.add_space(crate::theme::SP4);
         ui.label(caption(p, "Procedimiento"));
         ui.add_space(2.0);
         steps_ui(ui, p, "rapido", &r.steps, None);
@@ -570,7 +574,7 @@ impl QuickView {
         };
         ui.label(caption(p, title));
         ui.label(muted(intro));
-        ui.add_space(8.0);
+        ui.add_space(crate::theme::SP2);
 
         if let Ok(r) = &self.result {
             for rec in &r.recommendations {
@@ -589,17 +593,17 @@ impl QuickView {
                         });
                         ui.label(muted(&rec.detail));
                         if let Some(choice) = &rec.apply {
-                            ui.add_space(4.0);
+                            ui.add_space(crate::theme::SP1);
                             if ui.button("Aplicar").clicked() {
                                 apply = Some(choice.clone());
                             }
                         }
                     });
-                ui.add_space(8.0);
+                ui.add_space(crate::theme::SP2);
             }
         }
 
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
         ui.label(muted(
             "Este cálculo revisa corriente, interruptor, ampacidad con sus factores, \
              puesta a tierra, tubería y caída de tensión. Supone lugar seco, carga \

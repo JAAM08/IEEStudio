@@ -117,7 +117,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) -> bool {
         .auto_shrink([false, false])
         .show(ui, |ui| {
             ui.vertical_centered(|ui| {
-                ui.add_space(12.0);
+                ui.add_space(crate::theme::SP3);
                 for texture in &preview.pages {
                     // Tamaño en puntos de pantalla: la página carta mide 612 × 792 pt.
                     let size = texture.size_vec2() / PIXELS_PER_POINT as f32 * zoom;
@@ -133,7 +133,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) -> bool {
                         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                         Color32::WHITE,
                     );
-                    ui.add_space(16.0);
+                    ui.add_space(crate::theme::SP4);
                 }
             });
         });

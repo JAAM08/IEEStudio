@@ -317,7 +317,7 @@ impl CommandPalette {
                         icon::MAGNIFYING_GLASS
                     ))
                     .desired_width(f32::INFINITY)
-                    .margin(egui::Margin::symmetric(8, 6)),
+                    .margin(egui::Margin::symmetric(8, 8)),
             );
             if self.focus {
                 edit.request_focus();
@@ -326,7 +326,7 @@ impl CommandPalette {
             if edit.changed() {
                 self.selected = 0;
             }
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             egui::ScrollArea::vertical()
                 .max_height(360.0)
                 .auto_shrink([false, true])
@@ -347,7 +347,7 @@ impl CommandPalette {
                                         p.selected,
                                     );
                                 }
-                                ui.add_space(6.0);
+                                ui.add_space(crate::theme::SP2);
                                 ui.label(RichText::new(e.glyph).color(if selected {
                                     p.accent_text
                                 } else {
@@ -362,8 +362,8 @@ impl CommandPalette {
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            ui.add_space(6.0);
-                                            ui.label(muted(p, e.shortcut).size(11.0));
+                                            ui.add_space(crate::theme::SP2);
+                                            ui.label(muted(p, e.shortcut).size(crate::theme::FOOT));
                                         },
                                     );
                                 }
@@ -384,8 +384,11 @@ impl CommandPalette {
                         }
                     }
                 });
-            ui.add_space(4.0);
-            ui.label(muted(p, "↑ ↓ para elegir · Intro para hacerlo · Esc para cerrar").size(11.0));
+            ui.add_space(crate::theme::SP1);
+            ui.label(
+                muted(p, "↑ ↓ para elegir · Intro para hacerlo · Esc para cerrar")
+                    .size(crate::theme::FOOT),
+            );
         });
         if enter {
             chosen = found.get(self.selected).map(|e| e.command.clone());

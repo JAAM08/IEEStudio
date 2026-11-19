@@ -110,7 +110,7 @@ pub fn view(
     let mut go = None;
     let mut request = None;
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(p.bg))
+        .frame(egui::Frame::new().fill(p.panel))
         .show(ui, |ui| match step {
             Step::Panels => {
                 if let Some(s) = panels_step(ui, &p, doc) {
@@ -148,7 +148,7 @@ fn panels_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Step> {
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
-                .inner_margin(egui::Margin::symmetric(20, 18)),
+                .inner_margin(egui::Margin::symmetric(24, 16)),
         )
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
@@ -158,7 +158,7 @@ fn panels_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Step> {
                     Some(i) => {
                         label_caps(ui, p, "Ficha del tablero");
                         let panel = &doc.project.panels[i];
-                        ui.label(strong(format!("{} · {}", panel.id, panel.name)).size(18.0));
+                        ui.label(strong(format!("{} · {}", panel.id, panel.name)).size(crate::theme::TITLE));
                         ui.horizontal(|ui| {
                             if ui.button(format!("{} Ver sus circuitos", icon::LIST_BULLETS)).clicked() {
                                 go = Some(Step::Circuits);
@@ -177,14 +177,14 @@ fn panels_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Step> {
                         }
                     }
                     None => {
-                        ui.add_space(40.0);
+                        ui.add_space(crate::theme::SP8);
                         ui.label(muted(p, "Elige un tablero del árbol para ver su ficha."));
                     }
                 });
         });
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(36, 28)))
+        .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(32, 32)))
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
                 .id_salt("arbol-tableros")
@@ -213,20 +213,20 @@ fn panels_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Step> {
                     for i in roots {
                         tree(ui, p, doc, i, 1, selected_panel, &mut action);
                     }
-                    ui.add_space(10.0);
+                    ui.add_space(crate::theme::SP3);
                     if ui
                         .button(format!("{} Otro tablero desde {}", icon::PLUS, doc.project.source.name))
                         .clicked()
                     {
                         action = Some(TreeAction::Add(None));
                     }
-                    ui.add_space(16.0);
+                    ui.add_space(crate::theme::SP4);
                     ui.label(
                         muted(
                             p,
                             "Un transformador intermedio, dentro de la instalación, se marca en la ficha del tablero que alimenta; el programa calcula primario y secundario con la tensión de cada lado. El transformador de CFE o la subestación que alimenta toda la instalación va una sola vez en la acometida, en el paso Proyecto.",
                         )
-                        .size(12.5),
+                        .size(crate::theme::SECONDARY),
                     );
                     match action {
                         Some(TreeAction::Select(i)) => doc.selection = Selection::Feeder(i),
@@ -267,21 +267,25 @@ fn node(
             if on { p.accent } else { p.line },
         ))
         .corner_radius(8)
-        .inner_margin(egui::Margin::symmetric(14, 10))
+        .inner_margin(egui::Margin::symmetric(12, 8))
         .show(ui, |ui| {
             ui.vertical(|ui| {
                 ui.set_min_width(280.0);
                 ui.spacing_mut().item_spacing.y = 3.0;
                 ui.label(
-                    RichText::new(kicker.to_uppercase())
-                        .size(10.5)
+                    RichText::new(kicker)
+                        .size(crate::theme::FOOT)
                         .color(p.ink2)
                         .family(semibold()),
                 );
                 ui.label(strong(title));
-                ui.label(muted(p, sub).size(12.5));
+                ui.label(muted(p, sub).size(crate::theme::SECONDARY));
                 if let Some((text, color)) = status {
-                    ui.label(RichText::new(text).color(color).size(12.5));
+                    ui.label(
+                        RichText::new(text)
+                            .color(color)
+                            .size(crate::theme::SECONDARY),
+                    );
                 }
             });
         })
@@ -411,7 +415,7 @@ fn circuits_step(
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
-                .inner_margin(egui::Margin::symmetric(20, 18)),
+                .inner_margin(egui::Margin::symmetric(24, 16)),
         )
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
@@ -420,7 +424,7 @@ fn circuits_step(
                 .show(ui, |ui| match selected {
                     Some(c) => circuit_card(ui, p, doc, panel_index, c),
                     None => {
-                        ui.add_space(40.0);
+                        ui.add_space(crate::theme::SP8);
                         ui.label(muted(
                             p,
                             "Elige un circuito de la tabla para ver su ficha, o agrega uno nuevo.",
@@ -430,7 +434,7 @@ fn circuits_step(
         });
 
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(24, 18)))
+        .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(24, 16)))
         .show(ui, |ui| {
             // Tableros como pestañas.
             ui.horizontal(|ui| {
@@ -440,13 +444,13 @@ fn circuits_step(
                     }
                 }
             });
-            ui.add_space(10.0);
+            ui.add_space(crate::theme::SP3);
             let panel = &doc.project.panels[panel_index];
             let result = doc.panel_result(panel_index).cloned();
             let mut add = false;
             let mut balance = false;
             ui.horizontal(|ui| {
-                ui.label(strong(format!("Circuitos de {}", panel.id)).size(22.0));
+                ui.label(strong(format!("Circuitos de {}", panel.id)).size(crate::theme::TITLE));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if primary(ui, p, &format!("{}  Agregar circuito", icon::PLUS)) {
                         add = true;
@@ -469,22 +473,22 @@ fn circuits_step(
                             if let (Some(i), false) = (r.imbalance_percent, high) {
                                 line.push_str(&format!(" · desbalance {i:.1} %"));
                             }
-                            ui.label(muted(p, line).size(12.5));
+                            ui.label(muted(p, line).size(crate::theme::SECONDARY));
                             // Un desbalance alto es un aviso con su arreglo a la
                             // mano, no letra chica.
                             if let (Some(i), true) = (r.imbalance_percent, high) {
                                 ui.label(
                                     RichText::new(format!("{} Desbalance de {i:.1} %", icon::WARNING))
                                         .color(p.warn)
-                                        .size(12.5),
+                                        .size(crate::theme::ICON),
                                 )
                                 .on_hover_text(format!("Pasa del {limit:.0} % que fijan los criterios del proyecto."));
                             }
                             if r.imbalance_percent.is_some() {
                                 let button = if high {
-                                    egui::Button::new(RichText::new("Balancear fases").size(12.5))
+                                    egui::Button::new(RichText::new("Balancear fases").size(crate::theme::SECONDARY))
                                 } else {
-                                    egui::Button::new(RichText::new("Balancear").color(p.ink2).size(12.5)).frame(false)
+                                    egui::Button::new(RichText::new("Balancear").color(p.ink2).size(crate::theme::SECONDARY)).frame(false)
                                 };
                                 if ui
                                     .add(button)
@@ -498,11 +502,11 @@ fn circuits_step(
                     }
                 }
             }
-            ui.add_space(8.0);
+            ui.add_space(crate::theme::SP2);
             if interrupting_strip(ui, p, doc, panel_index) {
                 doc.edited();
             }
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             match &result {
                 Some(r) => {
                     if let Some(c) = circuit_table(ui, p, doc, panel_index, r, selected) {
@@ -552,7 +556,7 @@ fn subpanel_list(
         return None;
     }
     let mut action = None;
-    ui.add_space(16.0);
+    ui.add_space(crate::theme::SP4);
     label_caps(
         ui,
         p,
@@ -562,7 +566,7 @@ fn subpanel_list(
             children.len()
         ),
     );
-    ui.add_space(4.0);
+    ui.add_space(crate::theme::SP1);
     for k in children {
         let panel = &doc.project.panels[k];
         let status = doc.panel_result(k).map(|r| r.feeder.status);
@@ -575,7 +579,7 @@ fn subpanel_list(
                 ui.set_width(layout::remaining(ui.available_width(), 2.0));
                 ui.horizontal(|ui| {
                     symbols::show(ui, Symbol::Subpanel, 22.0, p.ink);
-                    ui.add_space(4.0);
+                    ui.add_space(crate::theme::SP1);
                     ui.label(strong(&panel.id));
                     if let Some(status) = status {
                         ui.label(crate::widgets::status_glyph(p, status))
@@ -616,7 +620,7 @@ fn subpanel_list(
                     });
                 });
             });
-        ui.add_space(4.0);
+        ui.add_space(crate::theme::SP1);
     }
     action
 }
@@ -659,13 +663,13 @@ fn circuit_table(
     // Encabezado de grupos.
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
-        ui.add_space(8.0);
+        ui.add_space(crate::theme::SP2);
         let (r1, _) = ui.allocate_exact_size(Vec2::new(capture_width, 22.0), Sense::hover());
         ui.painter().text(
             r1.left_center(),
             egui::Align2::LEFT_CENTER,
             "LO QUE CAPTURAS",
-            egui::FontId::new(11.0, semibold()),
+            egui::FontId::new(crate::theme::FOOT, semibold()),
             p.ink2,
         );
         let (r2, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 22.0), Sense::hover());
@@ -677,7 +681,7 @@ fn circuit_table(
             r2.left_center() + Vec2::new(8.0, 0.0),
             egui::Align2::LEFT_CENTER,
             "LO QUE RESUELVE IEESTUDIO",
-            egui::FontId::new(11.0, semibold()),
+            egui::FontId::new(crate::theme::FOOT, semibold()),
             p.accent_text,
         );
     });
@@ -700,12 +704,20 @@ fn circuit_table(
             table
                 .header(26.0, |mut header| {
                     header.col(|ui| {
-                        ui.add_space(8.0);
-                        ui.label(RichText::new("Circuito").size(11.5).color(p.ink2));
+                        ui.add_space(crate::theme::SP2);
+                        ui.label(
+                            RichText::new("Circuito")
+                                .size(crate::theme::SECONDARY)
+                                .color(p.ink2),
+                        );
                     });
                     for (title, _) in input.iter().chain(&output) {
                         header.col(|ui| {
-                            ui.label(RichText::new(*title).size(11.5).color(p.ink2));
+                            ui.label(
+                                RichText::new(*title)
+                                    .size(crate::theme::SECONDARY)
+                                    .color(p.ink2),
+                            );
                         });
                     }
                 })
@@ -731,7 +743,7 @@ fn circuit_table(
                                     p.accent,
                                 );
                             }
-                            ui.add_space(8.0);
+                            ui.add_space(crate::theme::SP2);
                             ui.label(strong(&circuit.id));
                             ui.add(egui::Label::new(muted(p, &circuit.name)).truncate());
                         });
@@ -786,7 +798,9 @@ fn circuit_table(
                                 ui.label(RichText::new(size).monospace());
                                 if r.forced {
                                     ui.label(
-                                        RichText::new(icon::LOCK_SIMPLE).size(11.0).color(p.ink2),
+                                        RichText::new(icon::LOCK_SIMPLE)
+                                            .size(crate::theme::ICON)
+                                            .color(p.ink2),
                                     )
                                     .on_hover_text(
                                         "Fijado por ti: IEEStudio lo verifica, no lo cambia.",
@@ -821,7 +835,10 @@ fn circuit_table(
                             let problem = main_problem(item)
                                 .map(|k| format!("{}: {}", k.name, sentence(&k.detail)));
                             let label = if compact {
-                                ui.label(crate::widgets::status_glyph(p, item.status).size(15.0))
+                                ui.label(
+                                    crate::widgets::status_glyph(p, item.status)
+                                        .size(crate::theme::ICON_BAR),
+                                )
                             } else {
                                 crate::widgets::status_chip(ui, p, item.status)
                             };
@@ -838,7 +855,7 @@ fn circuit_table(
                 });
         });
     if panel.circuits.is_empty() {
-        ui.add_space(18.0);
+        ui.add_space(crate::theme::SP4);
         ui.label(muted(
             p,
             "Este tablero no tiene circuitos. Agrega el primero con el botón de arriba.",
@@ -892,11 +909,11 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
         symbols::show(ui, Symbol::Load(load_kind), 30.0, p.accent_text);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.label(strong(&title).size(18.0));
-            ui.label(muted(p, load_kind.label()).size(12.0));
+            ui.label(strong(&title).size(crate::theme::TITLE));
+            ui.label(muted(p, load_kind.label()).size(crate::theme::SECONDARY));
         });
     });
-    ui.add_space(8.0);
+    ui.add_space(crate::theme::SP2);
 
     if let Some(item) = &item {
         match main_problem(item) {
@@ -918,21 +935,26 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
                     .fill(color.gamma_multiply(0.10))
                     .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.55)))
                     .corner_radius(8)
-                    .inner_margin(egui::Margin::symmetric(12, 10))
+                    .inner_margin(egui::Margin::symmetric(12, 8))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         ui.label(RichText::new(head).color(color).family(semibold()));
                         ui.label(sentence(&check.detail));
                         if let Some(cite) = cite_all(&check.references) {
-                            ui.label(RichText::new(cite).size(11.5).color(p.info));
+                            ui.label(
+                                RichText::new(cite)
+                                    .size(crate::theme::SECONDARY)
+                                    .color(p.info),
+                            );
                         }
                         let others = more;
                         if others > 1 {
                             ui.label(
-                                muted(p, format!("Y {} más en Revisar.", others - 1)).size(11.5),
+                                muted(p, format!("Y {} más en Revisar.", others - 1))
+                                    .size(crate::theme::SECONDARY),
                             );
                         }
-                        ui.add_space(4.0);
+                        ui.add_space(crate::theme::SP1);
                         ui.horizontal_wrapped(|ui| {
                             if let Some(rec) = proposed_instead(item) {
                                 if primary(ui, p, &format!("Usar {} (propuesto)", size_label(&rec)))
@@ -957,7 +979,7 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
             }
         }
         if let Some(run) = &item.run {
-            ui.add_space(10.0);
+            ui.add_space(crate::theme::SP3);
             egui::Grid::new(("resumen-circuito", i, c))
                 .num_columns(2)
                 .spacing([16.0, 6.0])
@@ -1011,14 +1033,14 @@ fn circuit_card(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, i: usize, c: usiz
         equipment_rules(ui, p, load_kind, item);
     }
 
-    ui.add_space(6.0);
+    ui.add_space(crate::theme::SP2);
     ui.separator();
     if properties::circuit_form(ui, doc, p, i, c, true) {
         doc.edited();
     }
 
     if let Some(run) = item.as_ref().and_then(|x| x.run.as_ref()) {
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
         let header = egui::CollapsingHeader::new(RichText::new("Cómo se calculó").color(p.ink2))
             .id_salt(("como-se-calculo", i, c))
             .open(open_procedure.then_some(true))
@@ -1053,7 +1075,7 @@ fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunRes
         LoadKind::AirConditioning => "Por ser aire acondicionado",
         _ => return,
     };
-    ui.add_space(10.0);
+    ui.add_space(crate::theme::SP3);
     let frame = egui::Frame::new()
         .fill(p.bg)
         .stroke(egui::Stroke::new(1.0, p.line))
@@ -1071,15 +1093,15 @@ fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunRes
             match &item.run {
                 Some(run) => {
                     for step in run.steps.iter().take(3) {
-                        ui.label(RichText::new(&step.title).size(12.5));
+                        ui.label(RichText::new(&step.title).size(crate::theme::SECONDARY));
                         ui.add(
-                            egui::Label::new(RichText::new(&step.substitution).monospace().size(12.0))
+                            egui::Label::new(RichText::new(&step.substitution).monospace().size(crate::theme::SECONDARY))
                                 .wrap(),
                         );
                         if let Some(cite) = cite_all(&step.references) {
-                            ui.label(RichText::new(cite).size(11.0).color(p.info));
+                            ui.label(RichText::new(cite).size(crate::theme::FOOT).color(p.info));
                         }
-                        ui.add_space(3.0);
+                        ui.add_space(crate::theme::SP1);
                     }
                 }
                 None => {
@@ -1087,7 +1109,7 @@ fn equipment_rules(ui: &mut egui::Ui, p: &Palette, kind: LoadKind, item: &RunRes
                         LoadKind::Motor => "Elige la potencia del motor para calcularlo.",
                         _ => "Captura los datos de la placa de la unidad para calcularlo: la corriente nominal (RLA), o la ampacidad mínima (MCA) y la protección máxima (MOP).",
                     };
-                    ui.add(egui::Label::new(muted(p, need).size(12.5)).wrap());
+                    ui.add(egui::Label::new(muted(p, need).size(crate::theme::SECONDARY)).wrap());
                 }
             }
         });
@@ -1127,9 +1149,10 @@ pub fn diagram_view(
         )
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(strong("Diagrama unifilar").size(16.0));
+                ui.label(strong("Diagrama unifilar").size(crate::theme::HEAD));
                 ui.label(
-                    muted(p, "Haz clic en un tablero o circuito para ir a su ficha.").size(12.0),
+                    muted(p, "Haz clic en un tablero o circuito para ir a su ficha.")
+                        .size(crate::theme::SECONDARY),
                 );
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if primary(ui, p, &format!("{}  Exportar DXF", icon::FLOW_ARROW)) {
@@ -1231,7 +1254,7 @@ fn interrupting_strip(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, panel_index
         .fill(p.warn.gamma_multiply(0.08))
         .stroke(egui::Stroke::new(1.0, p.warn.gamma_multiply(0.45)))
         .corner_radius(crate::theme::RADIUS_CARD)
-        .inner_margin(egui::Margin::symmetric(10, 6))
+        .inner_margin(egui::Margin::symmetric(8, 8))
         .show(ui, |ui| {
             ui.set_width(layout::remaining(ui.available_width(), 2.0));
             ui.horizontal(|ui| {
@@ -1264,14 +1287,14 @@ fn interrupting_strip(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, panel_index
                     Layout::left_to_right(Align::Center),
                     |ui| {
                         ui.set_min_width(width);
-                        ui.add(egui::Label::new(RichText::new(text).size(12.5)).truncate())
+                        ui.add(egui::Label::new(RichText::new(text).size(crate::theme::SECONDARY)).truncate())
                             .on_hover_text(format!(
                                 "{} Es una sola verificación del tablero; no cambia el estado de cada circuito.",
                                 sentence(&group.summary())
                             ));
                     },
                 );
-                ui.label(muted(p, "kA del tablero").size(12.0));
+                ui.label(muted(p, "kA del tablero").size(crate::theme::SECONDARY));
                 changed |= crate::widgets::optional_number(
                     ui,
                     &mut doc.project.panels[panel_index].board.interrupting_ka,
@@ -1301,7 +1324,7 @@ fn duplicate_review(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Car
         return None;
     }
     let mut action = None;
-    ui.add_space(20.0);
+    ui.add_space(crate::theme::SP6);
     label_caps(
         ui,
         p,
@@ -1312,10 +1335,10 @@ fn duplicate_review(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Car
             .fill(p.warn.gamma_multiply(0.06))
             .stroke(egui::Stroke::new(1.0, p.warn.gamma_multiply(0.6)))
             .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(14, 10))
+            .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
                 ui.set_width(layout::remaining(ui.available_width(), 2.0));
-                ui.add(egui::Label::new(RichText::new(format!("{} {}.", icon::WARNING, flag.text())).size(12.5)).wrap());
+                ui.add(egui::Label::new(RichText::new(format!("{} {}.", icon::WARNING, flag.text())).size(crate::theme::ICON)).wrap());
                 ui.horizontal(|ui| {
                     if ui
                         .button("Son equipos distintos")
@@ -1332,7 +1355,7 @@ fn duplicate_review(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> Option<Car
                     }
                 });
             });
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
     }
     action
 }
@@ -1351,11 +1374,15 @@ fn interrupting_card(
         .fill(p.panel)
         .stroke(egui::Stroke::new(1.0, p.line))
         .corner_radius(8)
-        .inner_margin(egui::Margin::symmetric(14, 10))
+        .inner_margin(egui::Margin::symmetric(12, 8))
         .show(ui, |ui| {
             ui.set_width(layout::remaining(ui.available_width(), 2.0));
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon::CIRCLE_DASHED).color(p.warn).size(16.0));
+                ui.label(
+                    RichText::new(icon::CIRCLE_DASHED)
+                        .color(p.warn)
+                        .size(crate::theme::ICON_BAR),
+                );
                 ui.add(
                     egui::Label::new(strong(format!(
                         "Capacidad interruptiva en {}: {}",
@@ -1371,8 +1398,8 @@ fn interrupting_card(
             if let Some(cite) = cite_all(&group.references) {
                 detail.push_str(&format!(" · {cite}"));
             }
-            ui.add(egui::Label::new(muted(p, detail).size(12.5)).wrap());
-            ui.add_space(4.0);
+            ui.add(egui::Label::new(muted(p, detail).size(crate::theme::SECONDARY)).wrap());
+            ui.add_space(crate::theme::SP1);
             // El dato de la suministradora sin decir dónde: se resuelve aquí
             // con un clic, sin suponer nada (decisión 0029, D-2).
             let missing_location = group
@@ -1442,7 +1469,8 @@ fn interrupting_card(
             crate::widgets::trace_ui(ui, p, &group.place, &group.trace);
             if group.breakers.len() > 1 {
                 egui::CollapsingHeader::new(
-                    muted(p, format!("Los {} interruptores", group.breakers.len())).size(12.5),
+                    muted(p, format!("Los {} interruptores", group.breakers.len()))
+                        .size(crate::theme::SECONDARY),
                 )
                 .id_salt(("interruptores", &group.place))
                 .show(ui, |ui| {
@@ -1452,7 +1480,10 @@ fn interrupting_card(
                             .map_or("sin dato".to_string(), |ka| format!("{ka} kA"));
                         ui.horizontal(|ui| {
                             ui.label(crate::widgets::status_glyph(p, breaker.status));
-                            ui.label(RichText::new(format!("{} — {ka}", breaker.label)).size(12.5));
+                            ui.label(
+                                RichText::new(format!("{} — {ka}", breaker.label))
+                                    .size(crate::theme::ICON),
+                            );
                         });
                     }
                 });
@@ -1532,7 +1563,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
-                .inner_margin(egui::Margin::symmetric(20, 18)),
+                .inner_margin(egui::Margin::symmetric(24, 16)),
         )
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
@@ -1552,8 +1583,8 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             }
                         });
                     });
-                    ui.label(muted(p, "Vista en miniatura; lo que no cumple va marcado. Ábrelo para leerlo.").size(12.0));
-                    ui.add_space(6.0);
+                    ui.label(muted(p, "Vista en miniatura; lo que no cumple va marcado. Ábrelo para leerlo.").size(crate::theme::SECONDARY));
+                    ui.add_space(crate::theme::SP2);
                     let diagram = shared.diagram(doc, ieestudio_diagrams::Mode::Review);
                     if let (Ok(result), Some(diagram)) = (&doc.result, diagram) {
                         // Ajustado al ancho del panel, sin barra de zoom: para
@@ -1574,7 +1605,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                     });
                                 }
                             });
-                        ui.add_space(14.0);
+                        ui.add_space(crate::theme::SP4);
                         for panel in &result.panels {
                             label_caps(ui, p, &format!("Tablero {}", panel.id));
                             egui::Grid::new(("resumen-tablero", &panel.id))
@@ -1637,10 +1668,10 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                         ui.end_row();
                                     }
                                 });
-                            ui.add_space(10.0);
+                            ui.add_space(crate::theme::SP3);
                         }
                         if let Some(g) = &result.grounding_electrode {
-                            ui.label(muted(p, format!("Conductor al electrodo: {} de cobre (Tabla 250-66)", size_label(&g.size))).size(12.0));
+                            ui.label(muted(p, format!("Conductor al electrodo: {} de cobre (Tabla 250-66)", size_label(&g.size))).size(crate::theme::SECONDARY));
                         }
                     }
                 });
@@ -1691,14 +1722,14 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                 .fill(p.panel)
                                 .stroke(egui::Stroke::new(1.0, if *status == Status::Fails { p.bad.gamma_multiply(0.6) } else { p.line }))
                                 .corner_radius(8)
-                                .inner_margin(egui::Margin::symmetric(14, 12))
+                                .inner_margin(egui::Margin::symmetric(12, 12))
                                 .show(ui, |ui| {
                                     ui.set_width(inner);
                                     ui.vertical(|ui| {
                                         label_caps(ui, p, level);
                                         let glyph = if k == 2 { icon::SEAL_QUESTION } else { status_icon(*status) };
-                                        ui.add(egui::Label::new(RichText::new(format!("{glyph} {head}")).color(color).size(16.0).family(semibold())).wrap());
-                                        ui.add(egui::Label::new(muted(p, sentence(&rest)).size(12.0)).wrap());
+                                        ui.add(egui::Label::new(RichText::new(format!("{glyph} {head}")).color(color).size(crate::theme::ICON_BAR).family(semibold())).wrap());
+                                        ui.add(egui::Label::new(muted(p, sentence(&rest)).size(crate::theme::ICON)).wrap());
                                     });
                                 });
                         }
@@ -1761,9 +1792,9 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         .filter(|g| g.status != Status::Complies)
                         .cloned()
                         .collect();
-                    ui.add_space(20.0);
+                    ui.add_space(crate::theme::SP6);
                     label_caps(ui, p, &format!("Por resolver · {}", items.len() + groups.len()));
-                    ui.add_space(4.0);
+                    ui.add_space(crate::theme::SP1);
                     if items.is_empty() && groups.is_empty() {
                         ui.label(RichText::new(format!("{} Nada pendiente: todo lo que verifica IEEStudio cumple.", icon::CHECK_CIRCLE)).color(p.ok));
                     }
@@ -1775,18 +1806,18 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             .fill(p.panel)
                             .stroke(egui::Stroke::new(1.0, if item.check.status == Status::Fails { p.bad.gamma_multiply(0.5) } else { p.line }))
                             .corner_radius(8)
-                            .inner_margin(egui::Margin::symmetric(14, 10))
+                            .inner_margin(egui::Margin::symmetric(12, 8))
                             .show(ui, |ui| {
                                 ui.set_width(layout::remaining(ui.available_width(), 2.0));
                                 ui.horizontal(|ui| {
-                                    ui.label(RichText::new(status_icon(item.check.status)).color(color).size(16.0));
+                                    ui.label(RichText::new(status_icon(item.check.status)).color(color).size(crate::theme::HEAD));
                                     ui.add(egui::Label::new(strong(format!("{}: {}", item.title, item.check.name.to_lowercase()))).wrap());
                                 });
                                 let mut detail = sentence(&item.check.detail);
                                 if let Some(cite) = cite_all(&item.check.references) {
                                     detail.push_str(&format!(" · {cite}"));
                                 }
-                                ui.add(egui::Label::new(muted(p, detail).size(12.5)).wrap());
+                                ui.add(egui::Label::new(muted(p, detail).size(crate::theme::SECONDARY)).wrap());
                                 ui.add_space(2.0);
                                 ui.horizontal(|ui| {
                                     if let Some(rec) = &item.proposed {
@@ -1819,13 +1850,13 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                                 });
                             });
                         if k + 1 < items.len() {
-                            ui.add_space(6.0);
+                            ui.add_space(crate::theme::SP2);
                         }
                     }
                     // La capacidad interruptiva: una tarjeta por lugar, con
                     // el dato que la resuelve ahí mismo.
                     for group in &groups {
-                        ui.add_space(6.0);
+                        ui.add_space(crate::theme::SP2);
                         match interrupting_card(ui, p, doc, group) {
                             Some(CardAction::Changed) => doc.edited(),
                             Some(CardAction::Go(i)) => {
@@ -1858,12 +1889,12 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                     }
 
                     if !result.verdict.out_of_scope.is_empty() {
-                        ui.add_space(20.0);
+                        ui.add_space(crate::theme::SP6);
                         label_caps(ui, p, "Fuera de alcance · se resuelve con otro estudio");
-                        ui.add_space(4.0);
+                        ui.add_space(crate::theme::SP1);
                         for o in &result.verdict.out_of_scope {
                             ui.label(RichText::new(format!("{} {}", icon::INFO, o.label())));
-                            ui.label(muted(p, sentence(&o.resolve_with) + " Se anota en la memoria.").size(12.5));
+                            ui.label(muted(p, sentence(&o.resolve_with) + " Se anota en la memoria.").size(crate::theme::ICON));
                         }
                     }
 
@@ -1874,9 +1905,9 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                         .filter(|w| !is_system_warning(w))
                         .collect();
                     if !warnings.is_empty() {
-                        ui.add_space(20.0);
+                        ui.add_space(crate::theme::SP6);
                         label_caps(ui, p, "Avisos");
-                        ui.add_space(4.0);
+                        ui.add_space(crate::theme::SP1);
                         for warning in warnings {
                             ui.horizontal_wrapped(|ui| {
                                 ui.add(
@@ -1897,7 +1928,7 @@ fn review_step(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc, shared: &mut Share
                             });
                         }
                     }
-                    ui.add_space(24.0);
+                    ui.add_space(crate::theme::SP6);
                 });
         });
     go
@@ -1922,22 +1953,22 @@ fn connection_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> bool {
         return false;
     }
     let mut fix = false;
-    ui.add_space(20.0);
+    ui.add_space(crate::theme::SP6);
     label_caps(
         ui,
         p,
         &format!("Conexiones que no existen · {}", items.len()),
     );
-    ui.add_space(4.0);
+    ui.add_space(crate::theme::SP1);
     egui::Frame::new()
         .fill(p.panel)
         .stroke(egui::Stroke::new(1.0, p.bad.gamma_multiply(0.6)))
         .corner_radius(8)
-        .inner_margin(egui::Margin::symmetric(14, 10))
+        .inner_margin(egui::Margin::symmetric(12, 8))
         .show(ui, |ui| {
             ui.set_width(layout::remaining(ui.available_width(), 2.0));
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon::X_CIRCLE).color(p.bad).size(16.0));
+                ui.label(RichText::new(icon::X_CIRCLE).color(p.bad).size(crate::theme::ICON_BAR));
                 ui.add(
                     egui::Label::new(strong(if items.len() == 1 {
                         "Un tramo pide una conexión que aquí no hay".to_string()
@@ -1953,7 +1984,7 @@ fn connection_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> bool {
                         p,
                         "El suministro o el tablero de donde salen no tiene esas fases, así que no se calculan. Pasa cuando se cambia el suministro o la conexión de un tablero después de capturar.",
                     )
-                    .size(12.5),
+                    .size(crate::theme::SECONDARY),
                 )
                 .wrap(),
             );
@@ -1978,13 +2009,13 @@ fn connection_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> bool {
                         "{what}: {} → {to}",
                         label_of(&KINDS, m.kind)
                     ))
-                    .size(12.5),
+                    .size(crate::theme::SECONDARY),
                 );
             }
             if items.len() > 8 {
-                ui.label(muted(p, format!("… y {} más", items.len() - 8)).size(12.5));
+                ui.label(muted(p, format!("… y {} más", items.len() - 8)).size(crate::theme::SECONDARY));
             }
-            ui.add_space(4.0);
+            ui.add_space(crate::theme::SP1);
             if ui
                 .add(
                     egui::Button::new(
@@ -2041,20 +2072,20 @@ fn system_review(
         return None;
     }
     let mut action = None;
-    ui.add_space(20.0);
+    ui.add_space(crate::theme::SP6);
     label_caps(ui, p, &format!("Sistema eléctrico · {}", items.len()));
-    ui.add_space(4.0);
+    ui.add_space(crate::theme::SP1);
     for (at, place, system, issue) in items {
         let color = if issue.invalid { p.bad } else { p.warn };
         egui::Frame::new()
             .fill(p.panel)
             .stroke(egui::Stroke::new(1.0, color.gamma_multiply(0.5)))
             .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(14, 10))
+            .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
                 ui.set_width(layout::remaining(ui.available_width(), 2.0));
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(if issue.invalid { icon::WARNING } else { icon::QUESTION }).color(color).size(16.0));
+                    ui.label(RichText::new(if issue.invalid { icon::WARNING } else { icon::QUESTION }).color(color).size(crate::theme::ICON_BAR));
                     ui.add(
                         egui::Label::new(strong(format!(
                             "{place} · {}: {}",
@@ -2071,7 +2102,7 @@ fn system_review(
                 };
                 ui.add(
                     egui::Label::new(
-                        muted(p, format!("{} {consequence}", sentence(&issue.reason))).size(12.5),
+                        muted(p, format!("{} {consequence}", sentence(&issue.reason))).size(crate::theme::SECONDARY),
                     )
                     .wrap(),
                 );
@@ -2090,7 +2121,7 @@ fn system_review(
                     });
                 }
             });
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
     }
     action
 }
@@ -2107,13 +2138,13 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> 
     }
     let profile = Profile::by_id(&doc.project.profile).unwrap_or(Profile::nom_001_sede_2012());
     let mut action = None;
-    ui.add_space(20.0);
+    ui.add_space(crate::theme::SP6);
     label_caps(
         ui,
         p,
         &format!("¿Tipo de carga correcto? · {}", items.len()),
     );
-    ui.add_space(4.0);
+    ui.add_space(crate::theme::SP1);
     for (i, c, kind) in items {
         let circuit = &doc.project.panels[i].circuits[c];
         let (what, rules, missing) = match kind {
@@ -2145,11 +2176,11 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> 
             .fill(p.panel)
             .stroke(egui::Stroke::new(1.0, p.warn.gamma_multiply(0.5)))
             .corner_radius(8)
-            .inner_margin(egui::Margin::symmetric(14, 10))
+            .inner_margin(egui::Margin::symmetric(12, 8))
             .show(ui, |ui| {
                 ui.set_width(layout::remaining(ui.available_width(), 2.0));
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(icon::QUESTION).color(p.warn).size(16.0));
+                    ui.label(RichText::new(icon::QUESTION).color(p.warn).size(crate::theme::ICON_BAR));
                     ui.add(
                         egui::Label::new(strong(format!(
                             "{} «{}» está como «Otra carga» ({})",
@@ -2172,7 +2203,7 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> 
                                 if kind == LoadKind::Motor { "un motor" } else { "un equipo de aire acondicionado" },
                             ),
                         )
-                        .size(12.5),
+                        .size(crate::theme::SECONDARY),
                     )
                     .wrap(),
                 );
@@ -2199,7 +2230,7 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> 
                     }
                 });
             });
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
     }
     action
 }
@@ -2217,7 +2248,7 @@ fn report_step(
         .frame(
             egui::Frame::new()
                 .fill(p.panel)
-                .inner_margin(egui::Margin::symmetric(24, 22)),
+                .inner_margin(egui::Margin::symmetric(24, 24)),
         )
         .show(ui, |ui| {
             egui::ScrollArea::vertical()
@@ -2233,9 +2264,9 @@ fn report_step(
                     let mut changed = false;
                     let info = &mut doc.project.info;
                     changed |= text_field(ui, p, "Responsable que firma", &mut info.responsible, "Nombre del ingeniero");
-                    ui.add_space(8.0);
+                    ui.add_space(crate::theme::SP2);
                     changed |= text_field(ui, p, "Cédula profesional", &mut info.license, "Número de cédula");
-                    ui.add_space(8.0);
+                    ui.add_space(crate::theme::SP2);
                     ui.horizontal_top(|ui| {
                         let half = layout::column_width(ui.available_width(), 2, 12.0);
                         ui.vertical(|ui| {
@@ -2251,9 +2282,9 @@ fn report_step(
                         doc.edited();
                     }
 
-                    ui.add_space(20.0);
+                    ui.add_space(crate::theme::SP6);
                     label_caps(ui, p, "Antes de entregar");
-                    ui.add_space(4.0);
+                    ui.add_space(crate::theme::SP1);
                     let (fails, pending) = problem_counts(doc);
                     let complete = doc
                         .result
@@ -2295,14 +2326,14 @@ fn report_step(
                     }
                     if let Ok(r) = &doc.result {
                         for o in &r.verdict.out_of_scope {
-                            ui.label(muted(p, format!("{} {}: fuera de alcance, se anota en la memoria", icon::INFO, o.name)).size(12.5));
+                            ui.label(muted(p, format!("{} {}: fuera de alcance, se anota en la memoria", icon::INFO, o.name)).size(crate::theme::ICON));
                         }
                     }
 
-                    ui.add_space(24.0);
+                    ui.add_space(crate::theme::SP6);
                     label_caps(ui, p, "También puedes exportar");
-                    ui.label(muted(p, "La memoria en PDF se exporta con el botón amarillo de abajo.").size(12.0));
-                    ui.add_space(4.0);
+                    ui.label(muted(p, "La memoria en PDF se exporta con el botón amarillo de abajo.").size(crate::theme::SECONDARY));
+                    ui.add_space(crate::theme::SP1);
                     ui.horizontal_wrapped(|ui| {
                         if ui.button(format!("{}  Cuadro de cargas en Excel", icon::FILE_XLS)).clicked() {
                             request = Some(Export::Excel);

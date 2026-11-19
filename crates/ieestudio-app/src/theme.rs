@@ -28,6 +28,53 @@ pub const RADIUS_CARD: u8 = 8;
 /// Radio de ventanas, menús y hojas.
 pub const RADIUS_WINDOW: u8 = 10;
 
+// ---------------------------------------------------- lenguaje visual (R4.5)
+// `docs/sistema-visual.md` explica cada valor. Ningún tamaño de letra,
+// margen o alto de control se escribe con un número suelto en el código: se
+// usan estas constantes (lo comprueba una prueba de este archivo).
+
+/// Escala tipográfica: título de sección o vista.
+pub const TITLE: f32 = 22.0;
+/// Encabezado: el nombre de lo que se está viendo (tablero, circuito, bloque).
+pub const HEAD: f32 = 15.0;
+/// Cuerpo: texto, campos, tablas y botones.
+pub const BODY: f32 = 13.0;
+/// Secundario: aclaraciones, subtítulos y detalle de una cifra.
+pub const SECONDARY: f32 = 12.0;
+/// Pie: rótulos de cifras y columnas, en tipo oración.
+pub const FOOT: f32 = 11.0;
+/// Excepción: el título principal de una vista (uno por pantalla).
+pub const VIEW_TITLE: f32 = 28.0;
+/// Excepción en teléfono: texto de renglones y botones de 44 px.
+#[allow(dead_code)] // Lo usan las pantallas de teléfono (R6).
+pub const TOUCH: f32 = 15.0;
+/// Excepción en teléfono: cifras del resumen.
+#[allow(dead_code)] // Lo usan las pantallas de teléfono (R6).
+pub const TOUCH_FIGURE: f32 = 17.0;
+
+/// Íconos dentro de texto, tablas y fichas.
+pub const ICON: f32 = 14.0;
+/// Íconos de la barra superior y de los botones de solo ícono.
+pub const ICON_BAR: f32 = 16.0;
+
+/// Retícula de espacios: 4, 8, 12, 16, 24 y 32 px.
+pub const SP1: f32 = 4.0;
+pub const SP2: f32 = 8.0;
+pub const SP3: f32 = 12.0;
+pub const SP4: f32 = 16.0;
+pub const SP6: f32 = 24.0;
+pub const SP8: f32 = 32.0;
+
+/// Alto de un control en fichas y tablas.
+pub const CONTROL_H: f32 = 24.0;
+/// Alto de un control en las barras.
+pub const BAR_CONTROL_H: f32 = 28.0;
+/// Alto de un renglón de tabla o de grupo de campos con ratón.
+pub const ROW_H: f32 = 28.0;
+/// Alto de un control táctil.
+#[allow(dead_code)] // Lo usan las pantallas de teléfono (R6).
+pub const TOUCH_H: f32 = 44.0;
+
 /// Paleta de un tema.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Palette {
@@ -38,9 +85,11 @@ pub struct Palette {
     pub panel: Color32,
     /// Controles y tarjetas.
     pub raise: Color32,
-    /// Elemento seleccionado: neutro, con la barra de acento al lado.
+    /// Elemento seleccionado: neutro, en forma de píldora.
     pub selected: Color32,
     pub line: Color32,
+    /// Divisor discreto: entre renglones de un grupo y entre regiones.
+    pub hair: Color32,
     pub ink: Color32,
     pub ink2: Color32,
     pub ink3: Color32,
@@ -80,6 +129,7 @@ impl Palette {
                 raise: rgb(0x29, 0x2e, 0x37),
                 selected: rgb(0x30, 0x36, 0x40),
                 line: rgb(0x36, 0x3c, 0x46),
+                hair: rgb(0x2c, 0x31, 0x3a),
                 ink: rgb(0xe8, 0xeb, 0xf0),
                 ink2: rgb(0xae, 0xb7, 0xc3),
                 ink3: rgb(0x8e, 0x99, 0xa8),
@@ -107,6 +157,7 @@ impl Palette {
                 raise: rgb(0xff, 0xff, 0xff),
                 selected: rgb(0xe1, 0xe5, 0xeb),
                 line: rgb(0xd3, 0xd8, 0xdf),
+                hair: rgb(0xe3, 0xe7, 0xec),
                 ink: rgb(0x1b, 0x1f, 0x25),
                 ink2: rgb(0x4b, 0x55, 0x60),
                 ink3: rgb(0x66, 0x70, 0x7c),
@@ -189,34 +240,53 @@ pub fn apply(ctx: &egui::Context, p: &Palette) {
     });
     ctx.all_styles_mut(|style| {
         style.text_styles = [
-            (TextStyle::Heading, FontId::new(15.0, semibold())),
-            (TextStyle::Body, FontId::new(13.0, FontFamily::Proportional)),
+            (TextStyle::Heading, FontId::new(HEAD, semibold())),
+            (TextStyle::Body, FontId::new(BODY, FontFamily::Proportional)),
             (
                 TextStyle::Button,
-                FontId::new(13.0, FontFamily::Proportional),
+                FontId::new(BODY, FontFamily::Proportional),
             ),
             (
                 TextStyle::Monospace,
-                FontId::new(12.5, FontFamily::Monospace),
+                FontId::new(BODY, FontFamily::Monospace),
             ),
             (
                 TextStyle::Small,
-                FontId::new(11.0, FontFamily::Proportional),
+                FontId::new(FOOT, FontFamily::Proportional),
             ),
         ]
         .into();
-        style.spacing.item_spacing = egui::vec2(6.0, 4.0);
-        style.spacing.button_padding = egui::vec2(10.0, 4.0);
-        style.spacing.interact_size.y = 26.0;
-        style.spacing.menu_margin = egui::Margin::same(6);
+        style.spacing.item_spacing = egui::vec2(SP2, SP1);
+        style.spacing.button_padding = egui::vec2(10.0, SP1);
+        style.spacing.interact_size.y = CONTROL_H;
+        style.spacing.menu_margin = egui::Margin::same(SP2 as i8);
         style.spacing.combo_width = 140.0;
 
         let v = &mut style.visuals;
         v.dark_mode = p.dark;
         v.override_text_color = Some(p.ink);
         v.panel_fill = p.panel;
-        v.window_fill = p.panel;
+        // Lo que flota (ventanas, menús, avisos) es la superficie elevada y
+        // lleva la única sombra del sistema.
+        v.window_fill = p.raise;
         v.window_stroke = Stroke::new(1.0, p.line);
+        let shadow = if p.dark {
+            Color32::from_black_alpha(115)
+        } else {
+            Color32::from_rgba_unmultiplied(15, 23, 42, 36)
+        };
+        v.window_shadow = egui::Shadow {
+            offset: [0, 8],
+            blur: 24,
+            spread: 0,
+            color: shadow,
+        };
+        v.popup_shadow = egui::Shadow {
+            offset: [0, 4],
+            blur: 16,
+            spread: 0,
+            color: shadow,
+        };
         v.window_corner_radius = CornerRadius::same(RADIUS_WINDOW);
         v.menu_corner_radius = CornerRadius::same(RADIUS_CARD);
         v.extreme_bg_color = p.bg;
@@ -243,6 +313,8 @@ pub fn apply(ctx: &egui::Context, p: &Palette) {
             w.expansion = 0.0;
         }
         v.widgets.noninteractive.fg_stroke = Stroke::new(1.0, p.ink2);
+        // Separadores y bordes de regiones: el divisor discreto.
+        v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, p.hair);
     });
 }
 
@@ -334,5 +406,72 @@ mod tests {
             };
             assert!((hue(p.accent) - hue(p.warn)).abs() >= 10.0);
         }
+    }
+
+    /// Lo escrito en `docs/sistema-visual.md` se cumple en todo el código de
+    /// la interfaz: tamaños de letra solo de la escala, márgenes y espacios
+    /// de la retícula, y rótulos sin convertir a mayúsculas.
+    #[test]
+    fn the_interface_uses_only_the_visual_system() {
+        let grid = [0, 2, 4, 8, 12, 16, 24, 32];
+        let mut problems = Vec::new();
+        let mut dirs = vec![std::path::PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src"
+        ))];
+        while let Some(dir) = dirs.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                if path.extension().is_none_or(|e| e != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                // Las pruebas de cada archivo no dibujan nada.
+                let code = text.split("#[cfg(test)]").next().unwrap_or("");
+                let name = path.file_name().unwrap().to_string_lossy().to_string();
+                for (n, line) in code.lines().enumerate() {
+                    let at = format!("{name}:{}", n + 1);
+                    let after = |key: &str| -> Vec<String> {
+                        line.split(key)
+                            .skip(1)
+                            .map(|r| r.trim_start().to_string())
+                            .collect()
+                    };
+                    for rest in [after(".size("), after("FontId::new(")].concat() {
+                        if rest.starts_with(|c: char| c.is_ascii_digit()) {
+                            problems.push(format!("{at}: tamaño de letra fuera de la escala"));
+                        }
+                    }
+                    for rest in after("add_space(") {
+                        if rest.starts_with(|c: char| c.is_ascii_digit())
+                            && !rest.starts_with("2.0)")
+                        {
+                            problems.push(format!("{at}: espacio fuera de la retícula"));
+                        }
+                    }
+                    for key in ["Margin::symmetric(", "Margin::same("] {
+                        for rest in after(key) {
+                            let args = rest.split(')').next().unwrap_or("");
+                            for value in args.split(',') {
+                                if let Ok(v) = value.trim().parse::<i32>() {
+                                    if !grid.contains(&v) {
+                                        problems
+                                            .push(format!("{at}: margen {v} fuera de la retícula"));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if line.contains("RichText::new(") && line.contains("to_uppercase()") {
+                        problems.push(format!("{at}: rótulo convertido a mayúsculas"));
+                    }
+                }
+            }
+        }
+        assert!(problems.is_empty(), "{}", problems.join("\n"));
     }
 }

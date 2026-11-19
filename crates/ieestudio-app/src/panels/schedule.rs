@@ -15,9 +15,7 @@ use super::Shared;
 use crate::state::{Doc, Selection};
 use crate::symbols::{self, Symbol};
 use crate::theme::Palette;
-use crate::widgets::{
-    label_of, muted, primary_button, segmented, status_color, status_text, strong, worst, KINDS,
-};
+use crate::widgets::{label_of, muted, segmented, status_color, status_text, strong, worst, KINDS};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Col {
@@ -390,8 +388,8 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         })
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(strong(format!("{} · {}", panel.id, panel.name)).size(17.0));
-                ui.add_space(6.0);
+                ui.label(strong(format!("{} · {}", panel.id, panel.name)).size(crate::theme::HEAD));
+                ui.add_space(crate::theme::SP2);
                 // Lo que quepa junto a los conteos de la derecha; nunca
                 // encimado con ellos.
                 let room = ui.available_width() - 450.0;
@@ -409,7 +407,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                                             label_of(&crate::widgets::SYSTEMS, system)
                                         ),
                                     )
-                                    .size(11.5),
+                                    .size(crate::theme::SECONDARY),
                                 )
                                 .truncate(),
                             );
@@ -433,7 +431,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                         if chosen != panel_index {
                             doc.selection = Selection::Feeder(chosen);
                         }
-                        ui.add_space(8.0);
+                        ui.add_space(crate::theme::SP2);
                     }
                     // Conteo por estado: lo primero que se busca al revisar.
                     let tally = [
@@ -455,13 +453,13 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                                 crate::widgets::status_icon(status)
                             ))
                             .color(status_color(&p, status))
-                            .size(12.0),
+                            .size(crate::theme::SECONDARY),
                         );
-                        ui.add_space(4.0);
+                        ui.add_space(crate::theme::SP1);
                     }
                 });
             });
-            ui.add_space(8.0);
+            ui.add_space(crate::theme::SP2);
             summary_strip(ui, &p, &result, worst(statuses.iter().copied()));
         });
     ui.separator();
@@ -470,14 +468,14 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     let mut action = None;
     let pending = statuses.iter().filter(|s| **s != Status::Complies).count();
     ui.horizontal_wrapped(|ui| {
-        ui.add_space(8.0);
-        if primary_button(ui, &p, &format!("{}  Agregar circuito", icon::PLUS))
+        ui.add_space(crate::theme::SP2);
+        if crate::widgets::primary_bar_button(ui, &p, &format!("{}  Agregar circuito", icon::PLUS))
             .on_hover_text("¿Qué vas a conectar? Elige el tipo de carga o un subtablero")
             .clicked()
         {
             action = Some(Action::Add);
         }
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
         segmented(
             ui,
             &p,
@@ -547,7 +545,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             }
         });
     });
-    ui.add_space(6.0);
+    ui.add_space(crate::theme::SP2);
 
     // ---------------------------------------------------------- filas
     let needle = shared.filter.trim().to_lowercase();
@@ -656,7 +654,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                             if k == 0 {
                                 ui.add_space(INDENT);
                             }
-                            let text = RichText::new(col.header()).size(11.0).color(p.ink3);
+                            let text = RichText::new(col.header()).size(crate::theme::FOOT).color(p.ink3);
                             if col.numeric() {
                                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                     ui.label(text);
@@ -668,21 +666,13 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                     }
                 })
                 .body(|body| {
-                    body.rows(24.0, rows.len(), |mut table_row| {
+                    body.rows(crate::theme::ROW_H, rows.len(), |mut table_row| {
                         let row = &rows[table_row.index()];
                         let selected = doc.selection == row.selection;
                         table_row.set_selected(selected);
                         let feeder = matches!(row.selection, Selection::Feeder(_) | Selection::Secondary(_));
                         for (k, col) in cols.iter().enumerate() {
                             table_row.col(|ui| {
-                                if k == 0 && selected {
-                                    let r = ui.max_rect();
-                                    ui.painter().rect_filled(
-                                        egui::Rect::from_min_size(r.left_top(), Vec2::new(3.0, r.height())),
-                                        0.0,
-                                        p.accent,
-                                    );
-                                }
                                 if k == 0 {
                                     ui.add_space(INDENT);
                                 }
@@ -724,7 +714,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                                     });
                                 } else if *col == Col::Size && row.forced {
                                     ui.label(rich);
-                                    ui.label(RichText::new(icon::LOCK_SIMPLE).size(11.0).color(p.lav_text))
+                                    ui.label(RichText::new(icon::LOCK_SIMPLE).size(crate::theme::ICON).color(p.lav_text))
                                         .on_hover_text("Calibre fijado por ti: IEEStudio lo verifica, no lo cambia.");
                                 } else {
                                     ui.label(rich);
@@ -818,8 +808,8 @@ fn group_header(
         ui.painter().text(
             r1.left_center() + Vec2::new(indent, 0.0),
             egui::Align2::LEFT_CENTER,
-            "LO QUE CAPTURAS",
-            egui::FontId::new(10.5, crate::theme::semibold()),
+            "Lo que capturas",
+            egui::FontId::new(crate::theme::FOOT, crate::theme::semibold()),
             p.ink2,
         );
         let (r2, _) = ui.allocate_exact_size(Vec2::new(resolve, 20.0), Sense::hover());
@@ -830,8 +820,8 @@ fn group_header(
         ui.painter().text(
             r2.left_center() + Vec2::new(8.0, 0.0),
             egui::Align2::LEFT_CENTER,
-            "LO QUE RESUELVE IEESTUDIO",
-            egui::FontId::new(10.5, crate::theme::semibold()),
+            "Lo que resuelve IEEStudio",
+            egui::FontId::new(crate::theme::FOOT, crate::theme::semibold()),
             p.accent_text,
         );
     });
@@ -850,7 +840,7 @@ pub fn columns_window(ctx: &egui::Context, shared: &mut Shared, open: &mut bool)
                 &shared.palette,
                 "Columnas del juego «Completo» del cuadro de cargas.",
             ));
-            ui.add_space(4.0);
+            ui.add_space(crate::theme::SP1);
             for col in Col::ALL {
                 if matches!(col, Col::Id | Col::Status) {
                     continue;
@@ -898,19 +888,24 @@ fn summary_strip(
                 ui.end_row();
                 return;
             }
-            ui.add_space(16.0);
+            ui.add_space(crate::theme::SP4);
             let (rect, _) = ui.allocate_exact_size(Vec2::new(1.0, 34.0), Sense::hover());
             ui.painter().rect_filled(rect, 0.0, p.line);
-            ui.add_space(16.0);
+            ui.add_space(crate::theme::SP4);
         };
         let figure = |ui: &mut egui::Ui, label: &str, value: String, unit: &str, color| {
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 1.0;
-                ui.label(RichText::new(label).size(10.5).color(p.ink3));
+                ui.label(RichText::new(label).size(crate::theme::FOOT).color(p.ink3));
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 3.0;
-                    ui.label(RichText::new(value).monospace().size(19.0).color(color));
-                    ui.label(RichText::new(unit).size(11.0).color(p.ink2));
+                    ui.label(
+                        RichText::new(value)
+                            .monospace()
+                            .size(crate::theme::TITLE)
+                            .color(color),
+                    );
+                    ui.label(RichText::new(unit).size(crate::theme::FOOT).color(p.ink2));
                 });
             })
             .response
@@ -920,7 +915,7 @@ fn summary_strip(
             None => format!("{value:.0}"),
             Some(_) => "—".to_string(),
         };
-        figure(ui, "CONECTADA", known(r.connected_w), "W", p.ink).on_hover_text(
+        figure(ui, "Conectada", known(r.connected_w), "W", p.ink).on_hover_text(
             match &r.load_unknown {
                 None => "Suma de las cargas de este tablero y sus subtableros".to_string(),
                 Some(why) => format!("Sin conocer: {why}"),
@@ -938,7 +933,7 @@ fn summary_strip(
             })
             .collect::<Vec<_>>()
             .join("\n");
-        figure(ui, "CALCULADA", known(r.demanded_va), "VA", p.ink).on_hover_text(format!(
+        figure(ui, "Calculada", known(r.demanded_va), "VA", p.ink).on_hover_text(format!(
             "Carga del alimentador según el artículo 220 (factor resultante {:.2}):\n{detail}",
             r.demand_factor
         ));
@@ -951,7 +946,7 @@ fn summary_strip(
             .on_hover_text("Factor de demanda resultante: carga calculada entre carga conectada");
         divider(ui, 90.0);
         if let Some(run) = &r.feeder.run {
-            figure(ui, "CORRIENTE", format!("{:.2}", run.nominal_a), "A", p.ink)
+            figure(ui, "Corriente", format!("{:.2}", run.nominal_a), "A", p.ink)
                 .on_hover_text("Corriente nominal del alimentador");
             divider(ui, 70.0);
         }
@@ -971,7 +966,7 @@ fn summary_strip(
                 .any(|k| k.name == "Caída acumulada" && k.status == Status::Fails);
             figure(
                 ui,
-                "CAÍDA MÁXIMA",
+                "Caída máxima",
                 format!("{drop:.2}"),
                 "%",
                 if fails { p.bad } else { p.ink },
@@ -987,13 +982,13 @@ fn summary_strip(
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 3.0;
             let title = match r.imbalance_percent {
-                Some(i) => format!("FASES · DESBALANCE {i:.1} %"),
-                None => "FASES · SIN ASIGNAR".to_string(),
+                Some(i) => format!("Fases · desbalance {i:.1} %"),
+                None => "Fases · sin asignar".to_string(),
             };
             let warn = r.imbalance_percent.is_some_and(|i| i > 5.0);
             ui.label(
                 RichText::new(title)
-                    .size(10.5)
+                    .size(crate::theme::FOOT)
                     .color(if warn { p.warn } else { p.ink3 }),
             );
             let max = r.phase_va.iter().cloned().fold(1.0, f64::max);
@@ -1001,7 +996,11 @@ fn summary_strip(
                 let phase_color = p.phases[idx];
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 5.0;
-                    ui.label(RichText::new(*name).size(10.5).color(phase_color));
+                    ui.label(
+                        RichText::new(*name)
+                            .size(crate::theme::FOOT)
+                            .color(phase_color),
+                    );
                     let (rect, resp) = ui.allocate_exact_size(Vec2::new(90.0, 5.0), Sense::hover());
                     ui.painter().rect_filled(rect, 2.0, p.selected);
                     let mut fill = rect;
@@ -1010,7 +1009,7 @@ fn summary_strip(
                     ui.label(
                         RichText::new(format!("{:.1} kVA", va / 1000.0))
                             .monospace()
-                            .size(10.5)
+                            .size(crate::theme::FOOT)
                             .color(p.ink2),
                     );
                     resp.on_hover_text(format!("Fase {name}: {va:.0} VA"));
@@ -1023,8 +1022,12 @@ fn summary_strip(
             // escribirse letra por letra.
             ui.set_min_width(110.0);
             ui.spacing_mut().item_spacing.y = 4.0;
-            ui.label(RichText::new("ESTE TABLERO").size(10.5).color(p.ink3));
-            ui.label(status_text(p, status).size(15.0));
+            ui.label(
+                RichText::new("Este tablero")
+                    .size(crate::theme::FOOT)
+                    .color(p.ink3),
+            );
+            ui.label(status_text(p, status).size(crate::theme::HEAD));
         });
     });
 }

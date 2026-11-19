@@ -32,7 +32,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) -> Option<usi
         .id_salt("vista-proyecto")
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.add_space(24.0);
+            ui.add_space(crate::theme::SP6);
             centered(ui, MAX_WIDTH, |ui| {
                 page_title(
                     ui,
@@ -41,17 +41,17 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) -> Option<usi
                     "Cómo va la instalación y los datos generales de la obra. Lo que no sepas todavía lo puedes llenar después.",
                 );
                 summary(ui, &p, doc);
-                ui.add_space(18.0);
+                ui.add_space(crate::theme::SP4);
                 open = panels_table(ui, &p, doc);
-                ui.add_space(22.0);
+                ui.add_space(crate::theme::SP6);
                 changed |= work_block(ui, &p, doc);
-                ui.add_space(14.0);
+                ui.add_space(crate::theme::SP4);
                 changed |= occupancy_block(ui, &p, doc);
-                ui.add_space(14.0);
+                ui.add_space(crate::theme::SP4);
                 changed |= supply_block(ui, &p, doc);
-                ui.add_space(14.0);
+                ui.add_space(crate::theme::SP4);
                 changed |= criteria_block(ui, &p, doc);
-                ui.add_space(30.0);
+                ui.add_space(crate::theme::SP8);
             });
         });
     if changed {
@@ -69,21 +69,18 @@ fn block<R>(
     hint: &str,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    egui::Frame::new()
-        .fill(p.panel)
-        .stroke(egui::Stroke::new(1.0, p.line))
-        .corner_radius(RADIUS_CARD)
-        .inner_margin(egui::Margin::symmetric(18, 14))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(strong(title).size(15.0));
-            if !hint.is_empty() {
-                ui.label(muted(p, hint).size(12.5));
-            }
-            ui.add_space(8.0);
-            add(ui)
-        })
-        .inner
+    // Sin recuadro propio: un divisor discreto arriba y el título. Los campos
+    // de adentro ya van en grupos; otro recuadro sería un contenedor de más.
+    ui.separator();
+    ui.add_space(crate::theme::SP2);
+    ui.label(strong(title).size(crate::theme::HEAD));
+    if !hint.is_empty() {
+        ui.label(muted(p, hint).size(crate::theme::SECONDARY));
+    }
+    ui.add_space(crate::theme::SP2);
+    let inner = add(ui);
+    crate::widgets::end_group(ui);
+    inner
 }
 
 // ------------------------------------------------------------------ resumen
@@ -91,36 +88,64 @@ fn block<R>(
 /// Cuatro cifras: la verificación, los tramos calculados, la carga de la
 /// instalación y la falla en el punto de conexión.
 fn summary(ui: &mut egui::Ui, p: &Palette, doc: &Doc) {
+    // Un solo recuadro con las cuatro cifras separadas por divisores, no
+    // cuatro tarjetas.
     let tiles = summary_tiles(p, doc);
-    let gap = 12.0;
-    let per_row = layout::cards_per_row(ui.available_width(), tiles.len(), gap);
-    let width = layout::column_width(ui.available_width(), per_row, gap);
-    for row in tiles.chunks(per_row) {
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = gap;
-            for tile in row {
-                egui::Frame::new()
-                    .fill(p.panel)
-                    .stroke(egui::Stroke::new(1.0, p.line))
-                    .corner_radius(RADIUS_CARD)
-                    .inner_margin(egui::Margin::symmetric(14, 10))
-                    .show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            ui.set_width(layout::remaining(width, 28.0));
-                            label_caps(ui, p, &tile.label);
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(&tile.value).size(18.0).color(tile.color),
-                                )
-                                .wrap(),
-                            );
-                            ui.add(egui::Label::new(muted(p, &tile.detail).size(12.0)).wrap());
+    let pad = crate::theme::SP3;
+    egui::Frame::new()
+        .fill(p.raise)
+        .stroke(egui::Stroke::new(1.0, p.line))
+        .corner_radius(RADIUS_CARD)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+            let per_row = layout::cards_per_row(ui.available_width(), tiles.len(), 0.0);
+            let width = layout::column_width(ui.available_width(), per_row, 0.0);
+            for (r, row) in tiles.chunks(per_row).enumerate() {
+                if r > 0 {
+                    let x = ui.max_rect().x_range();
+                    ui.painter()
+                        .hline(x, ui.cursor().top(), egui::Stroke::new(1.0, p.hair));
+                }
+                ui.horizontal_top(|ui| {
+                    for (k, tile) in row.iter().enumerate() {
+                        let cell = ui.vertical(|ui| {
+                            ui.set_width(width);
+                            egui::Frame::new()
+                                .inner_margin(egui::Margin::symmetric(16, 12))
+                                .show(ui, |ui| {
+                                    ui.set_width(layout::remaining(width, 2.0 * pad + 8.0));
+                                    tile_body(ui, p, tile);
+                                });
                         });
-                    });
+                        if k > 0 {
+                            let rect = cell.response.rect;
+                            ui.painter().vline(
+                                rect.left(),
+                                rect.y_range(),
+                                egui::Stroke::new(1.0, p.hair),
+                            );
+                        }
+                    }
+                });
             }
         });
-        ui.add_space(gap);
-    }
+    ui.add_space(crate::theme::SP4);
+}
+
+fn tile_body(ui: &mut egui::Ui, p: &Palette, tile: &Tile) {
+    ui.vertical(|ui| {
+        ui.label(muted(p, &tile.label).size(crate::theme::FOOT));
+        ui.add(
+            egui::Label::new(
+                RichText::new(&tile.value)
+                    .size(crate::theme::TITLE)
+                    .color(tile.color),
+            )
+            .wrap(),
+        );
+        ui.add(egui::Label::new(muted(p, &tile.detail).size(crate::theme::SECONDARY)).wrap());
+    });
 }
 
 struct Tile {
@@ -250,7 +275,7 @@ fn summary_tiles(p: &Palette, doc: &Doc) -> Vec<Tile> {
 fn panels_table(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<usize> {
     let mut open = None;
     label_caps(ui, p, "Tableros");
-    ui.add_space(4.0);
+    ui.add_space(crate::theme::SP1);
     if doc.project.panels.is_empty() {
         ui.label(muted(
             p,
@@ -262,7 +287,7 @@ fn panels_table(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<usize> {
         .fill(p.panel)
         .stroke(egui::Stroke::new(1.0, p.line))
         .corner_radius(RADIUS_CARD)
-        .inner_margin(egui::Margin::symmetric(14, 8))
+        .inner_margin(egui::Margin::symmetric(12, 8))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             egui::ScrollArea::horizontal()
@@ -282,7 +307,9 @@ fn panels_table(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<usize> {
                                 "Estado",
                                 "",
                             ] {
-                                ui.label(RichText::new(title).size(11.0).color(p.ink3));
+                                ui.label(
+                                    RichText::new(title).size(crate::theme::FOOT).color(p.ink3),
+                                );
                             }
                             ui.end_row();
                             for (i, panel) in doc.project.panels.iter().enumerate() {
@@ -406,7 +433,7 @@ fn work_block(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> bool {
                         });
                     }
                 });
-                ui.add_space(8.0);
+                ui.add_space(crate::theme::SP2);
             }
         },
     );
@@ -463,8 +490,8 @@ fn occupancy_block(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> bool {
                             None => {
                                 ui.vertical(|ui| {
                                     ui.set_width(card);
-                                    ui.add_space(4.0);
-                                    ui.label(muted(p, "Otro tipo").size(12.0));
+                                    ui.add_space(crate::theme::SP1);
+                                    ui.label(muted(p, "Otro tipo").size(crate::theme::SECONDARY));
                                     let other = current
                                         .as_deref()
                                         .is_some_and(|o| !COMMON_OCCUPANCIES.contains(&o));
@@ -503,7 +530,7 @@ fn occupancy_block(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> bool {
                         icon::INFO
                     ))
                     .color(p.warn)
-                    .size(12.5),
+                    .size(crate::theme::ICON),
                 );
             }
         },
@@ -560,7 +587,7 @@ fn supply_block(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> bool {
                     &mut project.source.system,
                     tolerance,
                 );
-                ui.add_space(10.0);
+                ui.add_space(crate::theme::SP3);
             }
             // Cambiar el suministro con tableros ya capturados puede dejar
             // conexiones que el sistema nuevo no tiene.
@@ -578,7 +605,7 @@ fn supply_block(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> bool {
                             }
                         ))
                         .color(p.bad)
-                        .size(12.5),
+                        .size(crate::theme::SECONDARY),
                     );
                     if ui
                         .button("Ajustarlos")
@@ -589,12 +616,12 @@ fn supply_block(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> bool {
                         changed = true;
                     }
                 });
-                ui.add_space(10.0);
+                ui.add_space(crate::theme::SP3);
             }
 
             ui.separator();
             changed |= properties::fault_study_switch(ui, p, &mut project.settings.fault_study);
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             // Con algo por resolver en la falla, la sección se abre sola: ahí
             // está el dato que falta.
             let attention = project.settings.fault_study
@@ -614,7 +641,7 @@ fn supply_block(ui: &mut egui::Ui, p: &Palette, doc: &mut Doc) -> bool {
                 });
             }
             if !summary.is_empty() {
-                ui.label(muted(p, capitalize(&summary.join(" · "))).size(12.5));
+                ui.label(muted(p, capitalize(&summary.join(" · "))).size(crate::theme::SECONDARY));
             }
             egui::CollapsingHeader::new("Datos de la acometida, su transformador y la falla")
                 .id_salt(("acometida-proyecto", attention))

@@ -25,6 +25,34 @@ pub fn view_tabs(
 ) -> Option<View> {
     let mut chosen = None;
     let (fails, pending) = guided::problem_counts(doc);
+    // Una sola cápsula: la vista activa va elevada sobre ella. Sin subrayado.
+    egui::Frame::new()
+        .fill(p.selected)
+        .stroke(egui::Stroke::new(1.0, p.line))
+        .corner_radius(CAPSULE)
+        .inner_margin(egui::Margin::same(2))
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            ui.horizontal(|ui| {
+                chosen = capsule_items(ui, p, current, compact, fails, pending);
+            });
+        });
+    chosen
+}
+
+/// Radio de una cápsula: el mayor que admite egui, así cualquier alto queda
+/// redondo en los extremos.
+pub const CAPSULE: u8 = u8::MAX;
+
+fn capsule_items(
+    ui: &mut egui::Ui,
+    p: &Palette,
+    current: Option<View>,
+    compact: bool,
+    fails: usize,
+    pending: usize,
+) -> Option<View> {
+    let mut chosen = None;
     for view in View::ALL {
         let now = current == Some(view);
         let ink = if now { p.ink } else { p.ink2 };
@@ -34,16 +62,26 @@ pub fn view_tabs(
             } else {
                 egui::Color32::TRANSPARENT
             })
-            .corner_radius(crate::theme::RADIUS_CONTROL)
-            .inner_margin(egui::Margin::symmetric(9, 4))
+            .shadow(if now {
+                egui::Shadow {
+                    offset: [0, 1],
+                    blur: 2,
+                    spread: 0,
+                    color: egui::Color32::from_black_alpha(if p.dark { 90 } else { 36 }),
+                }
+            } else {
+                egui::Shadow::NONE
+            })
+            .corner_radius(CAPSULE)
+            .inner_margin(egui::Margin::symmetric(12, 2))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
-                    ui.label(RichText::new(view.icon()).size(14.5).color(if now {
-                        p.accent
-                    } else {
-                        p.ink2
-                    }));
+                    ui.label(
+                        RichText::new(view.icon())
+                            .size(crate::theme::ICON)
+                            .color(if now { p.accent } else { p.ink3 }),
+                    );
                     if now || !compact {
                         let label = RichText::new(view.title()).color(ink);
                         ui.label(if now { label.family(semibold()) } else { label });
@@ -52,26 +90,13 @@ pub fn view_tabs(
                     // mismo total que lista esa vista.
                     if view == View::Review && fails + pending > 0 {
                         let color = if fails > 0 { p.bad } else { p.warn };
-                        ui.label(
-                            RichText::new(format!("{}", fails + pending))
-                                .color(color)
-                                .size(12.0),
-                        );
+                        crate::widgets::count_badge(ui, color, fails + pending);
                     }
                 });
             })
             .response
             .interact(Sense::click())
             .on_hover_cursor(egui::CursorIcon::PointingHand);
-        if now {
-            // La vista activa lleva el acento amarillo bajo su nombre.
-            let r = response.rect;
-            ui.painter().hline(
-                r.x_range().shrink(8.0),
-                r.bottom() + 1.0,
-                egui::Stroke::new(2.0, p.accent),
-            );
-        }
         let tip = if view == View::Review && fails + pending > 0 {
             format!(
                 "{} ({}): {} por resolver ({fails} no {}, {pending} sin evaluar)",
@@ -130,7 +155,7 @@ pub fn show_view(
             egui::CentralPanel::default()
                 .frame(
                     egui::Frame::new()
-                        .fill(shared.palette.bg)
+                        .fill(shared.palette.panel)
                         .inner_margin(egui::Margin::symmetric(16, 0)),
                 )
                 .show(ui, |ui| {
@@ -167,7 +192,7 @@ fn workbench(
             .resizable(true)
             .default_size(default.min(260.0))
             .size_range(min..=max)
-            .frame(frame(egui::Margin::symmetric(12, 6)))
+            .frame(frame(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(icon::LIST_BULLETS).color(p.accent));
@@ -194,7 +219,8 @@ fn workbench(
             .resizable(true)
             .default_size(layout::NAVIGATOR_W)
             .size_range(200.0..=360.0)
-            .frame(frame(egui::Margin::ZERO))
+            // El navegador es parte del cromo: un tono abajo del contenido.
+            .frame(egui::Frame::new().fill(p.bg))
             .show(ui, |ui| {
                 Viewer { doc, shared }.panel(ui, Panel::Browser);
             });
@@ -238,7 +264,7 @@ fn workbench(
                     .frame(
                         egui::Frame::new()
                             .fill(p.bg)
-                            .inner_margin(egui::Margin::symmetric(16, 6)),
+                            .inner_margin(egui::Margin::symmetric(16, 8)),
                     )
                     .show_separator_line(false)
                     .show(ui, |ui| {
