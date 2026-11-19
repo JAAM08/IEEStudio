@@ -62,7 +62,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
             }
         },
     );
-    ui.add_space(4.0);
+    ui.add_space(crate::theme::SP1);
 
     let mut select = None;
     // Proyecto y fuente.
@@ -120,10 +120,10 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
     // muestran aparte para que el usuario pueda corregirlos.
     let lost: Vec<usize> = (0..shown.len()).filter(|&i| !shown[i]).collect();
     if !lost.is_empty() {
-        ui.add_space(6.0);
+        ui.add_space(crate::theme::SP2);
         ui.label(
             RichText::new(format!("{} Sin alimentación válida", icon::WARNING))
-                .size(11.0)
+                .size(crate::theme::ICON)
                 .color(p.warn),
         )
         .on_hover_text("Revisa «Se alimenta de» en Propiedades.");
@@ -138,13 +138,13 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
         doc.selection = sel;
     }
 
-    ui.add_space(10.0);
+    ui.add_space(crate::theme::SP3);
     ui.label(
         muted(
             &p,
             "Clic para seleccionar; las demás vistas siguen la selección.",
         )
-        .size(11.0),
+        .size(crate::theme::FOOT),
     );
 }
 
@@ -282,17 +282,18 @@ fn item_inline(
     status: Option<Status>,
 ) -> egui::Response {
     let width = ui.available_width();
-    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 22.0), Sense::click());
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(width, crate::theme::ROW_H), Sense::click());
     let painter = ui.painter_at(rect);
+    // Selección en píldora, sin barra lateral: un solo indicador.
     if selected {
         painter.rect_filled(rect, crate::theme::RADIUS_CONTROL as f32, p.selected);
-        painter.rect_filled(
-            egui::Rect::from_min_size(rect.left_top(), Vec2::new(2.0, rect.height())),
-            0.0,
-            p.accent,
-        );
     } else if response.hovered() {
-        painter.rect_filled(rect, crate::theme::RADIUS_CONTROL as f32, p.raise);
+        painter.rect_filled(
+            rect,
+            crate::theme::RADIUS_CONTROL as f32,
+            p.selected.gamma_multiply(0.5),
+        );
     }
     // Primero lo que va a la derecha (estado y detalle); el nombre ocupa el
     // resto y se recorta si no cabe.
@@ -305,7 +306,7 @@ fn item_inline(
         child.label(status_glyph(p, s));
     }
     if !detail.is_empty() {
-        child.label(RichText::new(detail).size(11.0).color(p.ink3));
+        child.label(RichText::new(detail).size(crate::theme::ICON).color(p.ink3));
     }
     child.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
         ui.label(RichText::new(glyph).color(p.ink2));

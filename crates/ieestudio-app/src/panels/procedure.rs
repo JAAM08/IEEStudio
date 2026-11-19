@@ -71,7 +71,7 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                 RichText::new(
                     "Valores redondeados para presentar; el cálculo no redondea pasos intermedios.",
                 )
-                .size(11.0)
+                .size(crate::theme::FOOT)
                 .color(p.ink3),
             );
         });

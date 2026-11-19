@@ -48,5 +48,8 @@ los ejecuta en Windows y Linux.
   normativa.
 - Nada se marca conforme si falta un dato o una verificación; la aprobación
   profesional nunca la da el programa.
+- Toda pantalla nueva o modificada sigue `docs/sistema-visual.md`: tamaños de
+  letra, espacios, superficies y piezas comunes de `theme.rs` y `widgets.rs`.
+  Una prueba falla si aparece un tamaño o un margen fuera de la escala.
 - El dueño del proyecto revisa el funcionamiento, no el código: explica los
   cambios en términos de lo que el programa hace.

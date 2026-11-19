@@ -119,17 +119,17 @@ pub fn show(ctx: &egui::Context, p: &Palette, doc: &Doc, panel: usize) -> Outcom
                 .fill(p.panel)
                 .stroke(egui::Stroke::new(1.0, p.line))
                 .corner_radius(10)
-                .inner_margin(egui::Margin::symmetric(24, 20)),
+                .inner_margin(egui::Margin::symmetric(24, 24)),
         )
         .show(ctx, |ui| {
             ui.set_width(4.0 * TILE.x + 3.0 * GAP);
-            ui.label(strong(format!("¿Qué vas a conectar a {panel_id}?")).size(20.0));
+            ui.label(strong(format!("¿Qué vas a conectar a {panel_id}?")).size(crate::theme::TITLE));
             ui.add_space(2.0);
             ui.label(muted(
                 p,
                 "Según lo que elijas, IEEStudio te pide solo los datos de ese equipo y le aplica sus reglas.",
             ));
-            ui.add_space(14.0);
+            ui.add_space(crate::theme::SP4);
             for row in OPTIONS.chunks(4).enumerate() {
                 let (r, options) = row;
                 ui.horizontal(|ui| {
@@ -143,7 +143,7 @@ pub fn show(ctx: &egui::Context, p: &Palette, doc: &Doc, panel: usize) -> Outcom
                 ui.add_space(GAP);
             }
             ui.horizontal(|ui| {
-                ui.label(muted(p, "Los símbolos son los mismos del unifilar. También puedes elegir con las teclas 1 a 8.").size(12.0));
+                ui.label(muted(p, "Los símbolos son los mismos del unifilar. También puedes elegir con las teclas 1 a 8.").size(crate::theme::SECONDARY));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui.button("Cancelar").clicked() {
                         ui.close();
@@ -204,8 +204,12 @@ fn tile(
             .layout(Layout::top_down(Align::Min)),
     );
     child.spacing_mut().item_spacing.y = 3.0;
-    child.label(RichText::new(option.title).size(14.5).family(semibold()));
-    child.add(egui::Label::new(muted(p, option.sub).size(12.0)).wrap());
+    child.label(
+        RichText::new(option.title)
+            .size(crate::theme::HEAD)
+            .family(semibold()),
+    );
+    child.add(egui::Label::new(muted(p, option.sub).size(crate::theme::SECONDARY)).wrap());
     painter.text(
         inner.left_bottom(),
         egui::Align2::LEFT_BOTTOM,

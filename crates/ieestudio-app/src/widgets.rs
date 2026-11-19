@@ -63,7 +63,7 @@ pub fn topology_row(
                     sentence_case(&issue.reason)
                 ))
                 .color(if issue.invalid { p.bad } else { p.warn })
-                .size(11.5),
+                .size(crate::theme::SECONDARY),
             )
             .wrap(),
         );
@@ -209,7 +209,12 @@ pub fn combo_override<T: PartialEq + Copy>(
 /// o a lo que propone IEEStudio.
 pub fn reset_button(ui: &mut egui::Ui, tip: &str, reset: impl FnOnce()) -> bool {
     let clicked = ui
-        .add(egui::Button::new(RichText::new(icon::ARROW_COUNTER_CLOCKWISE).size(12.0)).small())
+        .add(
+            egui::Button::new(
+                RichText::new(icon::ARROW_COUNTER_CLOCKWISE).size(crate::theme::ICON),
+            )
+            .small(),
+        )
         .on_hover_text(tip)
         .clicked();
     if clicked {
@@ -334,7 +339,7 @@ fn blank_number_at(
                     }
                 ))
                 .color(ui.visuals().error_fg_color)
-                .size(11.5),
+                .size(crate::theme::SECONDARY),
             );
         }
         if response.has_focus() || rejected(&text).is_some() {
@@ -476,7 +481,8 @@ fn pill(ui: &mut egui::Ui, text: RichText, tint: Color32) -> egui::Response {
     let size = galley.size() + egui::vec2(12.0, 4.0);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     if ui.is_rect_visible(rect) {
-        let radius = crate::theme::RADIUS_CONTROL;
+        // Cápsula, como en la maqueta de R4.5.
+        let radius = u8::MAX;
         ui.painter()
             .rect_filled(rect, radius, tint.gamma_multiply(0.12));
         ui.painter().rect_stroke(
@@ -501,9 +507,9 @@ pub fn segmented<T: PartialEq + Copy>(
 ) -> bool {
     let mut changed = false;
     egui::Frame::new()
-        .fill(p.bg)
+        .fill(p.selected)
         .stroke(Stroke::new(1.0, p.line))
-        .corner_radius(crate::theme::RADIUS_CONTROL)
+        .corner_radius(u8::MAX)
         .inner_margin(egui::Margin::same(2))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -514,8 +520,8 @@ pub fn segmented<T: PartialEq + Copy>(
                     let button = egui::Button::new(if on { text.family(semibold()) } else { text })
                         .fill(if on { p.raise } else { Color32::TRANSPARENT })
                         .stroke(Stroke::NONE)
-                        .corner_radius(crate::theme::RADIUS_CONTROL - 2)
-                        .min_size(egui::vec2(0.0, 22.0));
+                        .corner_radius(u8::MAX)
+                        .min_size(egui::vec2(0.0, crate::theme::CONTROL_H - 2.0));
                     let response = ui.add(button);
                     let response = if tip.is_empty() {
                         response
@@ -532,9 +538,38 @@ pub fn segmented<T: PartialEq + Copy>(
     changed
 }
 
+/// Número pequeño en una píldora tenue, como los pendientes de Revisar.
+pub fn count_badge(ui: &mut egui::Ui, color: Color32, n: usize) {
+    let galley = ui.painter().layout_no_wrap(
+        n.to_string(),
+        egui::FontId::new(crate::theme::FOOT, semibold()),
+        color,
+    );
+    let size = Vec2::new((galley.size().x + crate::theme::SP2).max(16.0), 16.0);
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    ui.painter()
+        .rect_filled(rect, 8.0, color.gamma_multiply(0.16));
+    ui.painter()
+        .galley(rect.center() - galley.size() / 2.0, galley, color);
+}
+
 /// Botón de la acción principal de una vista: el único amarillo.
 pub fn primary_button(ui: &mut egui::Ui, p: &Palette, text: &str) -> egui::Response {
-    ui.add(egui::Button::new(RichText::new(text).color(p.on_accent)).fill(p.accent))
+    ui.add(
+        egui::Button::new(RichText::new(text).color(p.on_accent).family(semibold()))
+            .fill(p.accent)
+            .stroke(Stroke::NONE),
+    )
+}
+
+/// Botón de la acción principal en una barra: el alto de las barras (28 px).
+pub fn primary_bar_button(ui: &mut egui::Ui, p: &Palette, text: &str) -> egui::Response {
+    ui.add(
+        egui::Button::new(RichText::new(text).color(p.on_accent).family(semibold()))
+            .fill(p.accent)
+            .stroke(Stroke::NONE)
+            .min_size(Vec2::new(0.0, crate::theme::BAR_CONTROL_H)),
+    )
 }
 
 /// Etiqueta de estado: ícono, texto y color sobre un fondo tenue con borde.
@@ -542,7 +577,7 @@ pub fn primary_button(ui: &mut egui::Ui, p: &Palette, text: &str) -> egui::Respo
 pub fn status_chip(ui: &mut egui::Ui, p: &Palette, status: Status) -> egui::Response {
     pill(
         ui,
-        status_text(p, status).size(12.0),
+        status_text(p, status).size(crate::theme::SECONDARY),
         status_fill(p, status),
     )
 }
@@ -550,7 +585,13 @@ pub fn status_chip(ui: &mut egui::Ui, p: &Palette, status: Status) -> egui::Resp
 /// Etiqueta de categoría o de elemento complementario, en lavanda: «Calibre
 /// fijo», tipo de carga.
 pub fn tag(ui: &mut egui::Ui, p: &Palette, text: &str) -> egui::Response {
-    pill(ui, RichText::new(text).size(12.0).color(p.lav_text), p.lav)
+    pill(
+        ui,
+        RichText::new(text)
+            .size(crate::theme::SECONDARY)
+            .color(p.lav_text),
+        p.lav,
+    )
 }
 
 /// El peor estado de una lista: no cumple > sin evaluar > cumple.
@@ -573,15 +614,60 @@ pub fn strong(text: impl Into<String>) -> RichText {
 }
 
 /// Encabezado de sección dentro de un panel.
+/// Encabezado de un grupo de campos: tipo oración, en secundario. Los
+/// renglones de [`property`] que siguen forman un grupo compacto sobre la
+/// superficie elevada, con divisores discretos entre renglones.
 pub fn section(ui: &mut egui::Ui, p: &Palette, title: &str) {
-    ui.add_space(8.0);
+    ui.add_space(crate::theme::SP3);
     ui.label(
-        RichText::new(title.to_uppercase())
-            .size(11.0)
-            .color(p.ink3)
+        RichText::new(title)
+            .size(crate::theme::SECONDARY)
+            .color(p.ink2)
             .family(semibold()),
     );
-    ui.add_space(1.0);
+    ui.add_space(crate::theme::SP1);
+    let rect = ui.max_rect();
+    let group = OpenGroup {
+        shape: ui.painter().add(egui::Shape::Noop),
+        top: ui.cursor().top(),
+        left: rect.left(),
+        right: rect.right(),
+        rows: 0,
+        pass: ui.ctx().cumulative_pass_nr(),
+    };
+    ui.ctx().data_mut(|d| d.insert_temp(group_key(ui), group));
+}
+
+/// Termina el grupo de campos abierto: lo que sigue ya no se agrupa.
+pub fn end_group(ui: &mut egui::Ui) {
+    let key = group_key(ui);
+    ui.ctx().data_mut(|d| d.remove::<OpenGroup>(key));
+}
+
+/// Grupo de campos abierto en una capa de la ventana.
+#[derive(Debug, Clone, Copy)]
+struct OpenGroup {
+    /// Lugar reservado para el fondo, detrás de los renglones.
+    shape: egui::layers::ShapeIdx,
+    top: f32,
+    left: f32,
+    right: f32,
+    rows: u32,
+    /// Cuadro en que se abrió: un grupo no pasa de un cuadro al siguiente.
+    pass: u64,
+}
+
+fn group_key(ui: &egui::Ui) -> egui::Id {
+    egui::Id::new("grupo-de-campos").with(ui.layer_id())
+}
+
+/// El grupo abierto, si este renglón le pertenece: abierto en este cuadro y
+/// dibujado en su misma columna.
+fn open_group(ui: &egui::Ui) -> Option<OpenGroup> {
+    let group: OpenGroup = ui.ctx().data(|d| d.get_temp(group_key(ui)))?;
+    let left = ui.max_rect().left();
+    (group.pass == ui.ctx().cumulative_pass_nr() && (left - group.left).abs() < 1.0)
+        .then_some(group)
 }
 
 /// Procedencia de un valor en el panel de propiedades.
@@ -616,9 +702,9 @@ pub fn source_badge(ui: &mut egui::Ui, p: &Palette, source: Source) {
     egui::Frame::new()
         .stroke(Stroke::new(1.0, color.gamma_multiply(0.6)))
         .corner_radius(crate::theme::RADIUS_CONTROL)
-        .inner_margin(egui::Margin::symmetric(5, 0))
+        .inner_margin(egui::Margin::symmetric(4, 0))
         .show(ui, |ui| {
-            ui.label(RichText::new(text).size(10.5).color(color));
+            ui.label(RichText::new(text).size(crate::theme::FOOT).color(color));
         })
         .response
         .on_hover_text(tip);
@@ -631,11 +717,56 @@ pub fn property(
     label: &str,
     add: impl FnOnce(&mut egui::Ui),
 ) -> egui::Response {
-    ui.horizontal(|ui| {
-        fixed_label(ui, p, label);
-        add(ui);
-    })
-    .response
+    let Some(mut group) = open_group(ui) else {
+        return ui
+            .horizontal(|ui| {
+                ui.set_min_height(crate::theme::ROW_H);
+                fixed_label(ui, p, label);
+                add(ui);
+            })
+            .response;
+    };
+    let pad = crate::theme::SP3;
+    let top = ui.cursor().top();
+    if group.rows > 0 {
+        ui.painter().hline(
+            (group.left + pad)..=group.right,
+            top,
+            Stroke::new(1.0, p.hair),
+        );
+    }
+    let response = ui
+        .horizontal(|ui| {
+            ui.set_max_width(layout_remaining(ui.available_width(), pad));
+            ui.set_min_height(crate::theme::ROW_H);
+            ui.add_space(pad);
+            fixed_label(ui, p, label);
+            add(ui);
+        })
+        .response;
+    // El fondo crece con cada renglón; el último fija su tamaño.
+    group.rows += 1;
+    let bottom = response.rect.bottom() + 2.0;
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(group.left, group.top - 2.0),
+        egui::pos2(group.right, bottom),
+    );
+    ui.painter().set(
+        group.shape,
+        egui::epaint::RectShape::new(
+            rect,
+            crate::theme::RADIUS_CARD,
+            p.raise,
+            Stroke::new(1.0, p.line),
+            egui::StrokeKind::Inside,
+        ),
+    );
+    ui.ctx().data_mut(|d| d.insert_temp(group_key(ui), group));
+    response
+}
+
+fn layout_remaining(available: f32, used: f32) -> f32 {
+    crate::layout::remaining(available, used)
 }
 
 /// Etiqueta de ancho fijo, alineada a la izquierda, para formar columnas.
@@ -715,13 +846,13 @@ pub fn steps_ui(
                         if let Some(cite) = ieestudio_rules::cite_all(&step.references) {
                             ui.label(
                                 RichText::new(format!("{} {cite}", icon::BOOK_OPEN))
-                                    .size(11.0)
+                                    .size(crate::theme::ICON)
                                     .color(p.info),
                             );
                         }
                     });
                 });
-                ui.add_space(6.0);
+                ui.add_space(crate::theme::SP2);
             }
         });
     }
@@ -731,13 +862,32 @@ pub fn steps_ui(
 pub fn empty_state(ui: &mut egui::Ui, p: &Palette, glyph: &str, title: &str, hint: &str) {
     ui.with_layout(Layout::top_down(Align::Center), |ui| {
         ui.add_space(ui.available_height() * 0.3);
-        ui.label(RichText::new(glyph).size(28.0).color(p.ink3));
+        ui.label(
+            RichText::new(glyph)
+                .size(crate::theme::ICON_BAR)
+                .color(p.ink3),
+        );
         ui.label(strong(title).color(p.ink2));
         ui.label(muted(p, hint));
     });
 }
 
 /// Los tres niveles del veredicto, con su explicación al pasar el cursor.
+/// Marca de un nivel del veredicto: punto relleno del color de su estado, o
+/// anillo vacío para la aprobación profesional (`None`).
+fn status_dot(ui: &mut egui::Ui, p: &Palette, color: Option<Color32>) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(8.0, 8.0), Sense::hover());
+    match color {
+        Some(c) => {
+            ui.painter().circle_filled(rect.center(), 3.5, c);
+        }
+        None => {
+            ui.painter()
+                .circle_stroke(rect.center(), 3.0, Stroke::new(1.5, p.ink3));
+        }
+    }
+}
+
 pub fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
     let lines = verdict.lines("NOM-001-SEDE-2012");
     let short = [
@@ -765,23 +915,34 @@ pub fn verdict_chips(ui: &mut egui::Ui, p: &Palette, verdict: &Verdict) {
     for i in order {
         let (level, status, detail) = &lines[i];
         if !right_to_left && i > 0 {
-            ui.label(muted(p, "·"));
+            ui.add_space(crate::theme::SP2);
         }
-        let color = if i == 2 {
-            p.ink2
+        // Discreta pero sin perder el significado: cálculo y cumplimiento
+        // llevan un punto del color de su estado; la aprobación profesional,
+        // un anillo vacío, porque la da el ingeniero y nunca el programa.
+        let text = RichText::new(short[i])
+            .size(crate::theme::SECONDARY)
+            .color(p.ink2);
+        let mark = if i == 2 {
+            None
         } else {
-            status_color(p, *status)
+            Some(status_color(p, *status))
         };
-        let glyph = match (i, status) {
-            (2, _) => icon::SEAL_QUESTION,
-            (_, Status::Complies) => icon::CHECK_CIRCLE,
-            (_, Status::Fails) => icon::X_CIRCLE,
-            (_, Status::NotEvaluated) => icon::CIRCLE_DASHED,
-        };
-        ui.label(RichText::new(format!("{glyph} {}", short[i])).color(color))
-            .on_hover_text(format!("{level}: {detail}"));
+        // La marca y su texto van juntos: nunca se parten en dos renglones.
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = crate::theme::SP1;
+            if right_to_left {
+                ui.label(text);
+                status_dot(ui, p, mark);
+            } else {
+                status_dot(ui, p, mark);
+                ui.label(text);
+            }
+        })
+        .response
+        .on_hover_text(format!("{level}: {detail}"));
         if right_to_left && i > 0 {
-            ui.label(muted(p, "·"));
+            ui.add_space(crate::theme::SP2);
         }
     }
 }
@@ -843,7 +1004,7 @@ pub fn connection_picker(
             }
         }
         if !allowed.contains(kind) {
-            ui.add_space(6.0);
+            ui.add_space(crate::theme::SP2);
             ui.label(
                 RichText::new(format!(
                     "{} {}",
@@ -954,7 +1115,7 @@ pub fn trace_ui(
     use egui::RichText;
     egui::CollapsingHeader::new(
         RichText::new(format!("Cómo se obtuvo · {}", trace.evaluation.label()))
-            .size(12.0)
+            .size(crate::theme::SECONDARY)
             .color(p.ink2),
     )
     .id_salt(("traza", salt))
@@ -965,9 +1126,19 @@ pub fn trace_ui(
                 "Problemas" => p.bad,
                 _ => p.ink2,
             };
-            ui.label(RichText::new(title).size(11.5).strong().color(color));
+            ui.label(
+                RichText::new(title)
+                    .size(crate::theme::SECONDARY)
+                    .strong()
+                    .color(color),
+            );
             for item in items {
-                ui.add(egui::Label::new(RichText::new(format!("• {item}")).size(11.5)).wrap());
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("• {item}")).size(crate::theme::SECONDARY),
+                    )
+                    .wrap(),
+                );
             }
             ui.add_space(2.0);
         }
@@ -1002,16 +1173,16 @@ pub fn sentence(text: &str) -> String {
 }
 
 pub fn page_title(ui: &mut egui::Ui, p: &Palette, title: &str, subtitle: &str) {
-    ui.label(strong(title).size(24.0));
+    ui.label(strong(title).size(crate::theme::TITLE));
     ui.add_space(2.0);
     ui.label(muted(p, subtitle));
-    ui.add_space(14.0);
+    ui.add_space(crate::theme::SP4);
 }
 
 pub fn label_caps(ui: &mut egui::Ui, p: &Palette, text: &str) {
     ui.label(
-        RichText::new(text.to_uppercase())
-            .size(11.0)
+        RichText::new(text)
+            .size(crate::theme::FOOT)
             .color(p.ink2)
             .family(semibold()),
     );
@@ -1050,7 +1221,7 @@ pub fn choice(
             .layout(Layout::top_down(Align::Min)),
     );
     child.label(strong(title));
-    child.label(muted(p, sub).size(12.0));
+    child.label(muted(p, sub).size(crate::theme::SECONDARY));
     response
         .on_hover_cursor(egui::CursorIcon::PointingHand)
         .clicked()
@@ -1084,7 +1255,7 @@ pub fn text_field(
                 egui::TextEdit::singleline(value)
                     .hint_text(hint)
                     .desired_width(f32::INFINITY)
-                    .margin(egui::Margin::symmetric(8, 6)),
+                    .margin(egui::Margin::symmetric(8, 8)),
             )
             .changed();
     });

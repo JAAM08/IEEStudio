@@ -75,7 +75,7 @@ pub fn show(
             .color(p.ink2),
         );
     });
-    ui.add_space(8.0);
+    ui.add_space(crate::theme::SP2);
     let paper = *mode == Mode::Plan;
     egui::ScrollArea::both()
         .auto_shrink(false)

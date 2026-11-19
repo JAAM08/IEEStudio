@@ -655,9 +655,13 @@ impl App {
         let mut answer = None;
         let modal = egui::Modal::new(egui::Id::new("importacion-vista-previa")).show(ctx, |ui| {
             ui.set_width(500.0);
-            ui.label(muted(&p, "Importar cuadro de cargas · paso 2 de 3").size(11.5));
-            ui.label(strong(format!("Vista previa de «{}»", preview.file)).size(15.0));
-            ui.add_space(6.0);
+            ui.label(
+                muted(&p, "Importar cuadro de cargas · paso 2 de 3").size(crate::theme::SECONDARY),
+            );
+            ui.label(
+                strong(format!("Vista previa de «{}»", preview.file)).size(crate::theme::HEAD),
+            );
+            ui.add_space(crate::theme::SP2);
             let r = &preview.report;
             egui::Grid::new("vista-previa-importacion")
                 .num_columns(2)
@@ -689,16 +693,16 @@ impl App {
                     }
                 });
             if !r.errors.is_empty() {
-                ui.add_space(6.0);
+                ui.add_space(crate::theme::SP2);
                 egui::ScrollArea::vertical()
                     .max_height(140.0)
                     .show(ui, |ui| {
                         for e in &r.errors {
-                            ui.label(RichText::new(e).color(p.warn).size(12.0));
+                            ui.label(RichText::new(e).color(p.warn).size(crate::theme::SECONDARY));
                         }
                     });
             }
-            ui.add_space(4.0);
+            ui.add_space(crate::theme::SP1);
             ui.label(
                 muted(
                     &p,
@@ -708,9 +712,9 @@ impl App {
                         "El libro no cambia nada del proyecto."
                     },
                 )
-                .size(11.5),
+                .size(crate::theme::SECONDARY),
             );
-            ui.add_space(10.0);
+            ui.add_space(crate::theme::SP3);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if ui
                     .add_enabled(
@@ -759,11 +763,15 @@ impl App {
                 } else {
                     (icon::WARNING, p.warn)
                 };
-                ui.label(RichText::new(glyph).size(20.0).color(color));
-                ui.label(strong("Importación del cuadro de cargas").size(15.0));
+                ui.label(
+                    RichText::new(glyph)
+                        .size(crate::theme::ICON_BAR)
+                        .color(color),
+                );
+                ui.label(strong("Importación del cuadro de cargas").size(crate::theme::ICON_BAR));
             });
-            ui.label(muted(&p, "Paso 3 de 3: informe").size(11.5));
-            ui.add_space(4.0);
+            ui.label(muted(&p, "Paso 3 de 3: informe").size(crate::theme::ICON));
+            ui.add_space(crate::theme::SP1);
             ui.label(format!(
                 "{}.",
                 crate::widgets::capitalize(&report.summary())
@@ -773,20 +781,20 @@ impl App {
                     &p,
                     "Los tableros y circuitos que no están en el libro quedaron como estaban.",
                 )
-                .size(11.0),
+                .size(crate::theme::FOOT),
             );
             if !report.errors.is_empty() {
-                ui.add_space(6.0);
+                ui.add_space(crate::theme::SP2);
                 ui.label(strong("Filas que no se importaron"));
                 egui::ScrollArea::vertical()
                     .max_height(180.0)
                     .show(ui, |ui| {
                         for e in &report.errors {
-                            ui.label(RichText::new(e).color(p.warn).size(12.0));
+                            ui.label(RichText::new(e).color(p.warn).size(crate::theme::SECONDARY));
                         }
                     });
             }
-            ui.add_space(10.0);
+            ui.add_space(crate::theme::SP3);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let ok =
                     egui::Button::new(RichText::new("Aceptar").color(p.on_accent)).fill(p.accent);
@@ -1016,17 +1024,24 @@ impl App {
             ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
             ui.style_mut().visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-            ui.menu_button(RichText::new(icon::LIST).size(17.0), |ui| {
-                ui.menu_button("Archivo", |ui| self.file_menu(ui));
-                ui.menu_button("Edición", |ui| self.edit_menu(ui));
-                ui.menu_button("Ver", |ui| self.view_menu(ui));
-                ui.menu_button("Herramientas", |ui| self.tools_menu(ui));
-                ui.menu_button("Ayuda", |ui| self.help_menu(ui));
-            })
+            ui.menu_button(
+                RichText::new(icon::LIST).size(crate::theme::ICON_BAR),
+                |ui| {
+                    ui.menu_button("Archivo", |ui| self.file_menu(ui));
+                    ui.menu_button("Edición", |ui| self.edit_menu(ui));
+                    ui.menu_button("Ver", |ui| self.view_menu(ui));
+                    ui.menu_button("Herramientas", |ui| self.tools_menu(ui));
+                    ui.menu_button("Ayuda", |ui| self.help_menu(ui));
+                },
+            )
             .response
             .on_hover_text("Archivo, Edición, Ver, Herramientas y Ayuda");
-            ui.label(RichText::new(icon::LIGHTNING).size(17.0).color(p.accent));
-            ui.label(strong("IEEStudio").size(14.0));
+            ui.label(
+                RichText::new(icon::LIGHTNING)
+                    .size(crate::theme::ICON_BAR)
+                    .color(p.accent),
+            );
+            ui.label(strong("IEEStudio").size(crate::theme::ICON));
             let dirty = if self.doc.dirty { " •" } else { "" };
             let file = self
                 .doc
@@ -1052,7 +1067,9 @@ impl App {
             if ui
                 .add_enabled(
                     self.doc.can_undo(),
-                    egui::Button::new(RichText::new(icon::ARROW_COUNTER_CLOCKWISE).size(14.0)),
+                    egui::Button::new(
+                        RichText::new(icon::ARROW_COUNTER_CLOCKWISE).size(crate::theme::ICON),
+                    ),
                 )
                 .on_hover_text("Deshacer (Ctrl+Z)")
                 .clicked()
@@ -1062,14 +1079,16 @@ impl App {
             if ui
                 .add_enabled(
                     self.doc.can_redo(),
-                    egui::Button::new(RichText::new(icon::ARROW_CLOCKWISE).size(14.0)),
+                    egui::Button::new(
+                        RichText::new(icon::ARROW_CLOCKWISE).size(crate::theme::ICON),
+                    ),
                 )
                 .on_hover_text("Rehacer (Ctrl+Y)")
                 .clicked()
             {
                 self.doc.redo();
             }
-            ui.add_space(12.0);
+            ui.add_space(crate::theme::SP3);
             // Las vistas completas necesitan unos 600 px y lo de la derecha
             // 190: si no caben, las vistas se reducen a su ícono.
             let compact = scrolling || ui.available_width() < FULL_VIEWS + RIGHT_TOOLS;
@@ -1078,8 +1097,23 @@ impl App {
             let room = layout::remaining(ui.available_width(), RIGHT_TOOLS);
             let need = if compact { COMPACT_VIEWS } else { FULL_VIEWS };
             let current = if self.home { None } else { Some(self.view) };
-            let chosen = if scrolling || room >= need {
+            let chosen = if scrolling {
                 shell::view_tabs(ui, &p, current, &self.doc, compact)
+            } else if room >= need {
+                // La cápsula va al centro de la ventana si cabe sin tocar lo de
+                // los lados; su ancho es el del cuadro anterior.
+                let width_id = egui::Id::new("ancho-de-la-capsula");
+                let width: f32 = ui.ctx().data(|d| d.get_temp(width_id)).unwrap_or(need);
+                let window = ui.ctx().content_rect();
+                let start = window.center().x - width / 2.0;
+                let x = ui.cursor().left();
+                if start > x && start + width + RIGHT_TOOLS < window.right() {
+                    ui.add_space(start - x);
+                }
+                let tabs = ui.scope(|ui| shell::view_tabs(ui, &p, current, &self.doc, compact));
+                let measured = tabs.response.rect.width();
+                ui.ctx().data_mut(|d| d.insert_temp(width_id, measured));
+                tabs.inner
             } else {
                 egui::ScrollArea::horizontal()
                     .id_salt("barra-de-vistas")
@@ -1094,7 +1128,7 @@ impl App {
                 self.go_view(view);
             }
             if scrolling {
-                ui.add_space(16.0);
+                ui.add_space(crate::theme::SP4);
                 self.top_tools(ui, false);
             } else {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -1123,7 +1157,10 @@ impl App {
                         (icon::MOON, "Cambiar a tema oscuro")
                     };
                     if ui
-                        .add(egui::Button::new(RichText::new(glyph).size(15.0)).frame(false))
+                        .add(
+                            egui::Button::new(RichText::new(glyph).size(crate::theme::ICON_BAR))
+                                .frame(false),
+                        )
                         .on_hover_text(tip)
                         .clicked()
                     {
@@ -1136,7 +1173,7 @@ impl App {
                         .add(
                             egui::Button::new(
                                 RichText::new(icon::MAGNIFYING_GLASS)
-                                    .size(15.0)
+                                    .size(crate::theme::ICON_BAR)
                                     .color(p.ink2),
                             )
                             .frame(false),
@@ -1155,7 +1192,9 @@ impl App {
                     if ui
                         .add(
                             egui::Button::new(
-                                RichText::new(icon::LIST_BULLETS).size(15.0).color(color),
+                                RichText::new(icon::LIST_BULLETS)
+                                    .size(crate::theme::ICON_BAR)
+                                    .color(color),
                             )
                             .frame(false),
                         )
@@ -1170,8 +1209,12 @@ impl App {
                     let color = if on { p.accent } else { p.ink2 };
                     if ui
                         .add(
-                            egui::Button::new(RichText::new(icon::COLUMNS).size(15.0).color(color))
-                                .frame(false),
+                            egui::Button::new(
+                                RichText::new(icon::COLUMNS)
+                                    .size(crate::theme::ICON_BAR)
+                                    .color(color),
+                            )
+                            .frame(false),
                         )
                         .on_hover_text("Dos vistas a la vez: el cuadro y el unifilar")
                         .clicked()
@@ -1185,7 +1228,10 @@ impl App {
                         w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
                         w.inactive.weak_bg_fill = p.panel;
                         if ui
-                            .button(format!("{}  Cálculo rápido", icon::CALCULATOR))
+                            .add(
+                                egui::Button::new(format!("{}  Cálculo rápido", icon::CALCULATOR))
+                                    .min_size(egui::vec2(0.0, crate::theme::BAR_CONTROL_H)),
+                            )
                             .on_hover_text("Un circuito suelto, sin proyecto (F8)")
                             .clicked()
                         {
@@ -1396,7 +1442,7 @@ impl App {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if let Some(next) = next {
                         go_next |= next_button(ui, &p, next);
-                        ui.add_space(8.0);
+                        ui.add_space(crate::theme::SP2);
                     }
                     self.status_verdict(ui, &p);
                 });
@@ -1536,7 +1582,7 @@ impl App {
             .show(ctx, |ui| {
                 ui.label(strong(format!("IEEStudio {}", env!("CARGO_PKG_VERSION"))));
                 ui.label("Cálculo de instalaciones eléctricas de baja tensión. Código abierto, MIT o Apache-2.0.");
-                ui.add_space(6.0);
+                ui.add_space(crate::theme::SP2);
                 ui.label(muted(&p, "Perfil normativo: NOM-001-SEDE-2012."));
                 ui.label(muted(&p, "IEEStudio calcula y verifica; no otorga aprobación profesional. Los resultados debe revisarlos y firmarlos un profesional."));
             });
@@ -1562,10 +1608,14 @@ impl App {
         let modal = egui::Modal::new(egui::Id::new("cambios-sin-guardar")).show(ctx, |ui| {
             ui.set_width(400.0);
             ui.horizontal(|ui| {
-                ui.label(RichText::new(icon::WARNING).size(20.0).color(p.warn));
-                ui.label(strong("¿Guardar los cambios?").size(15.0));
+                ui.label(
+                    RichText::new(icon::WARNING)
+                        .size(crate::theme::ICON_BAR)
+                        .color(p.warn),
+                );
+                ui.label(strong("¿Guardar los cambios?").size(crate::theme::ICON_BAR));
             });
-            ui.add_space(4.0);
+            ui.add_space(crate::theme::SP1);
             ui.label(if files::WEB {
                 format!(
                     "«{}» tiene cambios que no has descargado. Si continúas, el proyecto \
@@ -1578,7 +1628,7 @@ impl App {
                     self.doc.project.name
                 )
             });
-            ui.add_space(10.0);
+            ui.add_space(crate::theme::SP3);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let label = if files::WEB { "Descargar" } else { "Guardar" };
                 let save = egui::Button::new(
@@ -1675,7 +1725,7 @@ impl App {
             .frame(
                 egui::Frame::new()
                     .fill(p.bg)
-                    .inner_margin(egui::Margin::symmetric(10, 5)),
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
             )
             .show(ui, |ui| self.top_bar(ui));
         let window_width = ui.available_width();
@@ -1683,7 +1733,7 @@ impl App {
             .frame(
                 egui::Frame::new()
                     .fill(p.bg)
-                    .inner_margin(egui::Margin::symmetric(10, 4)),
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
             )
             .show(ui, |ui| self.status_bar(ui, window_width));
 
@@ -1836,6 +1886,7 @@ impl eframe::App for App {
 
 /// El botón «Siguiente: …» de la barra de estado. `true` si se pulsó.
 fn next_button(ui: &mut egui::Ui, p: &Palette, next: View) -> bool {
+    // Discreto: el amarillo es de la acción principal de cada vista.
     ui.add(
         egui::Button::new(
             RichText::new(format!(
@@ -1843,9 +1894,11 @@ fn next_button(ui: &mut egui::Ui, p: &Palette, next: View) -> bool {
                 next.title(),
                 icon::ARROW_RIGHT
             ))
-            .color(p.on_accent),
+            .size(crate::theme::SECONDARY)
+            .color(p.ink2)
+            .family(crate::theme::semibold()),
         )
-        .fill(p.accent),
+        .frame(false),
     )
     .on_hover_text(format!("Ir a {} ({})", next.title(), next.shortcut()))
     .clicked()
@@ -1889,10 +1942,14 @@ fn start_card(ui: &mut egui::Ui, p: &Palette, glyph: &str, title: &str, hint: &s
             .max_rect(rect.shrink(14.0))
             .layout(Layout::top_down(Align::Min)),
     );
-    child.label(RichText::new(glyph).size(24.0).color(p.accent_text));
-    child.add_space(6.0);
-    child.label(strong(title).size(14.0));
-    child.add(egui::Label::new(muted(p, hint).size(11.0)).wrap());
+    child.label(
+        RichText::new(glyph)
+            .size(crate::theme::ICON_BAR)
+            .color(p.accent_text),
+    );
+    child.add_space(crate::theme::SP2);
+    child.label(strong(title).size(crate::theme::ICON));
+    child.add(egui::Label::new(muted(p, hint).size(crate::theme::ICON)).wrap());
     if hovered {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -1911,13 +1968,17 @@ fn home_screen(
     let width = 4.0 * 172.0 + 3.0 * 12.0;
     ui.vertical_centered(|ui| {
         ui.add_space((ui.available_height() * 0.12).max(24.0));
-        ui.label(RichText::new(icon::LIGHTNING).size(40.0).color(p.accent));
-        ui.label(strong("IEEStudio").size(28.0));
+        ui.label(
+            RichText::new(icon::LIGHTNING)
+                .size(crate::theme::ICON_BAR)
+                .color(p.accent),
+        );
+        ui.label(strong("IEEStudio").size(crate::theme::ICON_BAR));
         ui.label(muted(
             p,
             "Cálculo de instalaciones eléctricas de baja tensión · NOM-001-SEDE-2012",
         ));
-        ui.add_space(26.0);
+        ui.add_space(crate::theme::SP6);
     });
     let left = ((ui.available_width() - width) / 2.0).max(16.0);
     ui.horizontal(|ui| {
@@ -1960,7 +2021,7 @@ fn home_screen(
             chosen = Some(Start::Quick);
         }
     });
-    ui.add_space(26.0);
+    ui.add_space(crate::theme::SP6);
     let existing: Vec<&PathBuf> = recent.iter().filter(|p| p.exists()).take(6).collect();
     if !files::WEB && !existing.is_empty() {
         ui.horizontal(|ui| {
@@ -1968,8 +2029,8 @@ fn home_screen(
             ui.vertical(|ui| {
                 ui.set_width(width);
                 ui.label(
-                    RichText::new("RECIENTES")
-                        .size(10.5)
+                    RichText::new("Recientes")
+                        .size(crate::theme::FOOT)
                         .color(p.ink3)
                         .family(theme::semibold()),
                 );
@@ -1986,7 +2047,7 @@ fn home_screen(
                         .horizontal(|ui| {
                             ui.label(RichText::new(icon::FILE).color(p.ink2));
                             ui.label(RichText::new(name));
-                            ui.label(muted(p, folder).size(11.0));
+                            ui.label(muted(p, folder).size(crate::theme::ICON));
                         })
                         .response
                         .interact(egui::Sense::click())
@@ -1997,7 +2058,7 @@ fn home_screen(
                 }
             });
         });
-        ui.add_space(18.0);
+        ui.add_space(crate::theme::SP4);
     }
     ui.vertical_centered(|ui| {
         if ui
@@ -2006,13 +2067,13 @@ fn home_screen(
         {
             chosen = Some(Start::Back);
         }
-        ui.add_space(14.0);
+        ui.add_space(crate::theme::SP4);
         ui.label(
             muted(
                 p,
                 "Ctrl+K busca cualquier comando, tablero o circuito. IEEStudio calcula y verifica; la aprobación es de quien firma.",
             )
-            .size(11.0),
+            .size(crate::theme::FOOT),
         );
     });
     chosen
