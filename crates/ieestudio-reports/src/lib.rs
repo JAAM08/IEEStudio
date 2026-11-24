@@ -924,9 +924,10 @@ fn compose(source: String) -> Result<PagedDocument, String> {
 }
 
 fn render(source: String) -> Result<Vec<u8>, String> {
-    let document = compose(source)?;
-    typst_pdf::pdf(&document, &Default::default())
-        .map_err(|e| format!("no se pudo generar el PDF: {e:?}"))
+    Composed {
+        document: compose(source)?,
+    }
+    .pdf()
 }
 
 /// Página rasterizada para mostrarla en pantalla: RGBA de 8 bits.
@@ -936,34 +937,51 @@ pub struct PageImage {
     pub rgba: Vec<u8>,
 }
 
-fn rasterize(source: String, pixels_per_point: f64) -> Result<Vec<PageImage>, String> {
-    let document = compose(source)?;
-    let options = typst_render::RenderOptions {
-        pixel_per_pt: typst_utils::Scalar::new(pixels_per_point),
-        ..Default::default()
-    };
-    Ok(document
-        .pages()
-        .iter()
-        .map(|page| {
-            let pixmap = typst_render::render(page, &options);
-            // Las páginas son opacas: el RGBA premultiplicado es igual al directo.
-            PageImage {
-                width: pixmap.width(),
-                height: pixmap.height(),
-                rgba: pixmap.data().to_vec(),
-            }
-        })
-        .collect())
+/// Una memoria ya compuesta. Componer es lo caro (Typst acomoda todo el
+/// texto); con el documento a la mano, cada página se convierte en imagen
+/// cuando hace falta, y el PDF sale de esta misma composición.
+pub struct Composed {
+    document: PagedDocument,
 }
 
-/// Páginas de la memoria de un proyecto como imágenes, para la vista previa.
-pub fn project_pages(
-    project: &Project,
-    result: &ProjectResult,
-    pixels_per_point: f64,
-) -> Result<Vec<PageImage>, String> {
-    rasterize(project_source(project, result), pixels_per_point)
+impl Composed {
+    /// Número de páginas: el mismo que tendrá el PDF.
+    pub fn page_count(&self) -> usize {
+        self.document.pages().len()
+    }
+
+    /// Ancho y alto de una página, en puntos (1/72 de pulgada).
+    pub fn page_size_pt(&self, index: usize) -> Option<(f64, f64)> {
+        let size = self.document.pages().get(index)?.frame.size();
+        Some((size.x.to_pt(), size.y.to_pt()))
+    }
+
+    /// Una sola página como imagen, a `pixels_per_point` píxeles por punto.
+    pub fn render_page(&self, index: usize, pixels_per_point: f64) -> Option<PageImage> {
+        let page = self.document.pages().get(index)?;
+        let options = typst_render::RenderOptions {
+            pixel_per_pt: typst_utils::Scalar::new(pixels_per_point),
+            ..Default::default()
+        };
+        let pixmap = typst_render::render(page, &options);
+        // Las páginas son opacas: el RGBA premultiplicado es igual al directo.
+        Some(PageImage {
+            width: pixmap.width(),
+            height: pixmap.height(),
+            rgba: pixmap.data().to_vec(),
+        })
+    }
+
+    /// El PDF de esta misma composición.
+    pub fn pdf(&self) -> Result<Vec<u8>, String> {
+        typst_pdf::pdf(&self.document, &Default::default())
+            .map_err(|e| format!("no se pudo generar el PDF: {e:?}"))
+    }
+}
+
+/// Compone la memoria de un proyecto una vez, para verla página por página.
+pub fn compose_project(project: &Project, result: &ProjectResult) -> Result<Composed, String> {
+    compose(project_source(project, result)).map(|document| Composed { document })
 }
 
 /// Memoria de cálculo de un proyecto, en PDF.

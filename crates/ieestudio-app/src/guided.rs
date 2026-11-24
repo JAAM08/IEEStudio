@@ -12,13 +12,13 @@ use ieestudio_project::{size_label, Check, LoadKind, RunResult, Status};
 use ieestudio_rules::{cite_all, Profile, Rule};
 
 use crate::layout;
-use crate::panels::{properties, report, Shared};
+use crate::panels::{properties, Shared};
 use crate::state::{set_load_kind, Doc, Selection};
 use crate::symbols::{self, Symbol};
 use crate::theme::{semibold, Palette};
 use crate::widgets::{
     label_caps, label_of, main_problem, muted, page_title, proposed_instead, sentence,
-    status_color, status_icon, steps_ui, strong, text_field, thousands, worst, KINDS, SYSTEMS,
+    status_color, status_icon, steps_ui, strong, thousands, worst, KINDS, SYSTEMS,
 };
 
 /// Contenido que dibuja este módulo. Antes eran los cinco pasos de la vista
@@ -29,7 +29,6 @@ pub enum Step {
     Panels,
     Circuits,
     Review,
-    Report,
 }
 
 /// Archivo que un paso pide exportar a la ventana principal.
@@ -108,7 +107,6 @@ pub fn view(
 ) -> (Option<Step>, Option<Export>) {
     let p = shared.palette;
     let mut go = None;
-    let mut request = None;
     egui::CentralPanel::default()
         .frame(egui::Frame::new().fill(p.panel))
         .show(ui, |ui| match step {
@@ -127,13 +125,9 @@ pub fn view(
                     go = Some(s);
                 }
             }
-            Step::Report => {
-                if let Some(r) = report_step(ui, &p, doc, shared) {
-                    request = Some(r);
-                }
-            }
         });
-    (go, request)
+    // La memoria se exporta desde su propia vista (`panels::report`).
+    (go, None)
 }
 
 // ------------------------------------------------------------- 2 · tableros
@@ -1150,10 +1144,13 @@ pub fn diagram_view(
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(strong("Diagrama unifilar").size(crate::theme::HEAD));
-                ui.label(
-                    muted(p, "Haz clic en un tablero o circuito para ir a su ficha.")
-                        .size(crate::theme::SECONDARY),
-                );
+                // En ventanas angostas la indicación no cabe junto al botón.
+                if ui.available_width() > 600.0 {
+                    ui.label(
+                        muted(p, "Haz clic en un tablero o circuito para ir a su ficha.")
+                            .size(crate::theme::SECONDARY),
+                    );
+                }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if primary(ui, p, &format!("{}  Exportar DXF", icon::FLOW_ARROW)) {
                         request = Some(Export::Dxf);
@@ -2236,136 +2233,6 @@ fn kind_review(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<KindAction> 
 }
 
 // ------------------------------------------------------------- 5 · memoria
-
-fn report_step(
-    ui: &mut egui::Ui,
-    p: &Palette,
-    doc: &mut Doc,
-    shared: &mut Shared,
-) -> Option<Export> {
-    let mut request = None;
-    step_panel(ui, "memoria-datos", true, 440.0, true)
-        .frame(
-            egui::Frame::new()
-                .fill(p.panel)
-                .inner_margin(egui::Margin::symmetric(24, 24)),
-        )
-        .show(ui, |ui| {
-            egui::ScrollArea::vertical()
-                .id_salt("memoria-datos")
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    page_title(
-                        ui,
-                        p,
-                        "Memoria de cálculo",
-                        "Los datos de firma y lo que entregas. Lo demás ya salió de los pasos anteriores.",
-                    );
-                    let mut changed = false;
-                    let info = &mut doc.project.info;
-                    changed |= text_field(ui, p, "Responsable que firma", &mut info.responsible, "Nombre del ingeniero");
-                    ui.add_space(crate::theme::SP2);
-                    changed |= text_field(ui, p, "Cédula profesional", &mut info.license, "Número de cédula");
-                    ui.add_space(crate::theme::SP2);
-                    ui.horizontal_top(|ui| {
-                        let half = layout::column_width(ui.available_width(), 2, 12.0);
-                        ui.vertical(|ui| {
-                            ui.set_width(half);
-                            changed |= text_field(ui, p, "Revisión", &mut info.revision, "A, 0, 1…");
-                        });
-                        ui.vertical(|ui| {
-                            ui.set_width(half);
-                            changed |= text_field(ui, p, "Fecha", &mut info.date, "Vacía: la del día");
-                        });
-                    });
-                    if changed {
-                        doc.edited();
-                    }
-
-                    ui.add_space(crate::theme::SP6);
-                    label_caps(ui, p, "Antes de entregar");
-                    ui.add_space(crate::theme::SP1);
-                    let (fails, pending) = problem_counts(doc);
-                    let complete = doc
-                        .result
-                        .as_ref()
-                        .is_ok_and(|r| r.verdict.calculation == ieestudio_project::verdict::Calculation::Complete);
-                    let info = &doc.project.info;
-                    let checklist = [
-                        (complete, "Todos los tramos calculados".to_string()),
-                        (fails == 0, match fails {
-                            0 => "Nada incumple".to_string(),
-                            1 => "1 verificación no cumple".to_string(),
-                            n => format!("{n} verificaciones no cumplen"),
-                        }),
-                        (pending == 0, match pending {
-                            0 => "Nada quedó sin evaluar".to_string(),
-                            1 => "1 verificación sin evaluar".to_string(),
-                            n => format!("{n} verificaciones sin evaluar"),
-                        }),
-                        {
-                            let signed = !info.responsible.trim().is_empty() && !info.license.trim().is_empty();
-                            (
-                                signed,
-                                if signed { "Responsable y cédula capturados" } else { "Faltan el responsable o su cédula" }.to_string(),
-                            )
-                        },
-                    ];
-                    for (k, (ok, text)) in checklist.into_iter().enumerate() {
-                        // Lo que no cumple va en rojo; lo que falta, en ámbar.
-                        let (glyph, color) = match (ok, k) {
-                            (true, _) => (icon::CHECK_CIRCLE, p.ok),
-                            (false, 1) => (icon::X_CIRCLE, p.bad),
-                            (false, _) => (icon::CIRCLE_DASHED, p.warn),
-                        };
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 5.0;
-                            ui.label(RichText::new(glyph).color(color));
-                            ui.label(RichText::new(text).color(if ok { p.ink } else { color }));
-                        });
-                    }
-                    if let Ok(r) = &doc.result {
-                        for o in &r.verdict.out_of_scope {
-                            ui.label(muted(p, format!("{} {}: fuera de alcance, se anota en la memoria", icon::INFO, o.name)).size(crate::theme::ICON));
-                        }
-                    }
-
-                    ui.add_space(crate::theme::SP6);
-                    label_caps(ui, p, "También puedes exportar");
-                    ui.label(muted(p, "La memoria en PDF se exporta con el botón amarillo de abajo.").size(crate::theme::SECONDARY));
-                    ui.add_space(crate::theme::SP1);
-                    ui.horizontal_wrapped(|ui| {
-                        if ui.button(format!("{}  Cuadro de cargas en Excel", icon::FILE_XLS)).clicked() {
-                            request = Some(Export::Excel);
-                        }
-                        if ui.button(format!("{}  Unifilar en DXF", icon::FLOW_ARROW)).clicked() {
-                            request = Some(Export::Dxf);
-                        }
-                        if ui
-                            .button(format!("{}  Ver el unifilar", icon::ARROWS_OUT))
-                            .on_hover_text("A pantalla completa, como revisión o como plano.")
-                            .clicked()
-                        {
-                            shared.diagram_full = true;
-                            shared.diagram_fit = true;
-                            shared.diagram_mode = ieestudio_diagrams::Mode::Plan;
-                        }
-                    });
-                });
-        });
-    egui::CentralPanel::default()
-        .frame(
-            egui::Frame::new()
-                .fill(p.bg)
-                .inner_margin(egui::Margin::symmetric(16, 12)),
-        )
-        .show(ui, |ui| {
-            if report::show(ui, doc, shared) {
-                request = Some(Export::Pdf);
-            }
-        });
-    request
-}
 
 /// «de 12 m» o «sin longitud»: la longitud nunca se supone (pendiente 19).
 fn length_phrase(length_m: Option<f64>) -> String {

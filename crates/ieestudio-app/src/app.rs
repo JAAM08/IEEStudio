@@ -389,6 +389,11 @@ impl App {
             // Al abrir el unifilar se ajusta al ancho de la ventana.
             self.shared.diagram_fit = true;
         }
+        if view == View::Report {
+            // Al entrar a Memoria se compone de nuevo si el proyecto cambió;
+            // mientras se está en ella, solo con «Actualizar».
+            self.shared.preview.entering(self.doc.revision);
+        }
     }
 
     /// Va al contenido que pidió un paso de las vistas.
@@ -517,14 +522,19 @@ impl App {
         let (pdf, name) = if quick {
             (self.shared.quick.pdf(), "hoja-de-calculo.pdf")
         } else {
-            (
-                self.doc
-                    .result
-                    .as_ref()
-                    .map_err(Clone::clone)
-                    .and_then(|r| ieestudio_reports::project_pdf(&self.doc.project, r)),
-                "memoria-de-calculo.pdf",
-            )
+            // Si la vista previa ya compuso esta misma versión, se usa esa.
+            let pdf = self
+                .shared
+                .preview
+                .pdf(self.doc.revision)
+                .unwrap_or_else(|| {
+                    self.doc
+                        .result
+                        .as_ref()
+                        .map_err(Clone::clone)
+                        .and_then(|r| ieestudio_reports::project_pdf(&self.doc.project, r))
+                });
+            (pdf, "memoria-de-calculo.pdf")
         };
         let pdf = match pdf {
             Ok(pdf) => pdf,
