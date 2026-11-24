@@ -42,6 +42,14 @@ pub struct Shared {
     pub diagram_full: bool,
     /// Pendiente de ajustar el unifilar a la pantalla al abrirlo.
     pub diagram_fit: bool,
+    /// Teléfono: la ficha del elemento elegido ocupa la pantalla.
+    pub ficha_open: bool,
+    /// Teléfono: hoja inferior del unifilar con el tablero o circuito tocado.
+    pub sheet: Option<(usize, Option<usize>)>,
+    /// Tableta: cajón del navegador abierto.
+    pub navigator_drawer: bool,
+    /// Tableta: cajón de la ficha abierto.
+    pub inspector_drawer: bool,
     /// Último unifilar dibujado, con la revisión del proyecto y el modo: se
     /// reconstruye solo cuando cambian, no en cada cuadro.
     diagram_cache: Option<(u64, Mode, std::rc::Rc<ieestudio_diagrams::Diagram>)>,
@@ -65,6 +73,10 @@ impl Shared {
             diagram_full: false,
             diagram_fit: false,
             diagram_cache: None,
+            ficha_open: false,
+            sheet: None,
+            navigator_drawer: false,
+            inspector_drawer: false,
             preview: report::Preview::default(),
         }
     }

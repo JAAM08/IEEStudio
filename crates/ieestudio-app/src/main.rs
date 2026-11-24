@@ -11,8 +11,10 @@
 mod app;
 mod chooser;
 mod commands;
+mod compact;
 mod files;
 mod guided;
+mod home;
 mod layout;
 mod panels;
 mod shell;
@@ -39,10 +41,10 @@ fn main() -> eframe::Result {
         home: false,
         palette: false,
         view: None,
-        sub: None,
         procedure: false,
         split: false,
         quick: false,
+        ficha: false,
         chooser: false,
         diagram: false,
         measure: 0,
@@ -75,10 +77,6 @@ fn main() -> eframe::Result {
             // de antes del marco único; se aceptan hasta la etapa R7.
             "--paso" => {
                 let step = args.next();
-                options.sub = match step.as_deref() {
-                    Some("tableros") => Some(guided::Step::Panels),
-                    _ => Some(guided::Step::Circuits),
-                };
                 options.view = step
                     .as_deref()
                     .and_then(view_named)
@@ -102,6 +100,7 @@ fn main() -> eframe::Result {
                 _ => {}
             },
             "--rapido" => options.quick = true,
+            "--ficha" => options.ficha = true,
             "--unifilar" => options.view = Some(View::Diagram),
             _ => options.open = Some(PathBuf::from(arg)),
         }
@@ -226,10 +225,10 @@ fn main() {
         home: false,
         palette: false,
         view: None,
-        sub: None,
         procedure: false,
         split: false,
         quick: false,
+        ficha: false,
         chooser: false,
         diagram: false,
         measure: 0,

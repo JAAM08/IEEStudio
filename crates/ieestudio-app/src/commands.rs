@@ -309,7 +309,9 @@ impl CommandPalette {
         }
         let mut chosen = None;
         let modal = egui::Modal::new(egui::Id::new("paleta-de-comandos")).show(ctx, |ui| {
-            ui.set_width(560.0);
+            // Nunca más ancha que la ventana, con su margen.
+            let room = ui.ctx().content_rect().width() - 2.0 * crate::theme::SP8;
+            ui.set_width(room.clamp(200.0, 560.0));
             let edit = ui.add(
                 egui::TextEdit::singleline(&mut self.query)
                     .hint_text(format!(

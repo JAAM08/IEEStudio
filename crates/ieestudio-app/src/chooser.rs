@@ -122,7 +122,11 @@ pub fn show(ctx: &egui::Context, p: &Palette, doc: &Doc, panel: usize) -> Outcom
                 .inner_margin(egui::Margin::symmetric(24, 24)),
         )
         .show(ctx, |ui| {
-            ui.set_width(4.0 * TILE.x + 3.0 * GAP);
+            // Cuatro tarjetas por renglón en escritorio; las que quepan en
+            // ventanas angostas, con desplazamiento si no caben a lo alto.
+            let screen = ui.ctx().content_rect();
+            let cols = columns(screen.width());
+            ui.set_width(cols as f32 * TILE.x + (cols as f32 - 1.0) * GAP);
             ui.label(strong(format!("¿Qué vas a conectar a {panel_id}?")).size(crate::theme::TITLE));
             ui.add_space(2.0);
             ui.label(muted(
@@ -130,25 +134,35 @@ pub fn show(ctx: &egui::Context, p: &Palette, doc: &Doc, panel: usize) -> Outcom
                 "Según lo que elijas, IEEStudio te pide solo los datos de ese equipo y le aplica sus reglas.",
             ));
             ui.add_space(crate::theme::SP4);
-            for row in OPTIONS.chunks(4).enumerate() {
-                let (r, options) = row;
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = GAP;
-                    for (k, option) in options.iter().enumerate() {
-                        if tile(ui, p, profile, option, r * 4 + k + 1) {
-                            picked = Some(option.symbol);
-                        }
+            egui::ScrollArea::vertical()
+                .id_salt("que-vas-a-conectar")
+                .max_height((screen.height() - 360.0).max(TILE.y))
+                .show(ui, |ui| {
+                    for (r, options) in OPTIONS.chunks(cols).enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = GAP;
+                            for (k, option) in options.iter().enumerate() {
+                                if tile(ui, p, profile, option, r * cols + k + 1) {
+                                    picked = Some(option.symbol);
+                                }
+                            }
+                        });
+                        ui.add_space(GAP);
                     }
                 });
-                ui.add_space(GAP);
-            }
-            ui.horizontal(|ui| {
-                ui.label(muted(p, "Los símbolos son los mismos del unifilar. También puedes elegir con las teclas 1 a 8.").size(crate::theme::SECONDARY));
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button("Cancelar").clicked() {
-                        ui.close();
-                    }
-                });
+            // El texto se acomoda al ancho de las tarjetas en lugar de
+            // ensanchar la ventana.
+            ui.add(
+                egui::Label::new(
+                    muted(p, "Los símbolos son los mismos del unifilar. También puedes elegir con las teclas 1 a 8.")
+                        .size(crate::theme::SECONDARY),
+                )
+                .wrap(),
+            );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui.button("Cancelar").clicked() {
+                    ui.close();
+                }
             });
         });
     match picked {
@@ -156,6 +170,13 @@ pub fn show(ctx: &egui::Context, p: &Palette, doc: &Doc, panel: usize) -> Outcom
         None if modal.should_close() => Outcome::Cancel,
         None => Outcome::Open,
     }
+}
+
+/// Cuántas tarjetas caben por renglón en una ventana de `width` px, con los
+/// márgenes de la ventana flotante: de una a cuatro.
+fn columns(width: f32) -> usize {
+    let room = width - 2.0 * 24.0 - 2.0 * crate::theme::SP4;
+    (((room + GAP) / (TILE.x + GAP)).floor() as usize).clamp(1, 4)
 }
 
 /// Una tarjeta: símbolo, número, nombre, para qué es y sus artículos.
@@ -204,6 +225,9 @@ fn tile(
             .layout(Layout::top_down(Align::Min)),
     );
     child.spacing_mut().item_spacing.y = 3.0;
+    // Los textos de la tarjeta no se seleccionan: así tocarlos o hacer clic
+    // en ellos elige la tarjeta.
+    child.style_mut().interaction.selectable_labels = false;
     child.label(
         RichText::new(option.title)
             .size(crate::theme::HEAD)
@@ -295,5 +319,21 @@ mod tests {
         let text = first_clause(&clauses);
         assert!(text.ends_with("+1"));
         assert!(text.chars().count() <= 28);
+    }
+}
+
+#[cfg(test)]
+mod size_tests {
+    use super::*;
+
+    #[test]
+    fn the_tiles_fit_the_window() {
+        assert_eq!(columns(1440.0), 4);
+        assert_eq!(columns(390.0), 1);
+        assert_eq!(columns(0.0), 1);
+        for width in [390.0, 600.0, 768.0, 1024.0] {
+            let n = columns(width) as f32;
+            assert!(n * TILE.x + (n - 1.0) * GAP + 48.0 <= width, "{width}");
+        }
     }
 }

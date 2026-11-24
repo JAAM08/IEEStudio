@@ -74,11 +74,31 @@ impl QuickView {
         format!("Perfil NOM-001-SEDE-2012 · Ajuste de resistencia por temperatura: {adjust}")
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, p: &Palette) {
+    /// Dibuja el cálculo rápido. `standalone` es la experiencia propia, sin
+    /// proyecto: en lugar de «Agregar al proyecto» ofrece exportar la hoja.
+    /// Devuelve `true` si se pidió la hoja en PDF.
+    pub fn ui(&mut self, ui: &mut egui::Ui, p: &Palette, standalone: bool) -> bool {
+        let mut export = false;
         egui::Panel::top("rapido-aviso")
             .frame(egui::Frame::new().fill(p.raise).inner_margin(egui::Margin::symmetric(8, 4)))
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    if standalone {
+                        if crate::widgets::primary_button(
+                            ui,
+                            p,
+                            &format!("{}  Exportar hoja PDF", egui_phosphor::regular::EXPORT),
+                        )
+                        .on_hover_text("La hoja del cálculo con su procedimiento")
+                        .clicked()
+                        {
+                            export = true;
+                        }
+                        ui.label(
+                            RichText::new("Un circuito suelto, sin proyecto.").color(p.ink2),
+                        );
+                        return;
+                    }
                     ui.label(
                         RichText::new(format!(
                             "{} Herramienta fuera del proyecto: no cambia el proyecto abierto, salvo que agregues el circuito con el botón.",
@@ -86,20 +106,18 @@ impl QuickView {
                         ))
                         .color(p.ink2),
                     );
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if ui
-                            .button(format!(
-                                "{}  Agregar al proyecto",
-                                egui_phosphor::regular::ARROW_SQUARE_IN
-                            ))
-                            .on_hover_text(
-                                "Agrega este circuito al tablero seleccionado, con el calibre que verificaste aquí como fijado.",
-                            )
-                            .clicked()
-                        {
-                            self.send = true;
-                        }
-                    });
+                    if ui
+                        .button(format!(
+                            "{}  Agregar al proyecto",
+                            egui_phosphor::regular::ARROW_SQUARE_IN
+                        ))
+                        .on_hover_text(
+                            "Agrega este circuito al tablero seleccionado, con el calibre que verificaste aquí como fijado.",
+                        )
+                        .clicked()
+                    {
+                        self.send = true;
+                    }
                 });
             });
         egui::Panel::bottom("rapido-estado")
@@ -109,6 +127,24 @@ impl QuickView {
                     .inner_margin(egui::Margin::symmetric(8, 4)),
             )
             .show(ui, |ui| {
+                // En ventanas angostas el veredicto se acomoda en renglones y
+                // el perfil queda debajo.
+                if ui.available_width() < crate::layout::WIDE {
+                    ui.horizontal_wrapped(|ui| {
+                        if let Some(v) = self.verdict() {
+                            crate::widgets::verdict_chips(ui, p, &v);
+                        }
+                    });
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(self.summary())
+                                .color(p.ink2)
+                                .size(crate::theme::SECONDARY),
+                        )
+                        .wrap(),
+                    );
+                    return;
+                }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if let Some(v) = self.verdict() {
                         crate::widgets::verdict_chips(ui, p, &v);
@@ -120,12 +156,17 @@ impl QuickView {
             });
         let side = egui::Frame::new().fill(p.panel).inner_margin(14);
         let mut changed = false;
-        egui::Panel::left("rapido-datos")
-            .frame(side)
-            .default_size(290.0)
-            .show(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| changed |= self.inputs(ui, p));
-            });
+        // En ventanas angostas todo va en una columna: datos, resultado,
+        // recomendaciones y procedimiento.
+        let narrow = ui.available_width() < 720.0;
+        if !narrow {
+            egui::Panel::left("rapido-datos")
+                .frame(side)
+                .default_size(290.0)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| changed |= self.inputs(ui, p));
+                });
+        }
         // Con espacio, las recomendaciones van en su columna; si no, debajo
         // del resultado.
         let wide = ui.available_width() >= 1040.0;
@@ -144,6 +185,10 @@ impl QuickView {
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
                     .show(ui, |ui| {
+                        if narrow {
+                            changed |= self.inputs(ui, p);
+                            ui.add_space(crate::theme::SP4);
+                        }
                         self.procedure(ui, p);
                         if !wide {
                             ui.add_space(crate::theme::SP3);
@@ -155,6 +200,7 @@ impl QuickView {
         if changed {
             self.result = quick_circuit(Profile::nom_001_sede_2012(), &self.input);
         }
+        export
     }
 
     fn inputs(&mut self, ui: &mut egui::Ui, p: &Palette) -> bool {

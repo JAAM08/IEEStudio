@@ -226,7 +226,10 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) -> bool {
         if ui.button(icon::MINUS).on_hover_text("Alejar").clicked() {
             preview.zoom = (preview.zoom / 1.2).max(0.3);
         }
-        ui.label(RichText::new(format!("{:.0} %", preview.zoom * 100.0)).monospace());
+        ui.add(
+            egui::Label::new(RichText::new(format!("{:.0} %", preview.zoom * 100.0)).monospace())
+                .extend(),
+        );
         if ui.button(icon::PLUS).on_hover_text("Acercar").clicked() {
             preview.zoom = (preview.zoom * 1.2).min(2.5);
         }

@@ -283,6 +283,10 @@ fn panels_table(ui: &mut egui::Ui, p: &Palette, doc: &Doc) -> Option<usize> {
         ));
         return None;
     }
+    // En el teléfono los tableros son una lista que se toca, no una tabla.
+    if ui.available_width() < crate::layout::PHONE {
+        return crate::compact::list(ui, p, &crate::compact::panel_rows(doc));
+    }
     egui::Frame::new()
         .fill(p.panel)
         .stroke(egui::Stroke::new(1.0, p.line))

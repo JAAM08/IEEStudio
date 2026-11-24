@@ -665,8 +665,9 @@ pub fn show(ui: &mut egui::Ui, doc: &mut Doc, shared: &mut Shared) {
                         });
                     }
                 })
-                .body(|body| {
-                    body.rows(crate::theme::ROW_H, rows.len(), |mut table_row| {
+                .body(|mut body| {
+                    let height = crate::theme::row_height(body.ui_mut().ctx());
+                    body.rows(height, rows.len(), |mut table_row| {
                         let row = &rows[table_row.index()];
                         let selected = doc.selection == row.selection;
                         table_row.set_selected(selected);

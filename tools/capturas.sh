@@ -29,11 +29,13 @@ if [ -z "$proyecto" ]; then
 fi
 
 tamanos=${TAMANOS:-"1440x900 1024x768 768x1024 600x844 390x844"}
-vistas=${VISTAS:-"proyecto tableros circuitos unifilar revisar memoria procedimiento"}
+vistas=${VISTAS:-"inicio rapido proyecto tableros circuitos ficha unifilar revisar memoria procedimiento"}
 temas=${TEMAS:-"oscuro claro"}
 
 # Opciones de la aplicación para cada vista. «procedimiento» es el cuadro con
-# el panel de procedimiento abierto abajo; «dividida», dos vistas a la vez.
+# el panel de procedimiento abierto abajo; «dividida», dos vistas a la vez;
+# «ficha», la del circuito abierta (pantalla completa en teléfono, cajón en
+# tableta); «inicio» y «rapido», las dos experiencias de la pantalla de inicio.
 opciones() {
   case "$1" in
     tableros) echo "--vista tableros --seleccion TG-1" ;;
@@ -41,6 +43,9 @@ opciones() {
     unifilar) echo "--vista unifilar --seleccion C-03" ;;
     procedimiento) echo "--vista tableros --seleccion C-03 --procedimiento" ;;
     dividida) echo "--vista tableros --seleccion C-03 --dividir" ;;
+    ficha) echo "--vista tableros --seleccion C-03 --ficha" ;;
+    inicio) echo "--inicio" ;;
+    rapido) echo "--rapido" ;;
     *) echo "--vista $1" ;;
   esac
 }
