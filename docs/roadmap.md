@@ -124,6 +124,13 @@
   sombra solo en lo flotante, barra de vistas en cápsula, navegador integrado
   al cromo, ficha en grupos de campos y barra de estado discreta. Obligatorio
   para R5, R6 y R7.
+- Rediseño 2026, etapa R5 (`rediseno-2026-r5-unifilar-y-memoria.md`):
+  Memoria convierte en imagen solo las páginas a la vista (seis como mucho),
+  así el proyecto de 522 páginas abre con 553 MiB en vez de más de 5.4 GB;
+  ficha de Memoria a la derecha con firma, «Antes de entregar» y
+  exportaciones en grupos de campos; unifilar con controles flotantes en
+  cápsula, zoom con Ctrl y la rueda o pellizco sobre el cursor, arrastre, y
+  sin dibujar lo que queda fuera de la ventana.
 
 ## Pendiente, en orden
 
@@ -136,7 +143,10 @@ El orden y el detalle están en `plan-1.0.md`. En resumen:
   rediseño (decisión 0033).
 - Etapa 4: unifilar en el navegador y cadena de publicación (versión
   visible, actualización del service worker, imágenes del sitio).
-- Etapa 5: rendimiento, incluido el tamaño del `.wasm` (50.7 MB).
+- Etapa 5: rendimiento, incluido el tamaño del `.wasm` (50.7 MB), la
+  composición de la memoria que bloquea la ventana (1.3 s en escritorio y
+  2.9 s en el navegador con 522 páginas, R5) y la vista Revisar con cientos
+  de circuitos (9.5 ms por cuadro, R5).
 - Etapas 7 y 8: una sola interfaz adaptativa para escritorio, tablet y
   teléfono (sustituye la idea de llevar la vista guiada a una vista por
   paso). Antes, una prueba en un teléfono real de egui en el navegador

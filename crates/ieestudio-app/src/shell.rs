@@ -123,7 +123,6 @@ pub fn target(step: Step) -> (View, Option<Step>) {
     match step {
         Step::Panels | Step::Circuits => (View::Schedule, Some(step)),
         Step::Review => (View::Review, None),
-        Step::Report => (View::Report, None),
     }
 }
 
@@ -167,7 +166,7 @@ pub fn show_view(
             (go, None)
         }
         View::Review => guided::view(ui, Step::Review, doc, shared),
-        View::Report => guided::view(ui, Step::Report, doc, shared),
+        View::Report => (None, crate::panels::report::view(ui, doc, shared)),
         View::Schedule | View::Diagram => workbench(ui, arr, doc, shared),
     };
     Outcome { go, request }
@@ -293,7 +292,7 @@ mod tests {
 
     #[test]
     fn every_step_lands_on_one_of_the_five_views() {
-        for step in [Step::Panels, Step::Circuits, Step::Review, Step::Report] {
+        for step in [Step::Panels, Step::Circuits, Step::Review] {
             let (view, sub) = target(step);
             assert!(View::ALL.contains(&view));
             // Solo «Tableros y circuitos» recuerda a cuál de sus dos contenidos
