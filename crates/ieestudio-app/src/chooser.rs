@@ -118,7 +118,7 @@ pub fn show(ctx: &egui::Context, p: &Palette, doc: &Doc, panel: usize) -> Outcom
             egui::Frame::new()
                 .fill(p.panel)
                 .stroke(egui::Stroke::new(1.0, p.line))
-                .corner_radius(10)
+                .corner_radius(crate::theme::RADIUS_WINDOW)
                 .inner_margin(egui::Margin::symmetric(24, 24)),
         )
         .show(ctx, |ui| {
@@ -212,7 +212,7 @@ fn tile(
         inner.right_top(),
         egui::Align2::RIGHT_TOP,
         number.to_string(),
-        egui::FontId::monospace(11.0),
+        egui::FontId::monospace(crate::theme::FOOT),
         p.ink3,
     );
     let clauses: Vec<String> = option.rules.iter().map(|r| profile.clause(*r)).collect();
@@ -238,7 +238,7 @@ fn tile(
         inner.left_bottom(),
         egui::Align2::LEFT_BOTTOM,
         first_clause(&clauses),
-        egui::FontId::monospace(10.5),
+        egui::FontId::monospace(crate::theme::FOOT),
         p.ink3,
     );
     let tip: Vec<String> = option

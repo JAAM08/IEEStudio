@@ -102,10 +102,10 @@ src/shell.rs         pestañas de las vistas y disposición de las regiones
 src/views.rs         las cinco vistas y los paneles de las regiones
 src/layout.rs        qué regiones caben según el ancho (probado sin pantalla)
 src/state.rs         proyecto abierto, selección y acciones de edición
-src/guided.rs        contenido de Proyecto, Revisar y Memoria, y de Tableros y
-                     circuitos en ventanas angostas (se retira en R7)
-src/panels/          un archivo por panel: browser, schedule, properties,
-                     procedure, diagram, report, quick
+src/home.rs          pantalla de inicio: «Proyecto completo» y «Cálculo rápido»
+src/compact.rs       tableta y teléfono: barra inferior, listas, hojas y cajones
+src/panels/          un archivo por vista o región: project, browser, schedule,
+                     properties, procedure, diagram, review, report, quick
 src/widgets.rs       piezas compartidas: estados, propiedades, procedimiento
 src/theme.rs         paleta, tipografía e íconos
 ```

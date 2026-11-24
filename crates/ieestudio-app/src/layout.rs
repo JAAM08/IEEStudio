@@ -5,8 +5,8 @@
 //! compilación de depuración se cierra con «Negative width makes no sense».
 //! Aquí están las cuentas, sin interfaz, para probarlas solas.
 
-/// Ancho mínimo que necesita el contenido principal de un paso junto a su panel
-/// lateral fijo. Con menos, el panel lateral pasa abajo (ver [`side_fits`]).
+/// Ancho mínimo que necesita el contenido de la vista entre el navegador y el
+/// inspector; con menos, el navegador deja su lugar (ver [`regions`]).
 pub const MIN_CONTENT: f32 = 420.0;
 
 /// Ancho mínimo de una tarjeta para ponerla junto a otras en una fila.
@@ -21,13 +21,6 @@ pub fn remaining(available: f32, used: f32) -> f32 {
 pub fn column_width(available: f32, n: usize, gap: f32) -> f32 {
     let n = n.max(1) as f32;
     remaining(available, gap * (n - 1.0)) / n
-}
-
-/// Si un panel lateral de ancho `side` cabe junto al contenido principal.
-/// Si no cabe, el paso lo muestra abajo, a lo ancho, en lugar de encimarlo
-/// sobre el contenido o dejar a este con ancho negativo.
-pub fn side_fits(available: f32, side: f32) -> bool {
-    available >= side + MIN_CONTENT
 }
 
 /// Cuántas de `n` tarjetas caben en una fila: todas si cada una mide al menos
@@ -170,19 +163,6 @@ mod tests {
         assert_eq!(cards_per_row(390.0 - 64.0, 3, 12.0), 1);
         assert_eq!(cards_per_row(96.0, 3, 12.0), 1);
         assert_eq!(cards_per_row(5000.0, 1, 12.0), 1);
-    }
-
-    #[test]
-    fn side_panels_move_below_when_they_do_not_fit() {
-        // Paneles fijos de los pasos: Tableros 420, Circuitos 390, Revisar y
-        // Memoria 440.
-        for side in [390.0, 420.0, 440.0] {
-            assert!(side_fits(1440.0, side));
-            assert!(side_fits(1024.0, side));
-            assert!(!side_fits(768.0, side));
-            assert!(!side_fits(600.0, side));
-            assert!(!side_fits(390.0, side));
-        }
     }
 
     #[test]

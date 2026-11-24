@@ -32,12 +32,6 @@
     display: none; overflow-wrap: anywhere;
   }
   #estado[data-visible="si"] { display: block; }
-  #pequena {
-    position: fixed; left: 12px; right: 12px; bottom: 12px; padding: 12px 14px; border-radius: 8px;
-    background: #272b31; border: 1px solid #3a3f47; font-size: 13px; display: none;
-  }
-  #pequena button { margin-top: 8px; font: inherit; color: #1b1e23; background: #f5c518; border: 0; border-radius: 6px; padding: 6px 12px; }
-  @media (max-width: 760px) { #pequena.mostrar { display: block; } }
   #nueva {
     position: fixed; left: 50%; top: 12px; transform: translateX(-50%); max-width: calc(100% - 24px);
     display: none; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px 10px 16px; border-radius: 8px;
@@ -58,10 +52,6 @@
   <p id="texto">Cargando IEEStudio…</p>
 </div>
 <div id="estado" role="alert"></div>
-<div id="pequena">
-  IEEStudio está pensado para pantallas grandes. En el celular funciona, pero es más cómodo en una computadora o tableta.
-  <br><button type="button" id="entendido">Entendido</button>
-</div>
 <div id="nueva" role="status">
   <span>Hay una versión nueva de IEEStudio.</span>
   <span><button type="button" id="recargar">Recargar</button> <button type="button" id="despues">Después</button></span>
@@ -112,15 +102,6 @@
     estado.textContent = "No se pudo cargar IEEStudio. Revisa tu conexión y recarga la página.\n\n" + e;
     estado.dataset.visible = "si";
   }
-
-  const pequena = document.getElementById("pequena");
-  try {
-    if (!localStorage.getItem("ieestudio-aviso-pantalla")) pequena.classList.add("mostrar");
-  } catch (_) { pequena.classList.add("mostrar"); }
-  document.getElementById("entendido").addEventListener("click", () => {
-    pequena.classList.remove("mostrar");
-    try { localStorage.setItem("ieestudio-aviso-pantalla", "1"); } catch (_) {}
-  });
 
   // Versión nueva: el service worker nuevo toma el control de esta página,
   // pero el programa que corre sigue siendo el anterior hasta recargar. Se

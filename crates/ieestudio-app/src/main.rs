@@ -1,10 +1,10 @@
 //! IEEStudio: aplicación de escritorio y, compilada a WebAssembly, en el
 //! navegador.
 //!
-//! Uso en escritorio: `ieestudio-app [proyecto.json] [--claro] [--espacio calculo|diagrama|documentacion]
-//! [--panel rapido|unifilar|memoria|ninguno] [--seleccion ID|proyecto] [--inicio] [--comandos]
-//! [--paso proyecto|tableros|circuitos|revisar|memoria] [--avanzada] [--agregar] [--unifilar-completo]
-//! [--tamano 1024x768] [--captura imagen.png] [--medir 60]`
+//! Uso en escritorio: `ieestudio-app [proyecto.iees] [--claro]
+//! [--vista proyecto|tableros|unifilar|revisar|memoria] [--seleccion ID|proyecto] [--ficha]
+//! [--procedimiento] [--dividir] [--propiedades datos|resultados|normativa] [--inicio]
+//! [--rapido] [--comandos] [--agregar] [--tamano 1024x768] [--captura imagen.png] [--medir 60]`
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -13,7 +13,6 @@ mod chooser;
 mod commands;
 mod compact;
 mod files;
-mod guided;
 mod home;
 mod layout;
 mod panels;
@@ -46,7 +45,6 @@ fn main() -> eframe::Result {
         quick: false,
         ficha: false,
         chooser: false,
-        diagram: false,
         measure: 0,
     };
     let mut size = None;
@@ -60,11 +58,7 @@ fn main() -> eframe::Result {
             "--comandos" => options.palette = true,
             "--procedimiento" => options.procedure = true,
             "--dividir" => options.split = true,
-            // De antes del marco único: la vista avanzada era el cuadro con
-            // sus paneles.
-            "--avanzada" => options.view = options.view.or(Some(View::Schedule)),
             "--agregar" => options.chooser = true,
-            "--unifilar-completo" => options.diagram = true,
             // Tamaño de la ventana para revisar pantallas angostas: 1024x768.
             "--tamano" => {
                 size = args.next().and_then(|v| {
@@ -73,35 +67,12 @@ fn main() -> eframe::Result {
                 });
             }
             "--vista" => options.view = args.next().as_deref().and_then(view_named),
-            // `--paso`, `--espacio`, `--panel`, `--rapido` y `--unifilar` son
-            // de antes del marco único; se aceptan hasta la etapa R7.
-            "--paso" => {
-                let step = args.next();
-                options.view = step
-                    .as_deref()
-                    .and_then(view_named)
-                    .or(Some(View::Schedule));
-            }
             "--captura" => options.capture = args.next().map(PathBuf::from),
             // Con --captura: mide cuánto tarda la interfaz en armar N cuadros
             // más antes de tomar la imagen, e imprime los tiempos.
             "--medir" => options.measure = args.next().and_then(|v| v.parse().ok()).unwrap_or(60),
-            "--espacio" => {
-                options.view = match args.next().as_deref() {
-                    Some("diagrama") => Some(View::Diagram),
-                    Some("documentacion") => Some(View::Report),
-                    _ => Some(View::Schedule),
-                }
-            }
-            "--panel" => match args.next().as_deref() {
-                Some("rapido") => options.quick = true,
-                Some("unifilar") => options.view = Some(View::Diagram),
-                Some("memoria") => options.view = Some(View::Report),
-                _ => {}
-            },
             "--rapido" => options.quick = true,
             "--ficha" => options.ficha = true,
-            "--unifilar" => options.view = Some(View::Diagram),
             _ => options.open = Some(PathBuf::from(arg)),
         }
     }
@@ -230,7 +201,6 @@ fn main() {
         quick: false,
         ficha: false,
         chooser: false,
-        diagram: false,
         measure: 0,
     };
     wasm_bindgen_futures::spawn_local(async move {

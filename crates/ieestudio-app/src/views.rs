@@ -70,6 +70,12 @@ impl View {
         View::ALL.get(self.index() + 1).copied()
     }
 
+    /// Si la vista muestra la ficha del elemento elegido: al lado en
+    /// escritorio, en su cajón en tableta.
+    pub fn has_inspector(self) -> bool {
+        self.has_regions() || self == View::Review
+    }
+
     /// Si la vista muestra el navegador, el inspector y el procedimiento
     /// alrededor del contenido.
     pub fn has_regions(self) -> bool {
@@ -84,6 +90,13 @@ pub enum Panel {
     Schedule,
     Diagram,
     Properties,
+}
+
+/// Archivo que una vista pide exportar a la ventana principal.
+pub enum Export {
+    Pdf,
+    Excel,
+    Dxf,
 }
 
 #[cfg(test)]

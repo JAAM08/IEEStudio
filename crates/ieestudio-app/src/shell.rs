@@ -5,12 +5,11 @@ use eframe::egui::{self, Align, Layout, RichText, Sense};
 use egui_phosphor::regular as icon;
 
 use crate::compact;
-use crate::guided::{self, Export, Step};
 use crate::layout::{self, Class, Regions};
 use crate::panels::{procedure, Shared, Viewer};
 use crate::state::Doc;
 use crate::theme::{semibold, Palette};
-use crate::views::{Panel, View};
+use crate::views::{Export, Panel, View};
 use crate::widgets::strong;
 
 /// Las cinco vistas como pestañas de la barra superior. `current` es `None`
@@ -25,7 +24,7 @@ pub fn view_tabs(
     compact: bool,
 ) -> Option<View> {
     let mut chosen = None;
-    let (fails, pending) = guided::problem_counts(doc);
+    let (fails, pending) = crate::panels::review::problem_counts(doc);
     // Una sola cápsula: la vista activa va elevada sobre ella. Sin subrayado.
     egui::Frame::new()
         .fill(p.selected)
@@ -120,19 +119,11 @@ fn capsule_items(
     chosen
 }
 
-/// A qué vista, y a qué contenido de «Tableros y circuitos» en ventanas sin
-/// inspector, lleva un paso que pidió una vista (por ejemplo, un renglón de
-/// Revisar que se arregla en el calibre de un circuito).
-pub fn target(step: Step) -> (View, Option<Step>) {
-    match step {
-        Step::Panels | Step::Circuits => (View::Schedule, Some(step)),
-        Step::Review => (View::Review, None),
-    }
-}
-
 /// Lo que una vista pide al terminar el cuadro.
 pub struct Outcome {
-    pub go: Option<Step>,
+    /// Vista a la que se pidió ir, por ejemplo desde una incidencia de
+    /// Revisar en el teléfono.
+    pub go: Option<View>,
     pub request: Option<Export>,
 }
 
@@ -167,12 +158,15 @@ pub fn show_view(
                 .show(ui, |ui| {
                     if let Some(i) = crate::panels::project::show(ui, doc, shared) {
                         doc.selection = crate::state::Selection::Feeder(i);
-                        go = Some(Step::Panels);
+                        go = Some(View::Schedule);
                     }
                 });
             (go, None)
         }
-        View::Review => guided::view(ui, Step::Review, doc, shared),
+        View::Review => (
+            crate::panels::review::show(ui, doc, shared, arr.class),
+            None,
+        ),
         View::Report => (None, crate::panels::report::view(ui, doc, shared)),
         View::Schedule if phone => {
             egui::CentralPanel::default()
@@ -182,11 +176,11 @@ pub fn show_view(
         }
         View::Diagram if phone => {
             let open = compact::diagram_view(ui, doc, shared);
-            (open.then_some(Step::Circuits), None)
+            (open.then_some(View::Schedule), None)
         }
         View::Schedule | View::Diagram => workbench(ui, arr, doc, shared),
     };
-    if arr.class == Class::Tablet && arr.view.has_regions() {
+    if arr.class == Class::Tablet && arr.view.has_inspector() {
         // Elegir un tablero o circuito abre su ficha en el cajón de la
         // derecha; en el navegador, además, cierra el cajón del navegador.
         if doc.selection != before && doc.selection != crate::state::Selection::Project {
@@ -237,7 +231,7 @@ fn workbench(
     arr: &mut Arrangement,
     doc: &mut Doc,
     shared: &mut Shared,
-) -> (Option<Step>, Option<Export>) {
+) -> (Option<View>, Option<Export>) {
     let p = shared.palette;
     let regions = arr.regions;
     let frame = |margin: egui::Margin| egui::Frame::new().fill(p.panel).inner_margin(margin);
@@ -304,41 +298,18 @@ fn workbench(
             });
     }
 
-    let mut go = None;
     let mut request = None;
     egui::CentralPanel::default()
         .frame(frame(egui::Margin::ZERO))
         .show(ui, |ui| match arr.view {
             View::Diagram if !regions.split => {
-                // En tableta elegir en el dibujo abre la ficha en su cajón, sin
-                // salir del unifilar.
-                (go, request) = guided::diagram_view(ui, doc, shared, false);
+                // Elegir en el dibujo muestra la ficha en el inspector o, en
+                // tableta, en su cajón, sin salir del unifilar.
+                request = crate::panels::diagram::view(ui, doc, shared);
             }
             _ => {
                 Viewer { doc, shared }.panel(ui, Panel::Schedule);
             }
         });
-    (go, request)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_step_lands_on_one_of_the_five_views() {
-        for step in [Step::Panels, Step::Circuits, Step::Review] {
-            let (view, sub) = target(step);
-            assert!(View::ALL.contains(&view));
-            // Solo «Tableros y circuitos» recuerda a cuál de sus dos contenidos
-            // se quiere ir.
-            assert_eq!(sub.is_some(), view == View::Schedule);
-        }
-        assert_eq!(target(Step::Review), (View::Review, None));
-        assert_eq!(target(Step::Panels), (View::Schedule, Some(Step::Panels)));
-        assert_eq!(
-            target(Step::Circuits),
-            (View::Schedule, Some(Step::Circuits))
-        );
-    }
+    (None, request)
 }

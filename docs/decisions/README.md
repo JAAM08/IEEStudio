@@ -15,7 +15,7 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0007 | [Unifilar como trazos independientes del dibujo](0007-unifilar.md) | Aceptada; ampliada por 0022 |
 | 0008 | [Reglas y referencias normativas separadas](0008-referencias-normativas.md) | Aceptada |
 | 0009 | [Veredicto en tres niveles](0009-veredicto.md) | Aceptada |
-| 0010 | [Interfaz por paneles acoplables y espacios de trabajo](0010-interfaz-profesional.md) | Aceptada |
+| 0010 | [Interfaz por paneles acoplables y espacios de trabajo](0010-interfaz-profesional.md) | Sustituida por 0034 |
 | 0011 | [Motores y motocompresores](0011-motores.md) | Aceptada |
 | 0012 | [Carga de los alimentadores según el artículo 220](0012-carga-articulo-220.md) | Aceptada |
 | 0013 | [Cortocircuito y capacidad interruptiva](0013-cortocircuito.md) | Sustituida por 0018 |
@@ -24,8 +24,8 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0016 | [Transformadores dentro del proyecto](0016-transformador.md) | Aceptada; cortocircuito retirado por 0018 |
 | 0017 | [La aplicación en el navegador](0017-version-web.md) | Aceptada |
 | 0018 | [El cortocircuito sale de IEEStudio y pasa a la suite](0018-cortocircuito-fuera-de-alcance.md) | Aceptada; ampliada por 0023 |
-| 0019 | [Rediseño de la interfaz, fase 1: escritorio](0019-rediseno-fase-1.md) | Aceptada; vale dentro de la vista avanzada |
-| 0020 | [Vista guiada en cinco pasos](0020-flujo-guiado.md) | Aceptada |
+| 0019 | [Rediseño de la interfaz, fase 1: escritorio](0019-rediseno-fase-1.md) | Antecedente de 0034 |
+| 0020 | [Vista guiada en cinco pasos](0020-flujo-guiado.md) | Sustituida por 0034 |
 | 0021 | [Agregar un circuito eligiendo primero qué se conecta](0021-agregar-por-tipo-de-carga.md) | Aceptada |
 | 0022 | [El unifilar con el formato de un plano eléctrico](0022-unifilar-como-plano.md) | Aceptada |
 | 0023 | [Capacidad interruptiva con la falla estimada por bus infinito](0023-falla-por-bus-infinito.md) | Aceptada; motores y datos incompletos corregidos por 0028 |
@@ -39,6 +39,7 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0031 | [Falla en cada tablero descontando los conductores (punto a punto)](0031-falla-en-cada-tablero-punto-a-punto.md) | Aceptada; implementada en la etapa 1F |
 | 0032 | [Cálculo de cortocircuito opcional por proyecto](0032-calculo-de-cortocircuito-opcional.md) | Aceptada |
 | 0033 | [Conexión del secundario, datos de captura y estados de los tramos (pendientes 17, 19 y 20)](0033-secundario-captura-y-estados.md) | Aceptada; 17 y 19 implementados, 20 diferido al rediseño |
+| 0034 | [Un solo marco adaptativo para escritorio, tableta y teléfono](0034-marco-unico-adaptativo.md) | Aceptada; implementada en el rediseño 2026 (R1 a R7) |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`. Las auditorías del
 PR #11 están en `../auditoria-modelo-y-falla.md` (Opus) y

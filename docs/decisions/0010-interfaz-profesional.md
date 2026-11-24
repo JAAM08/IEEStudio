@@ -1,6 +1,6 @@
 # 0010. Interfaz por paneles acoplables y espacios de trabajo
 
-**Estado:** aceptada (octubre de 2026).
+**Estado:** aceptada (octubre de 2026). **Sustituida por la 0034** (24 de noviembre de 2026).
 
 ## Contexto
 

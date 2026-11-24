@@ -1,6 +1,7 @@
 # 0020. Vista guiada en cinco pasos
 
-**Estado:** aceptada (noviembre de 2026). Cambia la vista de omisión de la
+**Estado:** aceptada (noviembre de 2026). **Sustituida por la 0034** (24 de
+noviembre de 2026). Cambia la vista de omisión de la
 0010; la 0019 sigue valiendo dentro de la vista avanzada.
 
 ## Contexto

@@ -13,9 +13,10 @@ use eframe::egui::{self, Color32, RichText, Vec2};
 use egui_phosphor::regular as icon;
 
 use super::Shared;
-use crate::guided::{problem_counts, Export};
+use crate::panels::review::problem_counts;
 use crate::state::Doc;
 use crate::theme::{self, Palette};
+use crate::views::Export;
 use crate::widgets::{empty_state, muted, property, section, strong};
 
 /// Imágenes de página que se guardan a la vez: unos 30 MB a 1.6 px/pt.

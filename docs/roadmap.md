@@ -138,6 +138,13 @@
   inferior en el unifilar; tableta con el cuadro completo y cajones para el
   navegador y la ficha; modo táctil de 44 px. Navegación y desplazamiento
   validados con toques en Chromium con un teléfono emulado.
+- Rediseño 2026, etapa R7 (`rediseno-2026-r7-retiro-y-cierre.md` y decisión
+  0034): Revisar rehecha con la ficha al lado (cajón en tableta, pantalla
+  completa en teléfono), contadores y lista armada una vez por cambio; se
+  retiran `guided.rs`, `egui_dock`, las opciones de línea de comandos de
+  antes y el aviso de «pantallas grandes»; repaso final del sistema visual;
+  capturas y texto nuevos de la guía del sitio; tabla final de rendimiento.
+  Con esto termina el rediseño 2026.
 
 ## Pendiente, en orden
 
@@ -150,23 +157,17 @@ El orden y el detalle están en `plan-1.0.md`. En resumen:
   rediseño (decisión 0033).
 - Etapa 4: unifilar en el navegador y cadena de publicación (versión
   visible, actualización del service worker, imágenes del sitio).
-- Etapa 5: rendimiento, incluido el tamaño del `.wasm` (50.7 MB), la
+- Etapa 5: rendimiento, incluido el tamaño del `.wasm` (50.8 MB) y la
   composición de la memoria que bloquea la ventana (1.3 s en escritorio y
-  2.9 s en el navegador con 522 páginas, R5) y la vista Revisar con cientos
-  de circuitos (9.5 ms por cuadro, R5).
-- Etapas 7 y 8: una sola interfaz adaptativa para escritorio, tablet y
-  teléfono (sustituye la idea de llevar la vista guiada a una vista por
-  paso). Antes, una prueba en un teléfono real de egui en el navegador
-  (teclado virtual, desplazamiento), con el procedimiento de la sección 5 de
-  `rediseno-2026-r1-linea-base.md`.
-- Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
-  plantillas de circuito.
-- Rediseño 2026, etapa R7: sacar Revisar de `guided.rs` (en teléfono,
-  contadores en dos columnas e incidencias como tarjetas) y retirar el resto
-  de `guided.rs`, `egui_dock`, las opciones de línea de comandos de antes y
-  el aviso de «pantallas grandes» de la versión web. Probar en un teléfono y
-  una tableta reales (iOS Safari incluido).
-- Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
+  2.9 s en el navegador con 522 páginas). Revisar con 386 circuitos quedó en
+  7.8 ms por cuadro en R7.
+- Etapas 7 y 8: la interfaz adaptativa para escritorio, tableta y teléfono
+  quedó hecha con el rediseño 2026 (R1 a R7, decisión 0034); falta la prueba
+  en un teléfono real (abajo).
+- Por decidir: editar celdas directo en la tabla y plantillas de circuito.
+- Probar la interfaz en un teléfono y una tableta reales, iOS Safari incluido
+  (lista en la sección 9 de `rediseno-2026-r7-retiro-y-cierre.md`).
+- Rehacer el video de la guía del sitio con la interfaz nueva.
 - Confirmar con la NMX-J-136-ANCE-2019 los símbolos del unifilar (cotejados
   con la edición 2007) y con el texto de la NMX-J-116-ANCE la tabla de
   impedancias (transcrita de una lámina). Agregar la de transformadores tipo

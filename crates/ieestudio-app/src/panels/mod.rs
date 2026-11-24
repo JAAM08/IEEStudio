@@ -7,6 +7,7 @@ pub mod project;
 pub mod properties;
 pub mod quick;
 pub mod report;
+pub mod review;
 pub mod schedule;
 
 use eframe::egui;
@@ -42,6 +43,8 @@ pub struct Shared {
     pub diagram_full: bool,
     /// Pendiente de ajustar el unifilar a la pantalla al abrirlo.
     pub diagram_fit: bool,
+    /// Lo que Revisar arma una vez por revisión del proyecto.
+    pub review: review::Cache,
     /// Teléfono: la ficha del elemento elegido ocupa la pantalla.
     pub ficha_open: bool,
     /// Teléfono: hoja inferior del unifilar con el tablero o circuito tocado.
@@ -73,6 +76,7 @@ impl Shared {
             diagram_full: false,
             diagram_fit: false,
             diagram_cache: None,
+            review: review::Cache::default(),
             ficha_open: false,
             sheet: None,
             navigator_drawer: false,

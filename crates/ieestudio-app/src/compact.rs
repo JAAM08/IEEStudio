@@ -10,7 +10,7 @@ use eframe::egui::{
 use egui_phosphor::regular as icon;
 use ieestudio_project::{RunResult, Status};
 
-use crate::guided::problem_counts;
+use crate::panels::review::problem_counts;
 use crate::panels::{diagram, properties, Shared};
 use crate::shell::CAPSULE;
 use crate::state::{Doc, Selection};

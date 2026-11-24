@@ -12,7 +12,6 @@ use crate::chooser;
 use crate::commands::{Command, CommandPalette};
 use crate::compact;
 use crate::files::{self, Filter, Inbox, Picked, Purpose, Saved};
-use crate::guided::{self, Step};
 use crate::home::{self, Start};
 use crate::layout::{self, Class};
 use crate::panels::{schedule, Shared};
@@ -20,7 +19,7 @@ use crate::shell::{self, Arrangement};
 use crate::state::{empty_project, Doc, Selection};
 use crate::symbols::Symbol;
 use crate::theme::{self, Palette};
-use crate::views::View;
+use crate::views::{Export, View};
 use crate::widgets::{muted, strong, verdict_chips};
 
 const STORAGE_KEY: &str = "ieestudio-interfaz-1";
@@ -177,8 +176,7 @@ pub struct Options {
     pub home: bool,
     /// Empieza con la paleta de comandos abierta, para revisarla.
     pub palette: bool,
-    /// Vista en la que se empieza (`--vista`, y los `--paso` y `--espacio`
-    /// de antes).
+    /// Vista en la que se empieza (`--vista`).
     pub view: Option<View>,
     /// Empieza con el panel de procedimiento abierto.
     pub procedure: bool,
@@ -191,8 +189,6 @@ pub struct Options {
     pub ficha: bool,
     /// Empieza con la ventana «¿Qué vas a conectar?» abierta, para revisarla.
     pub chooser: bool,
-    /// Empieza en el unifilar, ajustado al ancho de la ventana.
-    pub diagram: bool,
     /// Con `capture`: cuadros que se miden antes de tomar la imagen.
     pub measure: u32,
 }
@@ -324,9 +320,6 @@ impl App {
         if options.chooser {
             app.shared.choose_load = app.doc.panel_index();
         }
-        if options.diagram {
-            app.view = View::Diagram;
-        }
         app.shared.ficha_open = options.ficha;
         app.shared.inspector_drawer = options.ficha;
         if app.view == View::Diagram {
@@ -417,9 +410,9 @@ impl App {
         }
     }
 
-    /// Va al contenido que pidió un paso de las vistas.
-    fn go_step(&mut self, step: Step) {
-        let (view, _) = shell::target(step);
+    /// Va a la vista que pidió otra vista (por ejemplo, una incidencia de
+    /// Revisar en el teléfono).
+    fn go_to(&mut self, view: View) {
         self.go_view(view);
         // En el teléfono, lo que se pidió desde otra vista se abre en su ficha.
         if self.class == Class::Phone && self.doc.selection != Selection::Project {
@@ -2117,13 +2110,13 @@ impl App {
             self.desktop_frame(ui, window_width)
         };
         if let Some(outcome) = outcome {
-            if let Some(step) = outcome.go {
-                self.go_step(step);
+            if let Some(view) = outcome.go {
+                self.go_to(view);
             }
             match outcome.request {
-                Some(guided::Export::Pdf) => self.export_pdf(false),
-                Some(guided::Export::Excel) => self.export_excel(),
-                Some(guided::Export::Dxf) => self.export_dxf(),
+                Some(Export::Pdf) => self.export_pdf(false),
+                Some(Export::Excel) => self.export_excel(),
+                Some(Export::Dxf) => self.export_dxf(),
                 None => {}
             }
         }
