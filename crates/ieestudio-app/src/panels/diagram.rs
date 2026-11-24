@@ -333,6 +333,100 @@ pub fn paint(
         .map(|h| (h.panel, h.circuit))
 }
 
+/// La vista Unifilar en escritorio y tableta: título, «Exportar DXF» y el
+/// dibujo. Elegir un tablero o circuito lo selecciona; su ficha se ve en el
+/// inspector o en su cajón.
+pub fn view(
+    ui: &mut egui::Ui,
+    doc: &mut crate::state::Doc,
+    shared: &mut super::Shared,
+) -> Option<crate::views::Export> {
+    use crate::state::Selection;
+    let p = shared.palette;
+    let mut request = None;
+    egui::Panel::top("unifilar-completo-barra")
+        .frame(
+            egui::Frame::new()
+                .fill(p.bg)
+                .inner_margin(egui::Margin::symmetric(16, 8)),
+        )
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(crate::widgets::strong("Diagrama unifilar").size(theme::HEAD));
+                // En ventanas angostas la indicación no cabe junto al botón.
+                if ui.available_width() > 600.0 {
+                    ui.label(
+                        crate::widgets::muted(
+                            &p,
+                            "Haz clic en un tablero o circuito para ver su ficha.",
+                        )
+                        .size(theme::SECONDARY),
+                    );
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if crate::widgets::primary_bar_button(
+                        ui,
+                        &p,
+                        &format!("{}  Exportar DXF", icon::FLOW_ARROW),
+                    )
+                    .clicked()
+                    {
+                        request = Some(crate::views::Export::Dxf);
+                    }
+                });
+            });
+        });
+    egui::CentralPanel::default()
+        .frame(
+            egui::Frame::new()
+                .fill(p.bg)
+                .inner_margin(egui::Margin::symmetric(16, 4)),
+        )
+        .show(ui, |ui| {
+            let Some(diagram) = shared.diagram(doc, shared.diagram_mode) else {
+                crate::widgets::empty_state(
+                    ui,
+                    &p,
+                    icon::WARNING_CIRCLE,
+                    "No se pudo calcular el proyecto",
+                    &doc.calc_error().unwrap_or_default(),
+                );
+                return;
+            };
+            if shared.diagram_fit {
+                // Al ancho de la ventana: así se lee, y lo que no cabe a lo
+                // alto se recorre. Sin agrandarlo de más en pantallas grandes.
+                let fit = (ui.available_width() - theme::SP6) / diagram.width as f32;
+                shared.diagram_zoom = fit.clamp(0.4, 1.3);
+                shared.diagram_fit = false;
+            }
+            let selected = match doc.selection {
+                Selection::Feeder(i) | Selection::Secondary(i) => Some((i, None)),
+                Selection::Circuit(i, c) => Some((i, Some(c))),
+                Selection::Project => None,
+            };
+            let before = shared.diagram_mode;
+            if let Some(hit) = show(
+                ui,
+                &p,
+                &diagram,
+                &mut shared.diagram_zoom,
+                &mut shared.diagram_mode,
+                selected,
+            ) {
+                doc.selection = match hit {
+                    (i, Some(c)) => Selection::Circuit(i, c),
+                    (i, None) => Selection::Feeder(i),
+                };
+            }
+            // La hoja del plano tiene otra proporción: se vuelve a ajustar.
+            if before != shared.diagram_mode {
+                shared.diagram_fit = true;
+            }
+        });
+    request
+}
+
 /// Rectángulo en pantalla que ocupa un elemento, con holgura: el del texto se
 /// estima por su número de letras, sin acomodarlo.
 fn bounds(element: &Element, zoom: f32, map: impl Fn((f64, f64)) -> egui::Pos2) -> egui::Rect {

@@ -20,8 +20,7 @@ xvfb-run -a cargo run -p ieestudio-app -- --captura captura.png   # revisar la i
 # --dividir (cuadro y unifilar a la vez), --propiedades datos|resultados|normativa,
 # --claro, --inicio (pantalla de inicio), --comandos (paleta de comandos abierta),
 # --seleccion C-03, --ficha (la ficha abierta: pantalla completa en teléfono, cajón en
-# tableta) y --rapido (la experiencia de cálculo rápido); --paso, --espacio, --panel y --avanzada
-# son de antes del marco único y se aceptan hasta R7
+# tableta), --rapido (la experiencia de cálculo rápido) y --agregar («¿Qué vas a conectar?»)
 tools/capturas.sh                                    # vistas × cinco tamaños × dos temas; falla si alguna se cierra
 tools/sitio-web.sh                                   # ieestudio.com con la app en el navegador, en target/sitio
 cargo clippy --target wasm32-unknown-unknown -p ieestudio-app -- -D warnings

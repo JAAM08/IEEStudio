@@ -410,24 +410,24 @@ write("funciones", funciones)
 
 # ------------------------------------------------------------------ guía
 steps = [
-    ("paso-1", "Abre IEEStudio", "La app abre con un proyecto de ejemplo: una casa habitación con un tablero y seis circuitos. A la izquierda está el navegador del proyecto; haz clic en cualquier elemento y las demás vistas lo siguen.",
-     ["Para empezar el tuyo: Archivo, Nuevo proyecto.", "El ejemplo siempre está en Archivo, Abrir el proyecto de ejemplo."]),
-    ("paso-2", "Datos de la obra y la acometida", "Selecciona el proyecto para capturar el cliente, la ubicación, quién elaboró y quién firma, el tipo de inmueble, y el sistema de la acometida.",
+    ("paso-1", "Abre IEEStudio", "Al abrir eliges entre dos experiencias: <strong>Proyecto completo</strong> —uno nuevo, uno que ya tienes o el ejemplo, una casa habitación con un tablero y seis circuitos— y <strong>Cálculo rápido</strong>, para un circuito suelto sin crear un proyecto.",
+     ["Arriba están las cinco vistas: Proyecto, Tableros y circuitos, Unifilar, Revisar y Memoria (<kbd>F2</kbd> a <kbd>F6</kbd>).", "Lo que eliges en una vista lo siguen las demás."]),
+    ("paso-2", "Datos de la obra y la acometida", "En la vista Proyecto capturas el cliente, la ubicación, quién elabora, el tipo de inmueble y el suministro. Arriba, el resumen dice cómo va el proyecto.",
      ["Los datos de la obra van a la portada de la memoria; no cambian el cálculo.", "Los límites de caída de tensión se ajustan aquí."]),
-    ("paso-3", "Tableros y carga del alimentador", "En cada tablero eliges de dónde se alimenta, su conexión, la longitud del alimentador y las áreas que atiende. Con eso se calcula la carga según el artículo 220, con el detalle de cada grupo en el procedimiento.",
+    ("paso-3", "Tableros y carga del alimentador", "En Tableros y circuitos elige un tablero: en su ficha, a la derecha, capturas de dónde se alimenta, su conexión, la longitud del alimentador y las áreas que atiende. Con eso se calcula la carga según el artículo 220, con el detalle de cada grupo en el procedimiento.",
      ["Si el tablero se alimenta por un transformador, márcalo y captura sus datos.", "Las áreas definen la carga mínima de alumbrado (Tabla 220-12)."]),
-    ("paso-4", "Circuitos en el cuadro de cargas", "Agrega circuitos con «+ Circuito» y captura su tipo de carga, potencia, fases y longitud. El cuadro de cargas se recalcula con cada cambio: corriente, calibre, tierra, tubo, interruptor, caída de tensión y estado.",
-     ["Ctrl+D duplica el circuito seleccionado y Supr lo elimina.", "«Balancear fases» reparte los circuitos entre A, B y C."]),
-    ("paso-5", "Revisa los resultados", "En Propiedades, la pestaña Resultados muestra lo que calculó el programa para el circuito seleccionado. Si fijaste un calibre o un interruptor, te dice qué habría propuesto y por qué.",
+    ("paso-4", "Circuitos en el cuadro de cargas", "Con «Agregar circuito» eliges qué vas a conectar y capturas su potencia, fases y longitud en la ficha. El cuadro de cargas se recalcula con cada cambio: corriente, calibre, tierra, tubo, interruptor, caída de tensión y estado.",
+     ["Ctrl+D duplica el circuito seleccionado y Supr lo elimina.", "«Esencial» y «Completo» cambian las columnas del cuadro.", "«Balancear fases» reparte los circuitos entre A, B y C."]),
+    ("paso-5", "Revisa los resultados", "En la ficha, la pestaña Resultados muestra lo que calculó el programa para el elemento elegido. Si algo no cumple, arriba de la ficha está el arreglo, como «Usar 10 AWG»; si fijaste un calibre o un interruptor, te dice qué habría propuesto y por qué.",
      ["Puedes fijar calibre, interruptor y conductores por fase, o dejar que IEEStudio proponga el menor que cumple."]),
-    ("paso-6", "Revisa la normativa", "La pestaña Normativa lista cada verificación —ampacidad, protección, caída, tubería— con su estado y el artículo que aplica. En los resultados del proyecto, lo que la norma pide y el programa no verifica, como la capacidad interruptiva, aparece como fuera de alcance.",
-     ["Abajo, el Procedimiento muestra la fórmula y los valores de cada paso."]),
-    ("paso-7", "El diagrama unifilar", "El espacio de trabajo Diagrama muestra el unifilar dibujado a partir del proyecto. No se dibuja a mano: cualquier cambio en el cuadro de cargas se refleja aquí.",
-     ["Archivo, Exportar unifilar a DXF, para seguir en AutoCAD."]),
-    ("paso-8", "La memoria de cálculo", "El espacio Documentación muestra la vista previa de la memoria con los datos de la obra, el cuadro de cargas, el unifilar, las observaciones y el procedimiento. Expórtala a PDF con Ctrl+E.",
+    ("paso-6", "Revisa la normativa", "La pestaña Normativa lista cada verificación —ampacidad, protección, caída, tubería— con su estado y el artículo que aplica. La vista Revisar junta todo lo que falta del proyecto, con su arreglo; lo que la norma pide y el programa no verifica aparece como fuera de alcance.",
+     ["El procedimiento (<kbd>F7</kbd>) muestra abajo la fórmula y los valores de cada paso."]),
+    ("paso-7", "El diagrama unifilar", "La vista Unifilar muestra el diagrama dibujado a partir del proyecto; se acerca con Ctrl y la rueda o pellizcando, y se recorre arrastrando. No se dibuja a mano: cualquier cambio en el cuadro de cargas se refleja aquí.",
+     ["«Exportar DXF», para seguir en AutoCAD."]),
+    ("paso-8", "La memoria de cálculo", "La vista Memoria muestra la vista previa con los datos de la obra, el cuadro de cargas, el unifilar, las observaciones y el procedimiento. A la derecha capturas la firma y revisas «Antes de entregar». Expórtala a PDF con Ctrl+E.",
      ["Las observaciones listan todo lo que no cumple o no se evaluó."]),
     ("paso-9", "Guarda y exporta", "En Windows, Guardar escribe un archivo .iees en tu carpeta. En el navegador, el proyecto se guarda solo en ese navegador y «Descargar proyecto» te da el .iees para tener tu copia.",
-     ["El cuadro de cargas se exporta a Excel y se importa de vuelta.", "Un .iees abre igual en la app en línea y en la de Windows."]),
+     ["El cuadro de cargas se exporta a Excel y se importa de vuelta.", "<kbd>Ctrl</kbd> <kbd>K</kbd> busca cualquier comando, tablero o circuito.", "Un .iees abre igual en la app en línea y en la de Windows."]),
 ]
 steps_html = ""
 for k, (img, title, text, bullets) in enumerate(steps, 1):
@@ -450,7 +450,7 @@ keys = [
     ("<kbd>Ctrl</kbd> <kbd>Z</kbd> / <kbd>Ctrl</kbd> <kbd>Y</kbd>", "Deshacer y rehacer"),
     ("<kbd>Ctrl</kbd> <kbd>D</kbd>", "Duplicar el circuito seleccionado"),
     ("<kbd>Supr</kbd>", "Eliminar el circuito seleccionado"),
-    ("<kbd>F2</kbd> a <kbd>F8</kbd>", "Mostrar u ocultar paneles: Proyecto, Cuadro de cargas, Unifilar, Memoria, Procedimiento, Propiedades y Cálculo rápido. En el navegador, F5 recarga la página: usa el menú Ventana."),
+    ("<kbd>F2</kbd> a <kbd>F8</kbd>", "<kbd>F2</kbd> a <kbd>F6</kbd>: las vistas Proyecto, Tableros y circuitos, Unifilar, Revisar y Memoria; <kbd>F7</kbd>, el procedimiento; <kbd>F8</kbd>, el cálculo rápido. En el navegador, F5 recarga la página: usa la barra de vistas."),
 ]
 keys_html = "\n".join(f"        <tr><td>{a}</td><td>{b}</td></tr>" for a, b in keys)
 faq = [
@@ -459,7 +459,7 @@ faq = [
     ("¿Si borro los datos del navegador pierdo el proyecto?", "El proyecto que tenías abierto, sí. Por eso conviene descargar el .iees de vez en cuando: es tu copia y la puedes abrir en cualquier computadora."),
     ("¿La memoria que genera ya está aprobada?", "No. IEEStudio verifica contra la norma y lo dice claramente, pero la aprobación la da el ingeniero responsable que revisa y firma. El programa nunca marca un proyecto como aprobado."),
     ("¿Qué hago si algo dice «no evaluado»?", "Lee el motivo en la pestaña Normativa o en las observaciones de la memoria: casi siempre falta un dato, como la corriente de placa de un motor. Captúralo y se evalúa."),
-    ("¿Funciona en el celular?", "Abre, pero está pensado para pantallas grandes. En una computadora o tableta es mucho más cómodo."),
+    ("¿Funciona en el celular?", "Sí. En el teléfono la app usa una barra inferior con las cinco vistas, listas que se tocan y la ficha a pantalla completa; en una tableta, el cuadro completo con cajones para el navegador y la ficha. Todavía no se ha probado en un teléfono real con iOS; si algo no responde, repórtalo."),
     ("¿Por qué Windows dice «Windows protegió su PC»?", "Porque el instalador todavía no tiene firma digital; está en trámite. Elige «Más información» y «Ejecutar de todas formas». La versión en línea no tiene ese aviso."),
     ("Encontré un error o me falta algo", f'Repórtalo en <a href="{GH}/issues">GitHub</a>. Si es un error de cálculo, incluye el archivo .iees o los datos del circuito.'),
 ]
@@ -500,7 +500,7 @@ guia = head(p, "Guía", "Guía de uso de IEEStudio en video y paso a paso: proye
         <div class="show-text">
           <p class="kicker">Atajo</p>
           <h3>Cálculo rápido de un circuito</h3>
-          <p>Con <kbd>F8</kbd> o Herramientas, Cálculo rápido, calculas un circuito suelto: sistema, carga, longitud y conductor. Si no cumple, te da alternativas ya calculadas que aplicas con un clic, y con «Agregar al proyecto» lo pasas al tablero seleccionado.</p>
+          <p>Desde la pantalla de inicio, o con <kbd>F8</kbd> dentro de un proyecto, calculas un circuito suelto: sistema, carga, longitud y conductor. Si no cumple, te da alternativas ya calculadas que aplicas con un clic; su hoja se exporta en PDF, y dentro de un proyecto «Agregar al proyecto» lo pasa al tablero seleccionado.</p>
         </div>
       </div>
     </div>

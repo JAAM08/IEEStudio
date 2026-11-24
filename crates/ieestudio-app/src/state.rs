@@ -417,7 +417,8 @@ impl Doc {
         self.project.panels.len() - 1
     }
 
-    /// Tableros que se alimentan del tablero `panel`.
+    /// Tableros que se alimentan del tablero `panel` (lo usan las pruebas).
+    #[cfg(test)]
     pub fn subpanels(&self, panel: usize) -> Vec<usize> {
         let id = &self.project.panels[panel].id;
         (0..self.project.panels.len())

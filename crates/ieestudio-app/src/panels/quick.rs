@@ -44,7 +44,7 @@ fn card(p: &Palette) -> egui::Frame {
     egui::Frame::new()
         .fill(p.panel)
         .stroke(egui::Stroke::new(1.0, p.line))
-        .corner_radius(8)
+        .corner_radius(crate::theme::RADIUS_CARD)
         .inner_margin(14)
 }
 
@@ -627,7 +627,7 @@ impl QuickView {
                 egui::Frame::new()
                     .fill(p.raise)
                     .stroke(egui::Stroke::new(1.0, p.line))
-                    .corner_radius(8)
+                    .corner_radius(crate::theme::RADIUS_CARD)
                     .inner_margin(12)
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());

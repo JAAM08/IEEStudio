@@ -497,7 +497,13 @@ mod tests {
                             .map(|r| r.trim_start().to_string())
                             .collect()
                     };
-                    for rest in [after(".size("), after("FontId::new(")].concat() {
+                    let fonts = [
+                        after(".size("),
+                        after("FontId::new("),
+                        after("FontId::monospace("),
+                        after("FontId::proportional("),
+                    ];
+                    for rest in fonts.concat() {
                         if rest.starts_with(|c: char| c.is_ascii_digit()) {
                             problems.push(format!("{at}: tamaño de letra fuera de la escala"));
                         }
@@ -519,6 +525,15 @@ mod tests {
                                             .push(format!("{at}: margen {v} fuera de la retícula"));
                                     }
                                 }
+                            }
+                        }
+                    }
+                    // Radios: 6, 8 y 10 px (o cero); mejor con su nombre.
+                    for rest in after("corner_radius(") {
+                        let value = rest.split(')').next().unwrap_or("");
+                        if let Ok(v) = value.trim().parse::<i32>() {
+                            if ![0, 6, 8, 10].contains(&v) {
+                                problems.push(format!("{at}: radio {v} fuera del sistema"));
                             }
                         }
                     }
