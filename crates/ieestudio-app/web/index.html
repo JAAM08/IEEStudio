@@ -13,7 +13,10 @@
   :root { color-scheme: dark; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2024; }
   body { font: 15px/1.5 system-ui, "Segoe UI", sans-serif; color: #e6e8eb; }
-  #ieestudio { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+  /* Los gestos (deslizar, pellizcar) los maneja la app: el navegador no
+     recorre ni amplía la página por su cuenta. */
+  #ieestudio { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+  html, body { overscroll-behavior: none; }
   #carga {
     position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 18px;
     background: #1d2024; transition: opacity 0.25s ease;

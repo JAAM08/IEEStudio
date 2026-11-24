@@ -282,8 +282,10 @@ fn item_inline(
     status: Option<Status>,
 ) -> egui::Response {
     let width = ui.available_width();
-    let (rect, response) =
-        ui.allocate_exact_size(Vec2::new(width, crate::theme::ROW_H), Sense::click());
+    let (rect, response) = ui.allocate_exact_size(
+        Vec2::new(width, crate::theme::row_height(ui.ctx())),
+        Sense::click(),
+    );
     let painter = ui.painter_at(rect);
     // Selección en píldora, sin barra lateral: un solo indicador.
     if selected {

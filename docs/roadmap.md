@@ -131,6 +131,13 @@
   exportaciones en grupos de campos; unifilar con controles flotantes en
   cápsula, zoom con Ctrl y la rueda o pellizco sobre el cursor, arrastre, y
   sin dibujar lo que queda fuera de la ventana.
+- Rediseño 2026, etapa R6 (`rediseno-2026-r6-tablet-y-telefono.md`):
+  pantalla de inicio con dos experiencias, «Proyecto completo» y «Cálculo
+  rápido» (esta en su propia pantalla, sin proyecto); teléfono con barra
+  inferior, listas de tableros y circuitos, ficha a pantalla completa y hoja
+  inferior en el unifilar; tableta con el cuadro completo y cajones para el
+  navegador y la ficha; modo táctil de 44 px. Navegación y desplazamiento
+  validados con toques en Chromium con un teléfono emulado.
 
 ## Pendiente, en orden
 
@@ -154,13 +161,11 @@ El orden y el detalle están en `plan-1.0.md`. En resumen:
   `rediseno-2026-r1-linea-base.md`.
 - Por decidir tras usar la vista guiada: editar celdas directo en la tabla y
   plantillas de circuito.
-- Rediseño 2026, etapa R6 (además de lo de la maqueta R0): la pantalla de
-  inicio ofrece dos experiencias independientes, requisito del dueño del
-  proyecto del 18 de noviembre de 2026: «Proyecto completo» (crear un
-  proyecto nuevo o abrir uno existente) y «Cálculo rápido» (las herramientas
-  de cálculo directo, sin crear un proyecto). Va en R6 porque ahí el cálculo
-  rápido pasa a ser su propia pantalla en teléfono y se arma el marco de cada
-  tamaño; la elección se construye una vez para todos.
+- Rediseño 2026, etapa R7: sacar Revisar de `guided.rs` (en teléfono,
+  contadores en dos columnas e incidencias como tarjetas) y retirar el resto
+  de `guided.rs`, `egui_dock`, las opciones de línea de comandos de antes y
+  el aviso de «pantallas grandes» de la versión web. Probar en un teléfono y
+  una tableta reales (iOS Safari incluido).
 - Volver a tomar las capturas de la guía del sitio con la interfaz nueva.
 - Confirmar con la NMX-J-136-ANCE-2019 los símbolos del unifilar (cotejados
   con la edición 2007) y con el texto de la NMX-J-116-ANCE la tabla de

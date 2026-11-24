@@ -720,7 +720,7 @@ pub fn property(
     let Some(mut group) = open_group(ui) else {
         return ui
             .horizontal(|ui| {
-                ui.set_min_height(crate::theme::ROW_H);
+                ui.set_min_height(crate::theme::row_height(ui.ctx()));
                 fixed_label(ui, p, label);
                 add(ui);
             })
@@ -738,7 +738,7 @@ pub fn property(
     let response = ui
         .horizontal(|ui| {
             ui.set_max_width(layout_remaining(ui.available_width(), pad));
-            ui.set_min_height(crate::theme::ROW_H);
+            ui.set_min_height(crate::theme::row_height(ui.ctx()));
             ui.add_space(pad);
             fixed_label(ui, p, label);
             add(ui);

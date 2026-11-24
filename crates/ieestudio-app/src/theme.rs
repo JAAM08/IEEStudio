@@ -231,6 +231,55 @@ pub fn install_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+fn touch_id() -> egui::Id {
+    egui::Id::new("ieestudio-modo-tactil")
+}
+
+/// Si la interfaz está en modo táctil: teléfono, o una pantalla que se tocó.
+pub fn is_touch(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp(touch_id())).unwrap_or(false)
+}
+
+/// Alto de un renglón con el que se interactúa: 28 px con ratón, 44 px
+/// táctil.
+pub fn row_height(ctx: &egui::Context) -> f32 {
+    if is_touch(ctx) {
+        TOUCH_H
+    } else {
+        ROW_H
+    }
+}
+
+/// Cambia entre la densidad de escritorio y la táctil: controles de 44 px y
+/// texto de 15 px (excepción `TOUCH` del sistema visual). Solo hace algo si
+/// el modo cambió.
+pub fn set_touch(ctx: &egui::Context, touch: bool) {
+    if is_touch(ctx) == touch && ctx.data(|d| d.get_temp::<bool>(touch_id())).is_some() {
+        return;
+    }
+    ctx.data_mut(|d| d.insert_temp(touch_id(), touch));
+    let (text, control) = if touch {
+        (TOUCH, TOUCH_H)
+    } else {
+        (BODY, CONTROL_H)
+    };
+    ctx.all_styles_mut(|style| {
+        for (kind, family) in [
+            (TextStyle::Body, FontFamily::Proportional),
+            (TextStyle::Button, FontFamily::Proportional),
+            (TextStyle::Monospace, FontFamily::Monospace),
+        ] {
+            style.text_styles.insert(kind, FontId::new(text, family));
+        }
+        style.spacing.interact_size.y = control;
+        // Con el dedo, arrastrar sobre un texto recorre la lista en lugar de
+        // seleccionarlo.
+        style.interaction.selectable_labels = !touch;
+        style.spacing.button_padding = egui::vec2(if touch { SP3 } else { 10.0 }, SP1);
+        style.spacing.item_spacing = egui::vec2(SP2, if touch { SP2 } else { SP1 });
+    });
+}
+
 /// Aplica la paleta y la densidad de un programa de escritorio profesional.
 pub fn apply(ctx: &egui::Context, p: &Palette) {
     ctx.set_theme(if p.dark {
@@ -316,6 +365,13 @@ pub fn apply(ctx: &egui::Context, p: &Palette) {
         // Separadores y bordes de regiones: el divisor discreto.
         v.widgets.noninteractive.bg_stroke = Stroke::new(1.0, p.hair);
     });
+    // La paleta nueva trae la densidad de escritorio: se vuelve a la táctil
+    // si estaba puesta.
+    let touch = is_touch(ctx);
+    ctx.data_mut(|d| d.remove::<bool>(touch_id()));
+    if touch {
+        set_touch(ctx, true);
+    }
 }
 
 #[cfg(test)]

@@ -110,8 +110,12 @@ grupos compactos; el cuadro de cargas va directo sobre el contenido.
   ingeniero, nunca el programa). «Siguiente» es un botón de texto, sin
   amarillo.
 - **Teléfono (R6):** barra inferior de cinco destinos con una cápsula detrás
-  del ícono activo; hojas inferiores; renglones de 44 px. La navegación y el
-  desplazamiento se validan funcionalmente en R6.
+  del ícono activo; hojas inferiores; renglones de 44 px. Como en la mesa de
+  teléfono aprobada, no lleva barra de estado: el veredicto con sus tres
+  niveles está en Proyecto, en Revisar y en cada ficha.
+- **Tableta (R6):** las vistas solo con su ícono; navegador y ficha en
+  **cajones** que se abren encima con un velo detrás (superficie de
+  contenido, la sombra de lo flotante, 150 ms al deslizarse).
 
 ## 7. Densidad
 

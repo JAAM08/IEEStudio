@@ -10,9 +10,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::chooser;
 use crate::commands::{Command, CommandPalette};
+use crate::compact;
 use crate::files::{self, Filter, Inbox, Picked, Purpose, Saved};
 use crate::guided::{self, Step};
-use crate::layout;
+use crate::home::{self, Start};
+use crate::layout::{self, Class};
 use crate::panels::{schedule, Shared};
 use crate::shell::{self, Arrangement};
 use crate::state::{empty_project, Doc, Selection};
@@ -146,14 +148,18 @@ pub struct App {
     home: bool,
     /// Vista activa del marco.
     view: View,
-    /// Contenido de «Tableros y circuitos» en ventanas sin inspector.
-    sub: Step,
     /// Dos vistas a la vez, si la ventana es lo bastante ancha.
     split: bool,
     /// Panel de procedimiento abierto abajo.
     procedure: bool,
-    /// Cálculo rápido como ventana flotante.
+    /// Cálculo rápido como ventana flotante, dentro de un proyecto.
     quick_window: bool,
+    /// La experiencia «Cálculo rápido» en su propia pantalla, sin proyecto.
+    quick_screen: bool,
+    /// La pantalla se tocó: controles táctiles aunque la ventana sea ancha.
+    touch: bool,
+    /// Clase de tamaño de la ventana en el último cuadro.
+    class: Class,
     /// Ventana «Personalizar columnas».
     columns_window: bool,
 }
@@ -174,14 +180,15 @@ pub struct Options {
     /// Vista en la que se empieza (`--vista`, y los `--paso` y `--espacio`
     /// de antes).
     pub view: Option<View>,
-    /// Contenido de «Tableros y circuitos» en ventanas angostas.
-    pub sub: Option<Step>,
     /// Empieza con el panel de procedimiento abierto.
     pub procedure: bool,
     /// Empieza con dos vistas a la vez.
     pub split: bool,
-    /// Empieza con el cálculo rápido abierto.
+    /// Empieza en la experiencia «Cálculo rápido».
     pub quick: bool,
+    /// Empieza con la ficha del elemento elegido abierta: a pantalla completa
+    /// en el teléfono, en su cajón en la tableta.
+    pub ficha: bool,
     /// Empieza con la ventana «¿Qué vas a conectar?» abierta, para revisarla.
     pub chooser: bool,
     /// Empieza en el unifilar, ajustado al ancho de la ventana.
@@ -245,10 +252,12 @@ impl App {
             commands: CommandPalette::default(),
             home: false,
             view: options.view.or(saved_view).unwrap_or_default(),
-            sub: options.sub.unwrap_or(Step::Circuits),
             split: options.split || saved_split,
             procedure: options.procedure,
-            quick_window: options.quick,
+            quick_window: false,
+            quick_screen: options.quick,
+            touch: false,
+            class: Class::Desktop,
             columns_window: false,
         };
         app.doc.selection = Selection::Circuit(0, 1);
@@ -287,7 +296,9 @@ impl App {
         }
         // Sin nada que retomar se empieza en la pantalla de inicio; las
         // capturas de prueba solo la muestran si se pide.
-        app.home = options.home || (!resumed && !capturing);
+        app.home = options.home || (!resumed && !capturing && !options.quick);
+        // Abrir un proyecto sale del cálculo rápido; si se pidió, se vuelve.
+        app.quick_screen = options.quick && !options.home;
         if options.palette {
             app.commands.toggle();
         }
@@ -316,6 +327,8 @@ impl App {
         if options.diagram {
             app.view = View::Diagram;
         }
+        app.shared.ficha_open = options.ficha;
+        app.shared.inspector_drawer = options.ficha;
         if app.view == View::Diagram {
             app.shared.diagram_fit = true;
         }
@@ -327,12 +340,16 @@ impl App {
     fn set_project(&mut self, project: Project, path: Option<PathBuf>) {
         self.doc = Doc::new(project, path);
         self.home = false;
+        self.quick_screen = false;
     }
 
     /// Hace lo que se eligió en la paleta de comandos.
     fn run_command(&mut self, command: Command) {
         match command {
-            Command::Home => self.home = true,
+            Command::Home => {
+                self.home = true;
+                self.quick_screen = false;
+            }
             Command::New => self.request(Pending::New),
             Command::Open => self.request(Pending::Open),
             Command::Save => self.save(false),
@@ -358,8 +375,14 @@ impl App {
                 }
             }
             Command::Quick => {
-                self.home = false;
-                self.quick_window = true;
+                // Desde el inicio o en el teléfono es su propia pantalla; dentro
+                // de un proyecto en escritorio, una ventana encima.
+                if self.home || self.class == Class::Phone {
+                    self.home = false;
+                    self.quick_screen = true;
+                } else {
+                    self.quick_window = true;
+                }
             }
             Command::View(view) => self.go_view(view),
             Command::Procedure => self.toggle_procedure(),
@@ -373,10 +396,8 @@ impl App {
                 self.home = false;
                 self.doc.selection = selection;
                 self.view = View::Schedule;
-                self.sub = match selection {
-                    Selection::Circuit(..) => Step::Circuits,
-                    _ => Step::Panels,
-                };
+                // En el teléfono se va directo a la ficha de lo buscado.
+                self.shared.ficha_open = self.class == Class::Phone;
             }
         }
     }
@@ -398,10 +419,11 @@ impl App {
 
     /// Va al contenido que pidió un paso de las vistas.
     fn go_step(&mut self, step: Step) {
-        let (view, sub) = shell::target(step);
+        let (view, _) = shell::target(step);
         self.go_view(view);
-        if let Some(sub) = sub {
-            self.sub = sub;
+        // En el teléfono, lo que se pidió desde otra vista se abre en su ficha.
+        if self.class == Class::Phone && self.doc.selection != Selection::Project {
+            self.shared.ficha_open = true;
         }
     }
 
@@ -1018,7 +1040,9 @@ impl App {
     fn top_bar(&mut self, ui: &mut egui::Ui) {
         // En una ventana angosta no cabe todo en un renglón: la barra entera
         // se recorre de lado, sin encimar nada ni dejar botones fuera.
-        if layout::bars_in_one_row(ui.available_width()) {
+        // En tableta las vistas van solo con su ícono y la barra no se recorre:
+        // así quedan a la vista los botones de los cajones.
+        if layout::bars_in_one_row(ui.available_width()) || self.class == Class::Tablet {
             self.top_bar_row(ui, false);
         } else {
             egui::ScrollArea::horizontal()
@@ -1051,7 +1075,9 @@ impl App {
                     .size(crate::theme::ICON_BAR)
                     .color(p.accent),
             );
-            ui.label(strong("IEEStudio").size(crate::theme::ICON));
+            if self.class == Class::Desktop {
+                ui.label(strong("IEEStudio").size(crate::theme::ICON));
+            }
             let dirty = if self.doc.dirty { " •" } else { "" };
             let file = self
                 .doc
@@ -1059,21 +1085,25 @@ impl App {
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .map(|n| n.to_string_lossy().into_owned());
-            ui.add(
-                egui::Label::new(muted(&p, format!("· {}{dirty}", self.doc.project.name)))
-                    .truncate(),
-            )
-            .on_hover_text(format!(
-                "{}; • significa cambios sin guardar",
-                file.unwrap_or_else(|| {
-                    // En el navegador el proyecto se guarda solo ahí.
-                    if files::WEB {
-                        "En este navegador".to_string()
-                    } else {
-                        "Sin guardar".to_string()
-                    }
-                })
-            ));
+            // En tableta el nombre ya va en la barra de estado; arriba solo
+            // queda la marca de cambios sin guardar.
+            let name = if self.class == Class::Desktop {
+                format!("· {}{dirty}", self.doc.project.name)
+            } else {
+                dirty.trim().to_string()
+            };
+            ui.add(egui::Label::new(muted(&p, name)).truncate())
+                .on_hover_text(format!(
+                    "{}; • significa cambios sin guardar",
+                    file.unwrap_or_else(|| {
+                        // En el navegador el proyecto se guarda solo ahí.
+                        if files::WEB {
+                            "En este navegador".to_string()
+                        } else {
+                            "Sin guardar".to_string()
+                        }
+                    })
+                ));
             if ui
                 .add_enabled(
                     self.doc.can_undo(),
@@ -1101,7 +1131,9 @@ impl App {
             ui.add_space(crate::theme::SP3);
             // Las vistas completas necesitan unos 600 px y lo de la derecha
             // 190: si no caben, las vistas se reducen a su ícono.
-            let compact = scrolling || ui.available_width() < FULL_VIEWS + RIGHT_TOOLS;
+            let compact = scrolling
+                || self.class != Class::Desktop
+                || ui.available_width() < FULL_VIEWS + RIGHT_TOOLS;
             // Si aun así no caben, se recorren de lado en lugar de quedar
             // debajo de los botones de la derecha.
             let room = layout::remaining(ui.available_width(), RIGHT_TOOLS);
@@ -1152,11 +1184,12 @@ impl App {
     /// procedimiento y cálculo rápido, en ese orden de derecha a izquierda.
     fn top_tools(&mut self, ui: &mut egui::Ui, right_to_left: bool) {
         let p = self.shared.palette;
-        let order: [u8; 5] = if right_to_left {
-            [0, 1, 2, 3, 4]
+        let order: [u8; 7] = if right_to_left {
+            [0, 1, 2, 3, 4, 5, 6]
         } else {
-            [4, 3, 2, 1, 0]
+            [6, 5, 4, 3, 2, 1, 0]
         };
+        let drawers = self.class == Class::Tablet && !self.home && self.view.has_regions();
         let window_width = ui.ctx().content_rect().width();
         for tool in order {
             match tool {
@@ -1232,14 +1265,56 @@ impl App {
                         self.split = !self.split;
                     }
                 }
+                // En tableta, el navegador y la ficha viven en cajones.
+                5 if drawers => {
+                    let on = self.shared.inspector_drawer;
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(icon::SLIDERS_HORIZONTAL)
+                                    .size(crate::theme::ICON_BAR)
+                                    .color(if on { p.accent } else { p.ink2 }),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text("Ficha del elemento elegido")
+                        .clicked()
+                    {
+                        self.shared.inspector_drawer = !on;
+                        self.shared.navigator_drawer = false;
+                    }
+                }
+                6 if drawers => {
+                    let on = self.shared.navigator_drawer;
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(icon::SIDEBAR)
+                                    .size(crate::theme::ICON_BAR)
+                                    .color(if on { p.accent } else { p.ink2 }),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text("Navegador: tableros y circuitos del proyecto")
+                        .clicked()
+                    {
+                        self.shared.navigator_drawer = !on;
+                        self.shared.inspector_drawer = false;
+                    }
+                }
                 4 => {
                     ui.scope(|ui| {
                         let w = &mut ui.style_mut().visuals.widgets;
                         w.inactive.bg_stroke = egui::Stroke::new(1.0, p.line);
                         w.inactive.weak_bg_fill = p.panel;
+                        let text = if self.class == Class::Desktop {
+                            format!("{}  Cálculo rápido", icon::CALCULATOR)
+                        } else {
+                            icon::CALCULATOR.to_string()
+                        };
                         if ui
                             .add(
-                                egui::Button::new(format!("{}  Cálculo rápido", icon::CALCULATOR))
+                                egui::Button::new(text)
                                     .min_size(egui::vec2(0.0, crate::theme::BAR_CONTROL_H)),
                             )
                             .on_hover_text("Un circuito suelto, sin proyecto (F8)")
@@ -1507,7 +1582,8 @@ impl App {
                     Symbol::Load(kind) => {
                         self.doc.add_circuit_of(panel, kind);
                         self.view = View::Schedule;
-                        self.sub = Step::Circuits;
+                        // En el teléfono, el circuito nuevo abre su ficha.
+                        self.shared.ficha_open = self.class == Class::Phone;
                         // La descripción queda lista para escribir.
                         crate::panels::properties::focus_description(ctx);
                     }
@@ -1520,7 +1596,7 @@ impl App {
                         ));
                         // Su alimentador se captura en la ficha del tablero.
                         self.view = View::Schedule;
-                        self.sub = Step::Panels;
+                        self.shared.ficha_open = self.class == Class::Phone;
                     }
                 }
             }
@@ -1714,6 +1790,303 @@ impl App {
 
 impl App {
     /// Un cuadro de la interfaz.
+    /// Modo táctil: en el teléfono siempre; en otros tamaños, desde que la
+    /// pantalla se toca hasta que se vuelve a mover el ratón.
+    fn update_touch(&mut self, ctx: &egui::Context) {
+        let (touched, moused) = ctx.input(|i| {
+            let touched = i
+                .events
+                .iter()
+                .any(|e| matches!(e, egui::Event::Touch { .. }));
+            let moved = i
+                .events
+                .iter()
+                .any(|e| matches!(e, egui::Event::PointerMoved(_)));
+            (touched, moved && !touched && !i.pointer.any_down())
+        });
+        if touched {
+            self.touch = true;
+        } else if moused {
+            self.touch = false;
+        }
+        theme::set_touch(ctx, self.touch || self.class == Class::Phone);
+    }
+
+    /// Escritorio y tableta: barra superior con las vistas, barra de estado
+    /// y la vista activa con sus regiones o cajones.
+    fn desktop_frame(
+        &mut self,
+        ui: &mut egui::Ui,
+        window_width: f32,
+    ) -> (Option<shell::Outcome>, Option<Start>) {
+        let p = self.shared.palette;
+        egui::Panel::top("menu")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg)
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
+            )
+            .show(ui, |ui| self.top_bar(ui));
+        egui::Panel::bottom("estado")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg)
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
+            )
+            .show(ui, |ui| self.status_bar(ui, window_width));
+        self.center(ui, window_width)
+    }
+
+    /// La pantalla de inicio o la vista activa, entre las barras.
+    fn center(
+        &mut self,
+        ui: &mut egui::Ui,
+        window_width: f32,
+    ) -> (Option<shell::Outcome>, Option<Start>) {
+        let p = self.shared.palette;
+        let mut start = None;
+        let home = self.home;
+        let recent = self.recent.clone();
+        let mut arrangement = Arrangement {
+            view: self.view,
+            regions: layout::regions(window_width, self.split),
+            procedure: self.procedure,
+            class: self.class,
+        };
+        let mut outcome = None;
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(p.bg))
+            .show(ui, |ui| {
+                if home {
+                    start = home::show(ui, &p, &recent, &self.doc.project.name);
+                    return;
+                }
+                outcome = Some(shell::show_view(
+                    ui,
+                    &mut arrangement,
+                    &mut self.doc,
+                    &mut self.shared,
+                ));
+            });
+        self.procedure = arrangement.procedure;
+        (outcome, start)
+    }
+
+    /// Teléfono: barra superior corta, la vista activa en una columna y la
+    /// barra inferior con los cinco destinos.
+    fn phone_frame(&mut self, ui: &mut egui::Ui) -> (Option<shell::Outcome>, Option<Start>) {
+        let p = self.shared.palette;
+        egui::Panel::top("menu")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg)
+                    .inner_margin(egui::Margin::symmetric(8, 0)),
+            )
+            .show(ui, |ui| self.phone_top_bar(ui));
+        if !self.home {
+            egui::Panel::bottom("destinos")
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.bg)
+                        .inner_margin(egui::Margin::symmetric(4, 4)),
+                )
+                .show(ui, |ui| {
+                    if let Some(view) = compact::bottom_bar(ui, &p, Some(self.view), &self.doc) {
+                        self.shared.sheet = None;
+                        self.go_view(view);
+                    }
+                });
+        }
+        // Los avisos van en un renglón arriba de los destinos.
+        let message = self
+            .notice
+            .as_ref()
+            .map(|n| (icon::WARNING_CIRCLE, n.clone(), p.bad))
+            .or_else(|| self.done.as_ref().map(|d| (icon::CHECK, d.clone(), p.ok)));
+        if let Some((glyph, text, color)) = message {
+            egui::Panel::bottom("aviso-telefono")
+                .frame(
+                    egui::Frame::new()
+                        .fill(p.bg)
+                        .inner_margin(egui::Margin::symmetric(12, 4)),
+                )
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(RichText::new(format!("{glyph} {text}")).color(color))
+                            .wrap(),
+                    );
+                });
+        }
+        let width = ui.available_width();
+        self.center(ui, width)
+    }
+
+    /// Barra superior del teléfono: el nombre o «‹ atrás» a la izquierda;
+    /// búsqueda y menú a la derecha.
+    fn phone_top_bar(&mut self, ui: &mut egui::Ui) {
+        let p = self.shared.palette;
+        ui.horizontal(|ui| {
+            ui.set_min_height(theme::TOUCH_H);
+            let back = if self.home {
+                None
+            } else {
+                compact::back(self.view, &self.doc, &self.shared)
+            };
+            match back {
+                Some(label) => {
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(format!("{}  {label}", icon::CARET_LEFT))
+                                    .color(p.info),
+                            )
+                            .frame(false),
+                        )
+                        .clicked()
+                    {
+                        compact::go_back(&mut self.doc, &mut self.shared);
+                    }
+                }
+                None => {
+                    ui.label(
+                        RichText::new(icon::LIGHTNING)
+                            .size(theme::ICON_BAR)
+                            .color(p.accent),
+                    );
+                    ui.label(strong("IEEStudio").size(theme::HEAD));
+                }
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.style_mut().visuals.widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                ui.style_mut().visuals.widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+                ui.menu_button(RichText::new(icon::LIST).size(theme::ICON_BAR), |ui| {
+                    self.phone_menu(ui);
+                });
+                if ui
+                    .add(
+                        egui::Button::new(
+                            RichText::new(icon::MAGNIFYING_GLASS).size(theme::ICON_BAR),
+                        )
+                        .frame(false),
+                    )
+                    .clicked()
+                {
+                    self.commands.toggle();
+                }
+            });
+        });
+    }
+
+    /// Menú del teléfono: lo de los menús de escritorio que sirve con el
+    /// dedo, más deshacer, el tema y el cálculo rápido.
+    fn phone_menu(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .add_enabled(
+                self.doc.can_undo(),
+                egui::Button::new(format!("{}  Deshacer", icon::ARROW_COUNTER_CLOCKWISE)),
+            )
+            .clicked()
+        {
+            self.doc.undo();
+            ui.close();
+        }
+        if ui
+            .add_enabled(
+                self.doc.can_redo(),
+                egui::Button::new(format!("{}  Rehacer", icon::ARROW_CLOCKWISE)),
+            )
+            .clicked()
+        {
+            self.doc.redo();
+            ui.close();
+        }
+        ui.separator();
+        if ui
+            .button(format!("{}  Cálculo rápido", icon::CALCULATOR))
+            .clicked()
+        {
+            self.run_command(Command::Quick);
+            ui.close();
+        }
+        if ui.button(format!("{}  Inicio", icon::HOUSE)).clicked() {
+            self.run_command(Command::Home);
+            ui.close();
+        }
+        let theme_label = if self.dark {
+            format!("{}  Tema claro", icon::SUN)
+        } else {
+            format!("{}  Tema oscuro", icon::MOON)
+        };
+        if ui.button(theme_label).clicked() {
+            self.run_command(Command::ToggleTheme);
+            ui.close();
+        }
+        ui.separator();
+        ui.menu_button("Archivo", |ui| self.file_menu(ui));
+        ui.menu_button("Ayuda", |ui| self.help_menu(ui));
+    }
+
+    /// La experiencia «Cálculo rápido»: las herramientas de cálculo directo
+    /// a pantalla completa, sin proyecto ni barra de vistas.
+    fn quick_screen_ui(&mut self, ui: &mut egui::Ui) {
+        let p = self.shared.palette;
+        egui::Panel::top("menu")
+            .frame(
+                egui::Frame::new()
+                    .fill(p.bg)
+                    .inner_margin(egui::Margin::symmetric(8, 4)),
+            )
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.set_min_height(theme::BAR_CONTROL_H);
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(format!("{}  Inicio", icon::CARET_LEFT))
+                                    .color(p.info),
+                            )
+                            .frame(false),
+                        )
+                        .on_hover_text("Volver a la pantalla de inicio")
+                        .clicked()
+                    {
+                        self.home = true;
+                        self.quick_screen = false;
+                    }
+                    ui.label(
+                        RichText::new(icon::CALCULATOR)
+                            .size(theme::ICON_BAR)
+                            .color(p.accent),
+                    );
+                    ui.label(strong("Cálculo rápido").size(theme::HEAD));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let (glyph, tip) = if self.dark {
+                            (icon::SUN, "Cambiar a tema claro")
+                        } else {
+                            (icon::MOON, "Cambiar a tema oscuro")
+                        };
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new(glyph).size(theme::ICON_BAR))
+                                    .frame(false),
+                            )
+                            .on_hover_text(tip)
+                            .clicked()
+                        {
+                            self.run_command(Command::ToggleTheme);
+                        }
+                    });
+                });
+            });
+        let mut export = false;
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new().fill(p.bg))
+            .show(ui, |ui| export = self.shared.quick.ui(ui, &p, true));
+        if export {
+            self.export_pdf(true);
+        }
+    }
+
     fn draw(&mut self, ui: &mut egui::Ui) {
         let p = self.shared.palette;
         let ctx = ui.ctx().clone();
@@ -1731,49 +2104,18 @@ impl App {
         }
         self.receive();
 
-        egui::Panel::top("menu")
-            .frame(
-                egui::Frame::new()
-                    .fill(p.bg)
-                    .inner_margin(egui::Margin::symmetric(8, 4)),
-            )
-            .show(ui, |ui| self.top_bar(ui));
         let window_width = ui.available_width();
-        egui::Panel::bottom("estado")
-            .frame(
-                egui::Frame::new()
-                    .fill(p.bg)
-                    .inner_margin(egui::Margin::symmetric(8, 4)),
-            )
-            .show(ui, |ui| self.status_bar(ui, window_width));
-
+        self.class = layout::class(window_width);
+        self.update_touch(&ctx);
         let revision = self.doc.revision;
-        let mut start = None;
-        let home = self.home;
-        let recent = self.recent.clone();
-        let mut arrangement = Arrangement {
-            view: self.view,
-            sub: self.sub,
-            regions: layout::regions(window_width, self.split),
-            procedure: self.procedure,
+        let (outcome, start) = if self.quick_screen {
+            self.quick_screen_ui(ui);
+            (None, None)
+        } else if self.class == Class::Phone {
+            self.phone_frame(ui)
+        } else {
+            self.desktop_frame(ui, window_width)
         };
-        let mut outcome = None;
-        egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(p.bg))
-            .show(ui, |ui| {
-                if home {
-                    start = home_screen(ui, &p, &recent, &self.doc.project.name);
-                    return;
-                }
-                outcome = Some(shell::show_view(
-                    ui,
-                    &mut arrangement,
-                    &mut self.doc,
-                    &mut self.shared,
-                ));
-            });
-        self.sub = arrangement.sub;
-        self.procedure = arrangement.procedure;
         if let Some(outcome) = outcome {
             if let Some(step) = outcome.go {
                 self.go_step(step);
@@ -1789,7 +2131,10 @@ impl App {
             Some(Start::New) => self.request(Pending::New),
             Some(Start::Open) => self.request(Pending::Open),
             Some(Start::Example) => self.request(Pending::Example),
-            Some(Start::Quick) => self.run_command(Command::Quick),
+            Some(Start::Quick) => {
+                self.home = false;
+                self.quick_screen = true;
+            }
             Some(Start::Recent(path)) => self.request(Pending::OpenPath(path)),
             Some(Start::Back) => self.home = false,
             None => {}
@@ -1831,18 +2176,25 @@ impl App {
         }
         if self.quick_window {
             let mut open = true;
+            let mut export = false;
             egui::Window::new(format!("{}  Cálculo rápido", icon::CALCULATOR))
                 .open(&mut open)
                 .default_size([1100.0, 700.0])
                 .default_pos([160.0, 70.0])
                 .collapsible(false)
-                .show(&ctx, |ui| self.shared.quick.ui(ui, &p));
+                .show(&ctx, |ui| {
+                    if self.shared.quick.ui(ui, &p, false) {
+                        export = true;
+                    }
+                });
             self.quick_window = open;
+            if export {
+                self.export_pdf(true);
+            }
         }
         if let Some(input) = self.shared.quick.take_request() {
             self.quick_to_project(&input);
             self.quick_window = false;
-            self.sub = Step::Circuits;
         }
         // El historial registra un cambio cuando la interacción terminó.
         let settled = !ctx.input(|i| i.pointer.any_down()) && ctx.memory(|m| m.focused().is_none());
@@ -1922,171 +2274,6 @@ struct ImportPreview {
     project: Project,
     /// Si cambia algo del proyecto abierto.
     changes: bool,
-}
-
-/// Qué se eligió en la pantalla de inicio.
-enum Start {
-    New,
-    Open,
-    Example,
-    Quick,
-    Recent(PathBuf),
-    /// Volver al proyecto abierto.
-    Back,
-}
-
-/// Tarjeta de la pantalla de inicio: ícono, título y una línea de qué hace.
-fn start_card(ui: &mut egui::Ui, p: &Palette, glyph: &str, title: &str, hint: &str) -> bool {
-    let size = egui::vec2(172.0, 118.0);
-    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
-    let hovered = response.hovered();
-    ui.painter().rect(
-        rect,
-        6.0,
-        if hovered { p.raise } else { p.panel },
-        egui::Stroke::new(1.0, if hovered { p.ink3 } else { p.line }),
-        egui::StrokeKind::Inside,
-    );
-    let mut child = ui.new_child(
-        egui::UiBuilder::new()
-            .max_rect(rect.shrink(14.0))
-            .layout(Layout::top_down(Align::Min)),
-    );
-    child.label(
-        RichText::new(glyph)
-            .size(crate::theme::ICON_BAR)
-            .color(p.accent_text),
-    );
-    child.add_space(crate::theme::SP2);
-    child.label(strong(title).size(crate::theme::ICON));
-    child.add(egui::Label::new(muted(p, hint).size(crate::theme::ICON)).wrap());
-    if hovered {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-    }
-    response.clicked()
-}
-
-/// Pantalla de inicio: lo que se puede hacer al abrir el programa, sin
-/// paneles vacíos alrededor.
-fn home_screen(
-    ui: &mut egui::Ui,
-    p: &Palette,
-    recent: &[PathBuf],
-    open_name: &str,
-) -> Option<Start> {
-    let mut chosen = None;
-    let width = 4.0 * 172.0 + 3.0 * 12.0;
-    ui.vertical_centered(|ui| {
-        ui.add_space((ui.available_height() * 0.12).max(24.0));
-        ui.label(
-            RichText::new(icon::LIGHTNING)
-                .size(crate::theme::ICON_BAR)
-                .color(p.accent),
-        );
-        ui.label(strong("IEEStudio").size(crate::theme::ICON_BAR));
-        ui.label(muted(
-            p,
-            "Cálculo de instalaciones eléctricas de baja tensión · NOM-001-SEDE-2012",
-        ));
-        ui.add_space(crate::theme::SP6);
-    });
-    let left = ((ui.available_width() - width) / 2.0).max(16.0);
-    ui.horizontal(|ui| {
-        ui.add_space(left);
-        ui.spacing_mut().item_spacing.x = 12.0;
-        if start_card(
-            ui,
-            p,
-            icon::FILE_PLUS,
-            "Nuevo proyecto",
-            "Un tablero vacío para empezar · Ctrl+N",
-        ) {
-            chosen = Some(Start::New);
-        }
-        if start_card(
-            ui,
-            p,
-            icon::FOLDER_OPEN,
-            "Abrir proyecto",
-            "Un archivo .iees que ya tienes · Ctrl+O",
-        ) {
-            chosen = Some(Start::Open);
-        }
-        if start_card(
-            ui,
-            p,
-            icon::HOUSE,
-            "Proyecto de ejemplo",
-            "Una casa con seis circuitos para conocer el programa",
-        ) {
-            chosen = Some(Start::Example);
-        }
-        if start_card(
-            ui,
-            p,
-            icon::CALCULATOR,
-            "Cálculo rápido",
-            "Un circuito suelto con su procedimiento · F8",
-        ) {
-            chosen = Some(Start::Quick);
-        }
-    });
-    ui.add_space(crate::theme::SP6);
-    let existing: Vec<&PathBuf> = recent.iter().filter(|p| p.exists()).take(6).collect();
-    if !files::WEB && !existing.is_empty() {
-        ui.horizontal(|ui| {
-            ui.add_space(left);
-            ui.vertical(|ui| {
-                ui.set_width(width);
-                ui.label(
-                    RichText::new("Recientes")
-                        .size(crate::theme::FOOT)
-                        .color(p.ink3)
-                        .family(theme::semibold()),
-                );
-                ui.add_space(2.0);
-                for path in existing {
-                    let name = path.file_name().map_or_else(
-                        || path.display().to_string(),
-                        |n| n.to_string_lossy().into_owned(),
-                    );
-                    let folder = path
-                        .parent()
-                        .map_or_else(String::new, |d| d.display().to_string());
-                    let row = ui
-                        .horizontal(|ui| {
-                            ui.label(RichText::new(icon::FILE).color(p.ink2));
-                            ui.label(RichText::new(name));
-                            ui.label(muted(p, folder).size(crate::theme::ICON));
-                        })
-                        .response
-                        .interact(egui::Sense::click())
-                        .on_hover_cursor(egui::CursorIcon::PointingHand);
-                    if row.clicked() {
-                        chosen = Some(Start::Recent(path.clone()));
-                    }
-                }
-            });
-        });
-        ui.add_space(crate::theme::SP4);
-    }
-    ui.vertical_centered(|ui| {
-        if ui
-            .button(format!("{}  Volver a «{open_name}»", icon::ARROW_LEFT))
-            .clicked()
-        {
-            chosen = Some(Start::Back);
-        }
-        ui.add_space(crate::theme::SP4);
-        ui.label(
-            muted(
-                p,
-                "Ctrl+K busca cualquier comando, tablero o circuito. IEEStudio calcula y verifica; la aprobación es de quien firma.",
-            )
-            .size(crate::theme::FOOT),
-        );
-    });
-    chosen
 }
 
 /// Resumen de los tiempos de `--medir`: el primer cuadro aparte, porque arma

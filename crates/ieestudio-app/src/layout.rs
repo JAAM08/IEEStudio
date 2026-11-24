@@ -71,6 +71,38 @@ pub const INSPECTOR_W: f32 = 328.0;
 /// maqueta R0.
 pub const SPLIT_FROM: f32 = 1360.0;
 
+/// Ancho de ventana por debajo del cual se arma el marco de teléfono: barra
+/// inferior, listas y ficha a pantalla completa (maqueta R0, sección 7).
+pub const PHONE: f32 = 600.0;
+
+/// Clase de tamaño de la ventana: decide cómo se arma el marco.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Class {
+    /// 900 px o más: navegador e inspector fijos.
+    Desktop,
+    /// De 600 a 899 px: navegador e inspector en cajones que se abren encima.
+    Tablet,
+    /// Menos de 600 px: barra inferior, una columna y hojas.
+    Phone,
+}
+
+/// La clase de una ventana de `width` px.
+pub fn class(width: f32) -> Class {
+    if width >= WIDE {
+        Class::Desktop
+    } else if width >= PHONE {
+        Class::Tablet
+    } else {
+        Class::Phone
+    }
+}
+
+/// Ancho de un cajón lateral: el del panel de escritorio, sin tapar más de
+/// cinco sextas partes de la ventana.
+pub fn drawer_width(window: f32, wanted: f32) -> f32 {
+    wanted.min(window * 5.0 / 6.0).max(0.0)
+}
+
 /// Qué regiones fijas caben alrededor de la vista activa.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Regions {
@@ -186,6 +218,22 @@ mod tests {
             let r = regions(width, true);
             assert!(!r.navigator && !r.inspector && !r.split);
         }
+    }
+
+    #[test]
+    fn each_width_has_its_frame() {
+        assert_eq!(class(1440.0), Class::Desktop);
+        assert_eq!(class(900.0), Class::Desktop);
+        assert_eq!(class(899.0), Class::Tablet);
+        assert_eq!(class(768.0), Class::Tablet);
+        assert_eq!(class(600.0), Class::Tablet);
+        assert_eq!(class(599.0), Class::Phone);
+        assert_eq!(class(390.0), Class::Phone);
+        assert_eq!(class(0.0), Class::Phone);
+        // Un cajón nunca tapa toda la ventana ni queda negativo.
+        assert_eq!(drawer_width(768.0, INSPECTOR_W), INSPECTOR_W);
+        assert_eq!(drawer_width(300.0, INSPECTOR_W), 250.0);
+        assert_eq!(drawer_width(-5.0, INSPECTOR_W), 0.0);
     }
 
     #[test]

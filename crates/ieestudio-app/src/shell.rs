@@ -4,8 +4,9 @@
 use eframe::egui::{self, Align, Layout, RichText, Sense};
 use egui_phosphor::regular as icon;
 
+use crate::compact;
 use crate::guided::{self, Export, Step};
-use crate::layout::{self, Regions};
+use crate::layout::{self, Class, Regions};
 use crate::panels::{procedure, Shared, Viewer};
 use crate::state::Doc;
 use crate::theme::{semibold, Palette};
@@ -53,6 +54,9 @@ fn capsule_items(
     pending: usize,
 ) -> Option<View> {
     let mut chosen = None;
+    // En tableta todas van solo con su ícono, también la activa: así caben
+    // las cinco junto a los botones de los cajones.
+    let icons_only = compact && ui.ctx().content_rect().width() < layout::WIDE;
     for view in View::ALL {
         let now = current == Some(view);
         let ink = if now { p.ink } else { p.ink2 };
@@ -82,7 +86,7 @@ fn capsule_items(
                             .size(crate::theme::ICON)
                             .color(if now { p.accent } else { p.ink3 }),
                     );
-                    if now || !compact {
+                    if (now && !icons_only) || !compact {
                         let label = RichText::new(view.title()).color(ink);
                         ui.label(if now { label.family(semibold()) } else { label });
                     }
@@ -135,10 +139,10 @@ pub struct Outcome {
 /// Estado de la interfaz que decide cómo se arma la vista activa.
 pub struct Arrangement {
     pub view: View,
-    /// Contenido de «Tableros y circuitos» en ventanas sin inspector.
-    pub sub: Step,
     pub regions: Regions,
     pub procedure: bool,
+    /// Escritorio, tableta o teléfono.
+    pub class: Class,
 }
 
 /// Dibuja la vista activa dentro de `ui`, con sus regiones.
@@ -148,6 +152,9 @@ pub fn show_view(
     doc: &mut Doc,
     shared: &mut Shared,
 ) -> Outcome {
+    let area = ui.max_rect();
+    let before = doc.selection;
+    let phone = arr.class == Class::Phone;
     let (go, request) = match arr.view {
         View::Project => {
             let mut go = None;
@@ -167,9 +174,59 @@ pub fn show_view(
         }
         View::Review => guided::view(ui, Step::Review, doc, shared),
         View::Report => (None, crate::panels::report::view(ui, doc, shared)),
+        View::Schedule if phone => {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().fill(shared.palette.panel))
+                .show(ui, |ui| compact::schedule(ui, doc, shared));
+            (None, None)
+        }
+        View::Diagram if phone => {
+            let open = compact::diagram_view(ui, doc, shared);
+            (open.then_some(Step::Circuits), None)
+        }
         View::Schedule | View::Diagram => workbench(ui, arr, doc, shared),
     };
+    if arr.class == Class::Tablet && arr.view.has_regions() {
+        // Elegir un tablero o circuito abre su ficha en el cajón de la
+        // derecha; en el navegador, además, cierra el cajón del navegador.
+        if doc.selection != before && doc.selection != crate::state::Selection::Project {
+            shared.inspector_drawer = true;
+            shared.navigator_drawer = false;
+        }
+        tablet_drawers(ui.ctx(), area, doc, shared);
+    }
     Outcome { go, request }
+}
+
+/// Los cajones de la tableta: navegador a la izquierda y ficha a la derecha.
+fn tablet_drawers(ctx: &egui::Context, area: egui::Rect, doc: &mut Doc, shared: &mut Shared) {
+    let p = shared.palette;
+    let mut open = shared.navigator_drawer;
+    compact::drawer(
+        ctx,
+        &p,
+        "cajon-navegador",
+        "Navegador",
+        compact::Side::Left,
+        layout::NAVIGATOR_W + 40.0,
+        area,
+        &mut open,
+        |ui| Viewer { doc, shared }.panel(ui, Panel::Browser),
+    );
+    shared.navigator_drawer = open;
+    let mut open = shared.inspector_drawer;
+    compact::drawer(
+        ctx,
+        &p,
+        "cajon-ficha",
+        "Ficha",
+        compact::Side::Right,
+        layout::INSPECTOR_W + 32.0,
+        area,
+        &mut open,
+        |ui| Viewer { doc, shared }.panel(ui, Panel::Properties),
+    );
+    shared.inspector_drawer = open;
 }
 
 /// Las vistas de trabajo: navegador a la izquierda, inspector a la derecha,
@@ -249,35 +306,13 @@ fn workbench(
 
     let mut go = None;
     let mut request = None;
-    let narrow = !regions.inspector;
     egui::CentralPanel::default()
         .frame(frame(egui::Margin::ZERO))
         .show(ui, |ui| match arr.view {
             View::Diagram if !regions.split => {
-                (go, request) = guided::diagram_view(ui, doc, shared, narrow);
-            }
-            _ if narrow => {
-                // Sin inspector, «Tableros y circuitos» conserva sus dos
-                // contenidos de antes, uno a la vez.
-                egui::Panel::top("tableros-o-circuitos")
-                    .frame(
-                        egui::Frame::new()
-                            .fill(p.bg)
-                            .inner_margin(egui::Margin::symmetric(16, 8)),
-                    )
-                    .show_separator_line(false)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            for (step, text) in
-                                [(Step::Panels, "Tableros"), (Step::Circuits, "Circuitos")]
-                            {
-                                if ui.selectable_label(arr.sub == step, text).clicked() {
-                                    arr.sub = step;
-                                }
-                            }
-                        });
-                    });
-                (go, request) = guided::view(ui, arr.sub, doc, shared);
+                // En tableta elegir en el dibujo abre la ficha en su cajón, sin
+                // salir del unifilar.
+                (go, request) = guided::diagram_view(ui, doc, shared, false);
             }
             _ => {
                 Viewer { doc, shared }.panel(ui, Panel::Schedule);
