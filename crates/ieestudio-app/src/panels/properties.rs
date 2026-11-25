@@ -1891,7 +1891,9 @@ fn decisions(
     property(ui, p, "Otros portadores", |ui| {
         changed |= ui
             .add(egui::DragValue::new(&mut ov.other_current_carrying_conductors).range(0..=40))
-            .on_hover_text("Conductores portadores de otros circuitos en la misma tubería")
+            .on_hover_text(
+                "Conductores portadores de otros circuitos en la misma tubería. Ajustan la ampacidad; la ocupación de una tubería compartida queda sin evaluar, porque necesita todos sus conductores",
+            )
             .changed();
     });
     changed

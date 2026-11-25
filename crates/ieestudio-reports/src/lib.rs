@@ -865,8 +865,14 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             if let Some(ground) = &p.grounding_size {
                 rows.push(("Puesta a tierra", size_label(ground)));
             }
+            if let Some(why) = &p.grounding_error {
+                rows.push(("Puesta a tierra", format!("Sin evaluar: {why}")));
+            }
             if let Some(conduit) = &p.conduit {
                 rows.push(("Tubería", conduit.clone()));
+            }
+            if let Some(why) = &p.conduit_error {
+                rows.push(("Tubería", format!("Sin evaluar: {why}")));
             }
         }
         Err(e) => {

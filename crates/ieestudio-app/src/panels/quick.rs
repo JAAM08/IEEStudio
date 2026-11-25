@@ -538,8 +538,20 @@ impl QuickView {
                             if let Some(ground) = &pr.grounding_size {
                                 ui.label(muted(format!("Puesta a tierra: {}", size_label(ground))));
                             }
+                            if let Some(why) = &pr.grounding_error {
+                                ui.label(
+                                    RichText::new(format!("Puesta a tierra: sin evaluar — {why}"))
+                                        .color(p.warn),
+                                );
+                            }
                             if let Some(conduit) = &pr.conduit {
                                 ui.label(muted(format!("Tubería: {conduit}")));
+                            }
+                            if let Some(why) = &pr.conduit_error {
+                                ui.label(
+                                    RichText::new(format!("Tubería: sin evaluar — {why}"))
+                                        .color(p.warn),
+                                );
                             }
                         }
                         Err(message) => {
@@ -604,6 +616,12 @@ impl QuickView {
         let muted = |t: &str| RichText::new(t).color(p.ink2);
         let mut apply = None;
         let (title, intro) = match &self.result {
+            // Sin conductor de puesta a tierra el circuito no se puede dar
+            // por bueno, aunque el conductor y la caída cumplan (fase 0.1, C-2).
+            Ok(r) if matches!(&r.protection, Ok(pr) if pr.grounding_error.is_some()) => (
+                "Resultado",
+                "El conductor y la caída de tensión cumplen, pero falta el conductor de puesta a tierra: el circuito queda sin evaluar.",
+            ),
             Ok(r)
                 if r.status == Status::Complies
                     && !matches!(&r.protection, Ok(pr) if pr.status == Status::Fails) =>
