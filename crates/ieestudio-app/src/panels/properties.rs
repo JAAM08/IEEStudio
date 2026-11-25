@@ -201,7 +201,7 @@ fn ficha_actions(ui: &mut egui::Ui, p: &Palette, selection: Selection) -> Option
 }
 
 /// Lo que impide que el tramo cumpla, en palabras, con su arreglo a la mano:
-/// volver al calibre propuesto y ver cómo se calculó.
+/// volver al calibre propuesto, si lo arregla, y ver cómo se calculó.
 fn problem_box(ui: &mut egui::Ui, p: &Palette, item: &RunResult) -> Option<Act> {
     let check = crate::widgets::main_problem(item)?;
     let mut act = None;
@@ -248,7 +248,7 @@ fn problem_box(ui: &mut egui::Ui, p: &Palette, item: &RunResult) -> Option<Act> 
                 );
             }
             ui.horizontal_wrapped(|ui| {
-                if let Some(rec) = crate::widgets::proposed_instead(item) {
+                if let Some(rec) = crate::widgets::proposed_fix(item, check) {
                     if crate::widgets::primary_button(
                         ui,
                         p,

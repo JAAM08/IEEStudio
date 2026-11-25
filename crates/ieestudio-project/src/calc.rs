@@ -53,7 +53,20 @@ pub struct Check {
     pub references: Vec<RuleReference>,
 }
 
+/// Inicio del detalle de la verificación «Tubería» de una tubería compartida
+/// (decisión 0035).
+const SHARED_RACEWAY: &str = "la tubería es compartida";
+
 impl Check {
+    /// La ocupación quedó sin evaluar porque la tubería es compartida con
+    /// conductores de otros circuitos (decisión 0035). Cambiar el calibre del
+    /// tramo no la resuelve.
+    pub fn is_shared_raceway(&self) -> bool {
+        self.name == "Tubería"
+            && self.status == Status::NotEvaluated
+            && self.detail.starts_with(SHARED_RACEWAY)
+    }
+
     /// Agrega las referencias normativas de las reglas que verifica.
     fn cite(mut self, profile: &Profile, rules: &[Rule]) -> Self {
         self.references = rules.iter().map(|&r| profile.reference(r)).collect();
@@ -520,7 +533,7 @@ fn shared_raceway(spec: &RunSpec, (mut run, mut checks): (Run, Vec<Check>)) -> (
     {
         check.status = Status::NotEvaluated;
         check.detail = format!(
-            "la tubería es compartida con {conductors} de otros circuitos. Su ocupación se calcula con el calibre y el aislamiento de todos los conductores que lleva, incluidos neutros y conductores de puesta a tierra, y el programa no los tiene. Para los conductores de este circuito solos bastaría {}, que no es la tubería a instalar",
+            "{SHARED_RACEWAY} con {conductors} de otros circuitos. Su ocupación se calcula con el calibre y el aislamiento de todos los conductores que lleva, incluidos neutros y conductores de puesta a tierra, y el programa no los tiene. Para los conductores de este circuito solos bastaría {}, que no es la tubería a instalar",
             own.label()
         );
     }

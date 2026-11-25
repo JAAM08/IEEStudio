@@ -138,6 +138,7 @@ fn c1_la_tuberia_compartida_queda_sin_evaluar() {
         "{}",
         tuberia.detail
     );
+    assert!(tuberia.is_shared_raceway());
     assert!(a1.run.as_ref().unwrap().conduit.is_none());
     assert_eq!(a1.status, Status::NotEvaluated);
     assert!(!a1.invalid_data);
@@ -192,6 +193,7 @@ fn c1_sin_otros_portadores_todo_igual() {
     let result = calc(&p);
     let a1 = &result.panels[0].circuits[0];
     assert_eq!(check(a1, "Tubería").status, Status::Complies);
+    assert!(!check(a1, "Tubería").is_shared_raceway());
     let conduit = a1.run.as_ref().unwrap().conduit.as_ref().unwrap();
     assert_eq!(conduit.metric_designator, 16);
     assert_eq!(result.verdict.compliance, Compliance::Conforms);
@@ -270,6 +272,36 @@ fn c2_sin_tierra_no_hay_tuberia_ni_conformidad() {
     let v = r.verdict();
     assert_eq!(v.compliance, Compliance::Incomplete);
     assert_eq!(v.calculation, Calculation::Incomplete);
+}
+
+/// C-2: la causa del calibre mínimo solo aparece cuando falta por el
+/// conductor de puesta a tierra. Si ningún calibre de fase cumple la carga,
+/// no se da causa y el resultado es el de `f04b59b`.
+#[test]
+fn c2_la_causa_del_minimo_solo_por_la_tierra() {
+    // Cobre 14 AWG, 90 kW, una fase a 127 V: 787.40 A, ningún calibre cumple
+    // con un conductor por fase. La tierra de 800 A sí está en la tabla.
+    let r = quick(&QuickInput {
+        kind: CircuitKind::LineToNeutral,
+        size: Size::new("14"),
+        power_w: 90_000.0,
+        length_m: 30.0,
+        ..QuickInput::default()
+    });
+    let p = r.protection.as_ref().unwrap();
+    assert!(p.minimum_size.is_none());
+    assert!(p.minimum_size_error.is_none(), "{:?}", p.minimum_size_error);
+    assert!(p.grounding_error.is_none());
+    assert_eq!(p.status, Status::Fails);
+    let v = r.verdict();
+    assert_eq!(v.compliance, Compliance::DoesNotConform);
+    assert_eq!(v.calculation, Calculation::Complete);
+
+    // Con aluminio y 35 A el mínimo falta por la tierra, y lo dice.
+    let r = quick(&c2_aluminio());
+    let p = r.protection.as_ref().unwrap();
+    let why = p.minimum_size_error.as_deref().expect("dice por qué");
+    assert!(why.contains("250-122"), "{why}");
 }
 
 /// C-2: ninguna combinación da una tubería calculada sin su conductor de

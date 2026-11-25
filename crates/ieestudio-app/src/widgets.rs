@@ -1167,6 +1167,20 @@ pub fn proposed_instead(item: &ieestudio_project::RunResult) -> Option<ieestudio
     }
 }
 
+/// El calibre propuesto como arreglo de un problema del tramo. Una tubería
+/// compartida sin evaluar no se arregla cambiando el calibre (decisión 0035):
+/// para ella no se ofrece.
+pub fn proposed_fix(
+    item: &ieestudio_project::RunResult,
+    problem: &ieestudio_project::Check,
+) -> Option<ieestudio_core::Size> {
+    if problem.is_shared_raceway() {
+        None
+    } else {
+        proposed_instead(item)
+    }
+}
+
 /// Un texto como oración: con mayúscula inicial y punto final.
 pub fn sentence(text: &str) -> String {
     capitalize(text.trim_end_matches('.')) + "."
@@ -1308,6 +1322,44 @@ mod tests {
 
     fn rejected(text: &str) -> Option<&'static str> {
         rejected_number(text, false)
+    }
+
+    fn first_problem(
+        result: &ieestudio_project::ProjectResult,
+        id: &str,
+    ) -> ieestudio_project::RunResult {
+        result
+            .panels
+            .iter()
+            .flat_map(|p| p.circuits.iter())
+            .find(|c| c.id == id)
+            .cloned()
+            .unwrap_or_else(|| panic!("no está {id}"))
+    }
+
+    /// Fase 0.1: con la tubería compartida sin evaluar no se ofrece el
+    /// calibre propuesto como arreglo; en los demás casos, sí.
+    #[test]
+    fn a_shared_raceway_is_not_fixed_with_the_proposed_size() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/fase-0/c1-tuberia-compartida.iees");
+        let project =
+            ieestudio_project::Project::from_json(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let result = ieestudio_project::calculate(&project).unwrap();
+        let a1 = first_problem(&result, "A-1");
+        let problem = main_problem(&a1).unwrap();
+        assert!(problem.is_shared_raceway(), "{problem:?}");
+        // El tramo sí tiene un calibre propuesto, pero no es el arreglo.
+        assert!(proposed_instead(&a1).is_some());
+        assert_eq!(proposed_fix(&a1, problem), None);
+
+        // La casa de ejemplo: C-04 no cumple y se le ofrece el propuesto.
+        let house = ieestudio_project::example::house();
+        let result = ieestudio_project::calculate(&house).unwrap();
+        let c04 = first_problem(&result, "C-04");
+        let problem = main_problem(&c04).unwrap();
+        assert!(!problem.is_shared_raceway());
+        assert!(proposed_fix(&c04, problem).is_some());
     }
 
     /// H-17: lo que no se guarda dice por qué.

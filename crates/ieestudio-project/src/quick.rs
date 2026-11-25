@@ -127,7 +127,8 @@ pub struct Protection {
     pub protected: bool,
     /// Menor calibre que cumple ampacidad y protección con estos conductores por fase.
     pub minimum_size: Option<Size>,
-    /// Por qué no se pudo determinar `minimum_size`.
+    /// Por qué no se pudo determinar `minimum_size`, solo cuando es por
+    /// falta del conductor de puesta a tierra.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub minimum_size_error: Option<String>,
     /// Conductor de puesta a tierra de equipos (250-122).
@@ -278,20 +279,26 @@ fn protection(
     let (design_a, breaker_a) = design_and_breaker(profile, &sizing)?;
     let check =
         check_conductor(profile, &sizing, &input.size, breaker_a).map_err(|e| e.to_string())?;
-    // Lo que no se puede determinar se conserva con su causa, nunca se
-    // descarta en silencio (fase 0.1, C-2).
-    let (minimum_size, minimum_size_error) = match select_conductor(profile, &sizing) {
-        Ok(r) => (Some(r.conductor.size), None),
-        Err(e) => (None, Some(e.to_string())),
-    };
-    let (grounding_size, grounding_error) = match equipment_grounding(
+    // Lo que no se puede determinar por falta del conductor de puesta a
+    // tierra se conserva con su causa, nunca se descarta en silencio (fase
+    // 0.1, C-2).
+    let selected = select_conductor(profile, &sizing);
+    let minimum_size = selected.as_ref().ok().map(|r| r.conductor.size.clone());
+    let grounding = equipment_grounding(
         profile,
         breaker_a,
         input.material,
         true,
         minimum_size.as_ref().unwrap_or(&input.size),
         &input.size,
-    ) {
+    );
+    // El calibre mínimo lleva causa solo si falta por la tierra: si ningún
+    // calibre de fase cumple la carga, se queda como antes, sin causa.
+    let minimum_size_error = match (&selected, &grounding) {
+        (Err(e), Err(g)) if e == g => Some(e.to_string()),
+        _ => None,
+    };
+    let (grounding_size, grounding_error) = match grounding {
         Ok(g) => (Some(g.size), None),
         Err(e) => (None, Some(e.to_string())),
     };
