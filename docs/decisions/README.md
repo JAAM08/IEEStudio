@@ -40,6 +40,7 @@ nueva que la sustituye y se marca la anterior como «Sustituida por».
 | 0032 | [Cálculo de cortocircuito opcional por proyecto](0032-calculo-de-cortocircuito-opcional.md) | Aceptada |
 | 0033 | [Conexión del secundario, datos de captura y estados de los tramos (pendientes 17, 19 y 20)](0033-secundario-captura-y-estados.md) | Aceptada; 17 y 19 implementados, 20 diferido al rediseño |
 | 0034 | [Un solo marco adaptativo para escritorio, tableta y teléfono](0034-marco-unico-adaptativo.md) | Aceptada; implementada en el rediseño 2026 (R1 a R7) |
+| 0035 | [Tubería compartida con conductores de otros circuitos](0035-tuberia-compartida.md) | Aceptada; implementada en la fase 0.1 |
 
 El estado del proyecto y lo pendiente están en `../roadmap.md`. Las auditorías del
 PR #11 están en `../auditoria-modelo-y-falla.md` (Opus) y
