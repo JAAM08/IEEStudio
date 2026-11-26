@@ -6,21 +6,88 @@ aplicación compilada para el navegador y deja el sitio completo en
 
 ```
 target/sitio/
-  index.html                 Inicio
-  funciones/                 Qué calcula y qué entrega
-  guia/                      Video y guía paso a paso, atajos, preguntas
+  index.html                 Portada: escena 3D, programa, herramientas, flujo,
+                             memoria, filosofía, documentación, comunidad, descarga
+  funciones/                 Herramientas: qué calcula y qué entrega
+  guia/                      Documentación: video, paso a paso, atajos, preguntas
   descargar/                 En línea, Windows e instalación como app
-  codigo-abierto/            Verificación, firma de código, privacidad, créditos
-  estilos.css, sitio.js, iconos.svg, imagenes/, fuentes/, video/
+  codigo-abierto/            Comunidad: verificación, firma de código, créditos
+  estilos.css, sitio.js      Comunes a todas las páginas
+  portada.js, escena.js      Solo de la portada
+  iconos.svg, imagenes/, fuentes/, video/, robots.txt, sitemap.xml
   app/                       La aplicación (WebAssembly, PWA), aparte del sitio
 ```
 
-Las páginas comparten navegación y pie; `tools/paginas.py` las genera. Se
-pueden editar a mano, pero volver a generarlas reemplaza esos cambios.
+Las páginas comparten navegación y pie; `python3 tools/paginas.py website` las
+genera. Se pueden editar a mano, pero volver a generarlas reemplaza esos
+cambios. El criterio de diseño está en `docs/decisions/0036-sitio-web-rediseno.md`.
 
-La integración continua arma el sitio en cada cambio (artefacto
-`ieestudio-sitio`) y lo adjunta a cada versión como
-`IEEStudio-<versión>-sitio-web.zip`.
+## Sistema visual
+
+Carbón `#17191E` y carbón profundo `#101216` de fondo, ámbar eléctrico
+`#E5B84B` como acento de marca, azul técnico `#5489C7` para datos y
+conexiones, violeta `#8E7CC3` solo como acento secundario, gris técnico
+`#5F6368` y blanco `#F4F5F7`. Manrope para el texto e IBM Plex Mono para
+valores y referencias. Cada sección es una «lámina» numerada, como un juego
+de planos; los dibujos de las herramientas usan trazo técnico sobre retícula.
+
+## Escena 3D
+
+Fuente en `tools/escena/escena.js`; se empaqueta con three.js en
+`website/escena.js`:
+
+```
+cd tools/escena && npm install && npm run build
+```
+
+Es geometría hecha en código, sin modelos externos. Los circuitos, sus
+interruptores y posiciones son los del proyecto de ejemplo del programa. Sin
+WebGL, la portada muestra el alzado del mismo tablero en SVG (`plano_tablero`
+en `tools/paginas.py`).
+
+## Política de imágenes
+
+El sitio muestra el programa real: capturas de la aplicación, hojas de la
+memoria que genera, el modelo 3D y dibujos técnicos propios, y el ícono. No se
+usan fotografías de stock, interfaces inventadas ni resultados simulados. Las
+capturas no se retocan.
+
+| Recurso | Origen | Versión |
+| --- | --- | --- |
+| `imagenes/app/*.webp`, `*@2x.webp` | `ieestudio-app --captura` a escala 2, tema oscuro, 1440×900 | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/app/movil-*.webp` | lo mismo a 390×844; `movil-resultados` es la ficha de C-04 en Resultados | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/app/unifilar-detalle.webp` | recorte de `unifilar@2x` | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/memoria/hoja-*.webp` | `ieestudio memoria` del ejemplo, hojas 1, 2, 3, 4, 9 y 13 | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/guia/*.webp` | capturas con la zona de cada paso resaltada | R7 (commit 05e3106) |
+| `video/` | guía en video (`tools/video/README.md`) | R4.5, anterior a R5–R7; el sitio lo dice |
+| `imagenes/compartir.jpg` | portada del sitio con la escena 3D | este rediseño |
+
+Para volver a generar las capturas de `imagenes/app/` (Linux, con xvfb):
+
+```
+cargo build --release -p ieestudio-app -p ieestudio-cli
+cap() { out=$1; shift; WINIT_X11_SCALE_FACTOR=2 xvfb-run -a -s "-screen 0 3200x2000x24" \
+  target/release/ieestudio-app --captura "$out" "$@"; }
+cap proyecto.png --vista proyecto --tamano 1440x900
+cap tableros.png --vista tableros --seleccion C-04 --tamano 1440x900
+cap movil-resultados.png --vista tableros --seleccion C-04 --ficha --propiedades resultados --tamano 390x844
+cap procedimiento.png --vista tableros --seleccion C-04 --procedimiento --tamano 1440x900
+cap unifilar.png --vista unifilar --tamano 1440x900
+cap revisar.png --vista revisar --tamano 1440x900
+cap memoria.png --vista memoria --tamano 1440x900
+cap rapido.png --rapido --tamano 1440x900
+cap inicio.png --inicio --tamano 1440x900
+# y las mismas a --tamano 390x844 con el prefijo movil-
+```
+
+`python3 tools/verificar-sitio.py` revisa enlaces, recursos sin usar,
+metadatos y que la escena coincida con el programa; la integración continua lo
+ejecuta en cada cambio.
+
+Cada PNG de 2880×1800 se guarda como `nombre@2x.webp` y reducido a 1440×900
+como `nombre.webp`. Las hojas de la memoria salen de
+`ieestudio ejemplo casa.iees && ieestudio memoria casa.iees` con `pdftoppm` a
+1020×1320 (`hoja-N.webp`) y 2040×2640 (`hoja-N-grande.webp`).
 
 ## Publicación
 
@@ -29,16 +96,9 @@ pruebas actualiza ieestudio.com, y «Run workflow» en la pestaña Actions lo
 vuelve a publicar. El dominio se compró en Hostinger y solo apunta a GitHub
 Pages con sus registros DNS; no hay hosting contratado.
 
-Si algún día se contrata hosting, basta con extraer el zip del sitio en
-`public_html`: el `.htaccess` declara el tipo de los archivos `.wasm`. En
-cualquier caso hace falta HTTPS para que la aplicación se pueda instalar.
-
-## Imágenes y video
-
-- `imagenes/`: capturas de la aplicación en el navegador a 2x con el proyecto
-  de ejemplo, en WebP; `imagenes/guia/` las mismas con la zona de cada paso
-  resaltada; las hojas de la memoria son del PDF que genera el programa.
-- `imagenes/fotos/`: fotografías de dominio público (CC0); autores y enlaces
-  en la página Código abierto, sección Créditos.
-- `video/`: la guía en video, sus subtítulos y su portada. Cómo se produce:
-  `tools/video/README.md`.
+La integración continua arma el sitio en cada cambio (artefacto
+`ieestudio-sitio`) y lo adjunta a cada versión como
+`IEEStudio-<versión>-sitio-web.zip`. Si algún día se contrata hosting, basta
+con extraer ese zip en `public_html`: el `.htaccess` declara el tipo de los
+archivos `.wasm`. En cualquier caso hace falta HTTPS para que la aplicación se
+pueda instalar.

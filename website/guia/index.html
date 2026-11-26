@@ -1,50 +1,59 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Guía · IEEStudio</title>
-<meta name="description" content="Guía de uso de IEEStudio en video y paso a paso: proyecto, tableros, circuitos, resultados, unifilar y memoria de cálculo.">
-<meta name="theme-color" content="#121418">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Documentación · IEEStudio</title>
+<meta name="description" content="Guía de uso de IEEStudio en video y paso a paso: proyecto, tableros, circuitos, resultados, unifilar y memoria de cálculo; atajos y preguntas frecuentes.">
+<link rel="canonical" href="https://ieestudio.com/guia/">
+<meta name="theme-color" content="#101216">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="../app/icono.svg" type="image/svg+xml">
 <link rel="icon" href="../favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="../app/icono-180.png">
-<meta property="og:title" content="Guía · IEEStudio">
-<meta property="og:description" content="Guía de uso de IEEStudio en video y paso a paso: proyecto, tableros, circuitos, resultados, unifilar y memoria de cálculo.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="es_MX">
+<meta property="og:site_name" content="IEEStudio">
+<meta property="og:title" content="Documentación · IEEStudio">
+<meta property="og:description" content="Guía de uso de IEEStudio en video y paso a paso: proyecto, tableros, circuitos, resultados, unifilar y memoria de cálculo; atajos y preguntas frecuentes.">
 <meta property="og:image" content="https://ieestudio.com/imagenes/compartir.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:url" content="https://ieestudio.com/guia/">
-<link rel="preload" href="../fuentes/IBMPlexSansCondensed-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="../fuentes/Manrope-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../estilos.css">
+<script>document.documentElement.classList.add("js")</script>
 </head>
 <body>
+<a class="sr" href="#contenido">Ir al contenido</a>
 
 <header class="nav" id="nav">
   <div class="wrap">
-    <a class="brand" href="../"><img src="../app/icono.svg" alt="" width="30" height="30">IEEStudio</a>
-    <nav class="nav-links" aria-label="Páginas">
-      <a href="../funciones/">Funciones</a>
-      <a href="../guia/" aria-current="page">Guía</a>
-      <a href="../descargar/">Descargar</a>
-      <a href="../codigo-abierto/">Código abierto</a>
+    <a class="marca" href="../"><img src="../app/icono.svg" alt="" width="28" height="28">IEEStudio</a>
+    <button class="menu" type="button" aria-label="Menú" aria-expanded="false" aria-controls="enlaces"><svg aria-hidden="true"><use href="../iconos.svg#i-menu"/></svg></button>
+    <nav class="nav-links" id="enlaces" aria-label="Principal">
+      <a href="../#producto" data-seccion="producto">Producto</a>
+      <a href="../funciones/" data-seccion="herramientas">Herramientas</a>
+      <a href="../guia/" data-seccion="documentacion" aria-current="page">Documentación</a>
+      <a href="../codigo-abierto/" data-seccion="comunidad">Comunidad</a>
       <a class="nav-git" href="https://github.com/JAAM08/IEEStudio"><svg aria-hidden="true"><use href="../iconos.svg#i-git"/></svg><span>GitHub</span></a>
-      <a class="btn btn-volt menu-app" href="../app/">Abrir la app</a>
+      <a class="btn btn-ambar btn-chico" href="../descargar/">Descargar</a>
     </nav>
-    <button class="menu-toggle" type="button" aria-label="Menú" aria-expanded="false"><svg aria-hidden="true"><use href="../iconos.svg#i-menu"/></svg></button>
-    <a class="btn btn-volt btn-small" href="../app/">Abrir la app</a>
   </div>
 </header>
 
-<main>
-  <section class="page-head">
+<main id="contenido">
+  <section class="cabecera">
     <div class="wrap">
-      <p class="kicker">Guía</p>
-      <h1>Un proyecto completo, paso a paso</h1>
+      <p class="rotulo">Documentación</p>
+      <h1>Un proyecto completo, paso a paso.</h1>
       <p class="intro">Mira el recorrido en video o sigue los pasos con la app abierta. Todo lo que ves aquí funciona igual en el navegador y en Windows.</p>
-      <div class="actions"><a class="btn btn-volt" href="../app/"><svg aria-hidden="true"><use href="../iconos.svg#i-play"/></svg>Abrir la app para seguirla</a></div>
+      <div class="acciones"><a class="btn btn-ambar" href="../app/"><svg aria-hidden="true"><use href="../iconos.svg#i-play"/></svg>Abrir la app para seguirla</a><a class="btn btn-linea" href="#referencia">Referencia técnica</a></div>
     </div>
   </section>
 
-  <section class="block" id="video">
+  <section class="bloque" id="video">
     <div class="wrap">
       <div class="video">
         <video controls preload="none" poster="../video/guia.jpg" playsinline>
@@ -52,120 +61,115 @@
           <track kind="captions" src="../video/guia.vtt" srclang="es" label="Español">
         </video>
       </div>
-      <p class="video-note">Narración con voz sintética y subtítulos integrados en español. El proyecto del video es el ejemplo que trae la app.</p>
+      <p class="nota-video">Narración con voz sintética y subtítulos en español. El video se grabó con una versión anterior de la interfaz; los pasos de abajo muestran la actual.</p>
     </div>
   </section>
 
-  <section class="block" style="padding-top:0">
+  <section class="bloque" id="pasos">
     <div class="wrap">
-      <p class="kicker">Paso a paso</p>
-      <h2>De la acometida a la memoria</h2>
-      <div class="guide">
-        <div class="guide-step" id="paso-1">
+      <h2>De la acometida a la memoria.</h2>
+      <div class="guia">
+        <div class="guia-paso" id="paso-1">
           <div>
             <span class="num">1</span>
             <h3>Abre IEEStudio</h3>
             <p>Al abrir eliges entre dos experiencias: <strong>Proyecto completo</strong> —uno nuevo, uno que ya tienes o el ejemplo, una casa habitación con un tablero y seis circuitos— y <strong>Cálculo rápido</strong>, para un circuito suelto sin crear un proyecto.</p>
             <ul><li>Arriba están las cinco vistas: Proyecto, Tableros y circuitos, Unifilar, Revisar y Memoria (<kbd>F2</kbd> a <kbd>F6</kbd>).</li><li>Lo que eliges en una vista lo siguen las demás.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-1.webp" width="1600" height="1000" alt="Abre IEEStudio en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-1.webp" width="1600" height="1000" alt="Abre IEEStudio en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-2">
+        <div class="guia-paso" id="paso-2">
           <div>
             <span class="num">2</span>
             <h3>Datos de la obra y la acometida</h3>
             <p>En la vista Proyecto capturas el cliente, la ubicación, quién elabora, el tipo de inmueble y el suministro. Arriba, el resumen dice cómo va el proyecto.</p>
             <ul><li>Los datos de la obra van a la portada de la memoria; no cambian el cálculo.</li><li>Los límites de caída de tensión se ajustan aquí.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-2.webp" width="1600" height="1000" alt="Datos de la obra y la acometida en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-2.webp" width="1600" height="1000" alt="Datos de la obra y la acometida en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-3">
+        <div class="guia-paso" id="paso-3">
           <div>
             <span class="num">3</span>
             <h3>Tableros y carga del alimentador</h3>
             <p>En Tableros y circuitos elige un tablero: en su ficha, a la derecha, capturas de dónde se alimenta, su conexión, la longitud del alimentador y las áreas que atiende. Con eso se calcula la carga según el artículo 220, con el detalle de cada grupo en el procedimiento.</p>
             <ul><li>Si el tablero se alimenta por un transformador, márcalo y captura sus datos.</li><li>Las áreas definen la carga mínima de alumbrado (Tabla 220-12).</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-3.webp" width="1600" height="1000" alt="Tableros y carga del alimentador en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-3.webp" width="1600" height="1000" alt="Tableros y carga del alimentador en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-4">
+        <div class="guia-paso" id="paso-4">
           <div>
             <span class="num">4</span>
             <h3>Circuitos en el cuadro de cargas</h3>
             <p>Con «Agregar circuito» eliges qué vas a conectar y capturas su potencia, fases y longitud en la ficha. El cuadro de cargas se recalcula con cada cambio: corriente, calibre, tierra, tubo, interruptor, caída de tensión y estado.</p>
             <ul><li>Ctrl+D duplica el circuito seleccionado y Supr lo elimina.</li><li>«Esencial» y «Completo» cambian las columnas del cuadro.</li><li>«Balancear fases» reparte los circuitos entre A, B y C.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-4.webp" width="1600" height="1000" alt="Circuitos en el cuadro de cargas en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-4.webp" width="1600" height="1000" alt="Circuitos en el cuadro de cargas en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-5">
+        <div class="guia-paso" id="paso-5">
           <div>
             <span class="num">5</span>
             <h3>Revisa los resultados</h3>
             <p>En la ficha, la pestaña Resultados muestra lo que calculó el programa para el elemento elegido. Si algo no cumple, arriba de la ficha está el arreglo, como «Usar 10 AWG»; si fijaste un calibre o un interruptor, te dice qué habría propuesto y por qué.</p>
             <ul><li>Puedes fijar calibre, interruptor y conductores por fase, o dejar que IEEStudio proponga el menor que cumple.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-5.webp" width="1600" height="1000" alt="Revisa los resultados en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-5.webp" width="1600" height="1000" alt="Revisa los resultados en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-6">
+        <div class="guia-paso" id="paso-6">
           <div>
             <span class="num">6</span>
             <h3>Revisa la normativa</h3>
             <p>La pestaña Normativa lista cada verificación —ampacidad, protección, caída, tubería— con su estado y el artículo que aplica. La vista Revisar junta todo lo que falta del proyecto, con su arreglo; lo que la norma pide y el programa no verifica aparece como fuera de alcance.</p>
             <ul><li>El procedimiento (<kbd>F7</kbd>) muestra abajo la fórmula y los valores de cada paso.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-6.webp" width="1600" height="1000" alt="Revisa la normativa en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-6.webp" width="1600" height="1000" alt="Revisa la normativa en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-7">
+        <div class="guia-paso" id="paso-7">
           <div>
             <span class="num">7</span>
             <h3>El diagrama unifilar</h3>
             <p>La vista Unifilar muestra el diagrama dibujado a partir del proyecto; se acerca con Ctrl y la rueda o pellizcando, y se recorre arrastrando. No se dibuja a mano: cualquier cambio en el cuadro de cargas se refleja aquí.</p>
             <ul><li>«Exportar DXF», para seguir en AutoCAD.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-7.webp" width="1600" height="1000" alt="El diagrama unifilar en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-7.webp" width="1600" height="1000" alt="El diagrama unifilar en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-8">
+        <div class="guia-paso" id="paso-8">
           <div>
             <span class="num">8</span>
             <h3>La memoria de cálculo</h3>
             <p>La vista Memoria muestra la vista previa con los datos de la obra, el cuadro de cargas, el unifilar, las observaciones y el procedimiento. A la derecha capturas la firma y revisas «Antes de entregar». Expórtala a PDF con Ctrl+E.</p>
             <ul><li>Las observaciones listan todo lo que no cumple o no se evaluó.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-8.webp" width="1600" height="1000" alt="La memoria de cálculo en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-8.webp" width="1600" height="1000" alt="La memoria de cálculo en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
-        <div class="guide-step" id="paso-9">
+        <div class="guia-paso" id="paso-9">
           <div>
             <span class="num">9</span>
             <h3>Guarda y exporta</h3>
             <p>En Windows, Guardar escribe un archivo .iees en tu carpeta. En el navegador, el proyecto se guarda solo en ese navegador y «Descargar proyecto» te da el .iees para tener tu copia.</p>
             <ul><li>El cuadro de cargas se exporta a Excel y se importa de vuelta.</li><li><kbd>Ctrl</kbd> <kbd>K</kbd> busca cualquier comando, tablero o circuito.</li><li>Un .iees abre igual en la app en línea y en la de Windows.</li></ul>
           </div>
-          <figure><img src="../imagenes/guia/paso-9.webp" width="1600" height="1000" alt="Guarda y exporta en IEEStudio." loading="lazy"></figure>
+          <figure><img src="../imagenes/guia/paso-9.webp" width="1600" height="1000" alt="Guarda y exporta en IEEStudio; el recuadro marca la zona del paso." loading="lazy"></figure>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="block">
+  <section class="bloque" id="rapido">
     <div class="wrap">
-      <div class="show">
-        <div class="show-media">
-          <div class="frame"><img src="../imagenes/guia/paso-rapido.webp" width="1600" height="1000" alt="Cálculo rápido de un circuito con sus recomendaciones." loading="lazy"></div>
-        </div>
-        <div class="show-text">
-          <p class="kicker">Atajo</p>
-          <h3>Cálculo rápido de un circuito</h3>
+      <div class="exhibe">
+        <div class="exhibe-media"><div class="marco"><img src="../imagenes/guia/paso-rapido.webp" width="1600" height="1000" alt="Cálculo rápido de un circuito con sus recomendaciones." loading="lazy"></div></div>
+        <div class="exhibe-texto">
+          <h2>Cálculo rápido de un circuito.</h2>
           <p>Desde la pantalla de inicio, o con <kbd>F8</kbd> dentro de un proyecto, calculas un circuito suelto: sistema, carga, longitud y conductor. Si no cumple, te da alternativas ya calculadas que aplicas con un clic; su hoja se exporta en PDF, y dentro de un proyecto «Agregar al proyecto» lo pasa al tablero seleccionado.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="block" id="atajos">
+  <section class="bloque" id="atajos">
     <div class="wrap">
-      <p class="kicker">Teclado</p>
-      <h2>Atajos</h2>
-      <table class="keys">
+      <h2>Atajos de teclado.</h2>
+      <table class="atajos">
         <tr><td><kbd>Ctrl</kbd> <kbd>N</kbd></td><td>Nuevo proyecto</td></tr>
         <tr><td><kbd>Ctrl</kbd> <kbd>O</kbd></td><td>Abrir un proyecto (en el navegador, usa Archivo, Abrir)</td></tr>
         <tr><td><kbd>Ctrl</kbd> <kbd>S</kbd></td><td>Guardar; en el navegador, descargar el proyecto</td></tr>
@@ -173,25 +177,47 @@
         <tr><td><kbd>Ctrl</kbd> <kbd>Z</kbd> / <kbd>Ctrl</kbd> <kbd>Y</kbd></td><td>Deshacer y rehacer</td></tr>
         <tr><td><kbd>Ctrl</kbd> <kbd>D</kbd></td><td>Duplicar el circuito seleccionado</td></tr>
         <tr><td><kbd>Supr</kbd></td><td>Eliminar el circuito seleccionado</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>K</kbd></td><td>Paleta de comandos: busca cualquier comando, tablero o circuito</td></tr>
         <tr><td><kbd>F2</kbd> a <kbd>F8</kbd></td><td><kbd>F2</kbd> a <kbd>F6</kbd>: las vistas Proyecto, Tableros y circuitos, Unifilar, Revisar y Memoria; <kbd>F7</kbd>, el procedimiento; <kbd>F8</kbd>, el cálculo rápido. En el navegador, F5 recarga la página: usa la barra de vistas.</td></tr>
       </table>
     </div>
   </section>
 
-  <section class="block" id="preguntas">
+  <section class="bloque" id="preguntas">
     <div class="wrap">
-      <p class="kicker">Preguntas frecuentes</p>
-      <h2>Lo que más se pregunta</h2>
+      <h2>Preguntas frecuentes.</h2>
       <div class="faq">
         <details><summary>¿Cuesta algo?</summary><p>No. IEEStudio es gratuito y de código abierto, también para uso profesional. No pide cuenta ni registro.</p></details>
         <details><summary>¿Mis proyectos se suben a internet?</summary><p>No. En la versión en línea todo se calcula en tu navegador y el proyecto se guarda en ese mismo navegador. En Windows se guarda en tus carpetas. Ningún proyecto pasa por un servidor.</p></details>
         <details><summary>¿Si borro los datos del navegador pierdo el proyecto?</summary><p>El proyecto que tenías abierto, sí. Por eso conviene descargar el .iees de vez en cuando: es tu copia y la puedes abrir en cualquier computadora.</p></details>
         <details><summary>¿La memoria que genera ya está aprobada?</summary><p>No. IEEStudio verifica contra la norma y lo dice claramente, pero la aprobación la da el ingeniero responsable que revisa y firma. El programa nunca marca un proyecto como aprobado.</p></details>
-        <details><summary>¿Qué hago si algo dice «no evaluado»?</summary><p>Lee el motivo en la pestaña Normativa o en las observaciones de la memoria: casi siempre falta un dato, como la corriente de placa de un motor. Captúralo y se evalúa.</p></details>
+        <details><summary>¿Qué hago si algo dice «sin evaluar»?</summary><p>Lee el motivo en la pestaña Normativa o en las observaciones de la memoria: casi siempre falta un dato, como la corriente de placa de un motor. Captúralo y se evalúa.</p></details>
+        <details><summary>¿Calcula el cortocircuito?</summary><p>Revisa la capacidad interruptiva de cada tablero con una falla estimada como cota superior; no es un estudio completo de cortocircuito. La revisión se puede apagar y entonces queda anotada como fuera de alcance.</p></details>
         <details><summary>¿Funciona en el celular?</summary><p>Sí. En el teléfono la app usa una barra inferior con las cinco vistas, listas que se tocan y la ficha a pantalla completa; en una tableta, el cuadro completo con cajones para el navegador y la ficha. Todavía no se ha probado en un teléfono real con iOS; si algo no responde, repórtalo.</p></details>
-        <details><summary>¿Cómo sé que tengo la versión más reciente?</summary><p>En la versión en línea, cuando se publica una versión nueva aparece arriba el aviso «Hay una versión nueva de IEEStudio» con el botón Recargar. Tu proyecto sigue guardado en el navegador al recargar. No uses «Borrar datos del sitio» para actualizar: borraría el proyecto.</p></details>
-        <details><summary>¿Por qué Windows dice «Windows protegió su PC»?</summary><p>Porque el instalador todavía no tiene firma digital; está en trámite. Elige «Más información» y «Ejecutar de todas formas». La versión en línea no tiene ese aviso.</p></details>
+        <details><summary>¿Por qué Windows dice «Windows protegió su PC»?</summary><p>Porque el instalador todavía no tiene firma digital. Elige «Más información» y «Ejecutar de todas formas». La versión en línea no tiene ese aviso.</p></details>
         <details><summary>Encontré un error o me falta algo</summary><p>Repórtalo en <a href="https://github.com/JAAM08/IEEStudio/issues">GitHub</a>. Si es un error de cálculo, incluye el archivo .iees o los datos del circuito.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="bloque" id="referencia">
+    <div class="wrap">
+      <h2>Referencia técnica.</h2>
+      <p class="intro">Criterios de cálculo, fuentes y decisiones, en el repositorio.</p>
+      <div class="docs">
+        <div>
+          <ul class="indice">
+            <li><a href="https://github.com/JAAM08/IEEStudio/blob/main/docs/engineering-methodology.md"><span><span class="t">Metodología de ingeniería</span><span class="d">Cómo se calcula, qué se verifica y qué no.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/blob/main/docs/normative-sources.md"><span><span class="t">Fuentes normativas</span><span class="d">Qué tablas y artículos usa el programa y de dónde salen.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/tree/main/data/nom-001-sede-2012"><span><span class="t">Tablas de la norma en datos</span><span class="d">Los CSV que usa el motor, revisables en una hoja de cálculo.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+          </ul>
+        </div>
+        <div>
+          <ul class="indice">
+            <li><a href="https://github.com/JAAM08/IEEStudio/tree/main/docs/decisions"><span><span class="t">Decisiones de diseño</span><span class="d">El porqué de cada criterio, registro por registro.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/blob/main/docs/architecture.md"><span><span class="t">Arquitectura</span><span class="d">Cómo se organiza el código en crates.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
@@ -199,19 +225,19 @@
 
 <footer>
   <div class="wrap">
-    <a class="brand" href="../"><img src="../app/icono.svg" alt="" width="26" height="26">IEEStudio</a>
-    <nav aria-label="Enlaces">
+    <a class="marca" href="../"><img src="../app/icono.svg" alt="" width="26" height="26">IEEStudio</a>
+    <nav aria-label="Pie">
       <a href="../app/">Abrir la app</a>
-      <a href="../funciones/">Funciones</a>
-      <a href="../guia/">Guía</a>
+      <a href="../funciones/">Herramientas</a>
+      <a href="../guia/">Documentación</a>
       <a href="../descargar/">Descargar</a>
-      <a href="../codigo-abierto/">Código abierto</a>
+      <a href="../codigo-abierto/">Comunidad</a>
       <a href="https://github.com/JAAM08/IEEStudio/issues">Reportar un problema</a>
     </nav>
-    <p>Software libre bajo licencias MIT o Apache-2.0. IEEStudio no está afiliado a la Secretaría de Energía ni a ningún organismo de normalización; la NOM-001-SEDE-2012 se cita por artículo y su texto no se reproduce. Fotografías de dominio público; ver <a href="../codigo-abierto/#creditos">créditos</a>.</p>
+    <p>Software libre bajo licencias MIT o Apache-2.0. IEEStudio no está afiliado a la Secretaría de Energía, a la CFE ni a ningún organismo de normalización; la NOM-001-SEDE-2012 se cita por artículo y su texto no se reproduce. Las imágenes del programa son capturas y documentos reales de IEEStudio; el modelo 3D de la portada es un dibujo propio.</p>
   </div>
 </footer>
 
-<script src="../sitio.js"></script>
+<script src="../sitio.js" defer></script>
 </body>
 </html>

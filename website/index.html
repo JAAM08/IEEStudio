@@ -1,161 +1,622 @@
 <!doctype html>
-<html lang="es">
+<html lang="es-MX">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IEEStudio</title>
-<meta name="description" content="Programa gratuito y de código abierto para calcular instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012. Úsalo en el navegador o instálalo en Windows.">
-<meta name="theme-color" content="#121418">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IEEStudio — Ingeniería eléctrica con precisión digital</title>
+<meta name="description" content="Programa gratuito y de código abierto para calcular, diseñar y documentar instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012: conductores, protecciones, caída de tensión, tubería, cuadro de cargas, unifilar y memoria de cálculo.">
+<link rel="canonical" href="https://ieestudio.com/">
+<meta name="theme-color" content="#101216">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="app/icono.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="app/icono-180.png">
-<meta property="og:title" content="IEEStudio">
-<meta property="og:description" content="Programa gratuito y de código abierto para calcular instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012. Úsalo en el navegador o instálalo en Windows.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="es_MX">
+<meta property="og:site_name" content="IEEStudio">
+<meta property="og:title" content="IEEStudio — Ingeniería eléctrica con precisión digital">
+<meta property="og:description" content="Programa gratuito y de código abierto para calcular, diseñar y documentar instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012: conductores, protecciones, caída de tensión, tubería, cuadro de cargas, unifilar y memoria de cálculo.">
 <meta property="og:image" content="https://ieestudio.com/imagenes/compartir.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:url" content="https://ieestudio.com/">
-<link rel="preload" href="fuentes/IBMPlexSansCondensed-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preload" href="fuentes/Manrope-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="estilos.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"IEEStudio","url":"https://ieestudio.com/",
+"applicationCategory":"EngineeringApplication","operatingSystem":"Windows 10, Windows 11, navegador web",
+"description":"Cálculo de instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012, con cuadro de cargas, diagrama unifilar y memoria de cálculo.",
+"inLanguage":"es","isAccessibleForFree":true,"license":"https://github.com/JAAM08/IEEStudio#licencia",
+"offers":{"@type":"Offer","price":"0","priceCurrency":"MXN"},
+"author":{"@type":"Person","name":"Juan Antonio Aguilar Martínez","url":"https://github.com/JAAM08"},
+"codeRepository":"https://github.com/JAAM08/IEEStudio"}
+</script>
+<script>document.documentElement.classList.add("js")</script>
 </head>
 <body>
+<a class="sr" href="#contenido">Ir al contenido</a>
 
 <header class="nav" id="nav">
   <div class="wrap">
-    <a class="brand" href="./"><img src="app/icono.svg" alt="" width="30" height="30">IEEStudio</a>
-    <nav class="nav-links" aria-label="Páginas">
-      <a href="funciones/">Funciones</a>
-      <a href="guia/">Guía</a>
-      <a href="descargar/">Descargar</a>
-      <a href="codigo-abierto/">Código abierto</a>
+    <a class="marca" href="./"><img src="app/icono.svg" alt="" width="28" height="28">IEEStudio</a>
+    <button class="menu" type="button" aria-label="Menú" aria-expanded="false" aria-controls="enlaces"><svg aria-hidden="true"><use href="iconos.svg#i-menu"/></svg></button>
+    <nav class="nav-links" id="enlaces" aria-label="Principal">
+      <a href="#producto" data-seccion="producto">Producto</a>
+      <a href="funciones/" data-seccion="herramientas">Herramientas</a>
+      <a href="guia/" data-seccion="documentacion">Documentación</a>
+      <a href="codigo-abierto/" data-seccion="comunidad">Comunidad</a>
       <a class="nav-git" href="https://github.com/JAAM08/IEEStudio"><svg aria-hidden="true"><use href="iconos.svg#i-git"/></svg><span>GitHub</span></a>
-      <a class="btn btn-volt menu-app" href="app/">Abrir la app</a>
+      <a class="btn btn-ambar btn-chico" href="descargar/">Descargar</a>
     </nav>
-    <button class="menu-toggle" type="button" aria-label="Menú" aria-expanded="false"><svg aria-hidden="true"><use href="iconos.svg#i-menu"/></svg></button>
-    <a class="btn btn-volt btn-small" href="app/">Abrir la app</a>
   </div>
 </header>
 
-<main>
-  <section class="hero">
-    <div class="wrap hero-copy">
-      <h1><span>Calcula la instalación.</span><span class="second">Entrega la memoria.</span></h1>
-      <div class="hero-side">
-        <p class="lead">IEEStudio calcula instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012 y arma la memoria de cálculo con cada paso a la vista. Gratis y de código abierto.</p>
-        <div class="actions">
-          <a class="btn btn-volt" href="app/"><svg aria-hidden="true"><use href="iconos.svg#i-play"/></svg>Abrir en el navegador</a>
-          <a class="btn btn-line descargar" href="https://github.com/JAAM08/IEEStudio/releases"><svg aria-hidden="true"><use href="iconos.svg#i-down"/></svg>Descargar para Windows</a>
-        </div>
-        <p class="release version">Versión de prueba: revisa los resultados antes de usarlos en un proyecto.</p>
+<main id="contenido">
+  <section class="hero" id="inicio" aria-labelledby="titulo">
+    <div class="escena" id="escena">
+      <svg class="plano-tablero respaldo" viewBox="0 0 440 600" role="img" aria-label="Alzado frontal del tablero TG-1 del proyecto de ejemplo">
+  <title>Alzado frontal del tablero TG-1 del proyecto de ejemplo</title>
+  <g>
+    <rect class="g" x="70" y="60" width="280" height="410" rx="3"/>
+    <rect class="f" x="86" y="76" width="248" height="378"/>
+    <rect x="194" y="0" width="32" height="60"/>
+    <path class="f" d="M190 52h40M190 58h40"/>
+    <rect x="132" y="470" width="26" height="110"/><rect x="197" y="470" width="26" height="110"/><rect x="262" y="470" width="26" height="110"/>
+    <path class="f" d="M128 472h34M193 472h34M258 472h34"/>
+    <rect x="172.5" y="97.5" width="75" height="50" rx="4"/>
+    <rect class="rc" x="197.5" y="117" width="25" height="11" rx="2"/>
+    <text x="210" y="92" text-anchor="middle">3P-25</text>
+    <rect x="276" y="101" width="37.5" height="42.5" rx="3"/>
+    <rect class="c" x="281" y="106" width="27.5" height="20" rx="1"/>
+    <rect x="198" y="165" width="5.5" height="180"/><rect x="207.25" y="165" width="5.5" height="180"/><rect x="216.5" y="165" width="5.5" height="180"/>
+    <rect x="149" y="181.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="189" y="185.5" width="4" height="7.5" rx="1"/>
+    <text x="143" y="192.75" text-anchor="end">C-01</text>
+    <rect x="149" y="198.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="189" y="202.5" width="4" height="7.5" rx="1"/>
+    <text x="143" y="209.75" text-anchor="end">C-02</text>
+    <rect x="149" y="215.5" width="47.5" height="32.5" rx="2"/>
+    <rect class="c" x="189" y="219.5" width="4" height="24.5" rx="1"/>
+    <text x="143" y="235.25" text-anchor="end">C-03</text>
+    <rect x="223.5" y="215.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="219.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="226.75" text-anchor="start">C-04</text>
+    <rect x="223.5" y="198.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="202.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="209.75" text-anchor="start">C-05</text>
+    <rect x="223.5" y="181.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="185.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="192.75" text-anchor="start">C-06</text>
+    <rect class="f" x="223.5" y="233.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="250.5" width="47.5" height="14"/>
+    <rect class="f" x="223.5" y="250.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="267.5" width="47.5" height="14"/>
+    <rect class="f" x="223.5" y="267.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="284.5" width="47.5" height="14"/>
+    <rect class="f" x="223.5" y="284.5" width="47.5" height="14"/>
+    <rect x="117.5" y="389" width="85" height="7"/><rect x="237.5" y="389" width="65" height="7"/>
+    <text x="160" y="410" text-anchor="middle">N</text><text x="270" y="410" text-anchor="middle">T</text>
+  </g>
+  <g class="cota">
+    <path d="M70 34v20M350 34v20M70 40h280M380 60h20M380 470h20M394 60v410"/>
+    <path d="M74 37l-4 3 4 3M346 37l4 3-4 3M391 64l3-4 3 4M391 466l3 4 3-4"/>
+  </g>
+  <text x="210" y="34" text-anchor="middle">560</text>
+  <text x="404" y="268" transform="rotate(90 404 268)" text-anchor="middle">820</text>
+  <text x="70" y="596">TG-1  3F-4H  220Y/127 V</text>
+</svg>
+    </div>
+    <div class="globos" id="globos"><svg aria-hidden="true"></svg><button class="globo" type="button" tabindex="-1" aria-hidden="true" data-pieza="principal">1</button><button class="globo" type="button" tabindex="-1" aria-hidden="true" data-pieza="derivados">2</button><button class="globo" type="button" tabindex="-1" aria-hidden="true" data-pieza="barras">3</button><button class="globo" type="button" tabindex="-1" aria-hidden="true" data-pieza="conductores">4</button><button class="globo" type="button" tabindex="-1" aria-hidden="true" data-pieza="canalizacion">5</button><button class="globo" type="button" tabindex="-1" aria-hidden="true" data-pieza="tierra">6</button><button class="globo" type="button" tabindex="-1" aria-hidden="true" data-pieza="medicion">7</button><div class="punta" id="punta" role="status"></div></div>
+
+    <div class="wrap hero-texto">
+      <p class="estado"><span class="led" aria-hidden="true"></span><span>En desarrollo activo. Versión <span class="version-tag">de prueba</span></span></p>
+      <h1 id="titulo">Ingeniería eléctrica. <span>Con precisión digital.</span></h1>
+      <p class="lead">Una plataforma de herramientas para calcular, diseñar y documentar instalaciones eléctricas de baja tensión conforme a la NOM-001-SEDE-2012, con cada paso a la vista.</p>
+      <div class="acciones">
+        <a class="btn btn-ambar" href="app/"><svg aria-hidden="true"><use href="iconos.svg#i-play"/></svg>Explorar IEEStudio</a>
+        <a class="btn btn-linea" href="#herramientas">Conocer las herramientas</a>
       </div>
+      <p class="nota">Gratis y de código abierto. Funciona en el navegador o se <a href="descargar/">instala en Windows</a>.</p>
     </div>
 
-    <div class="stage">
-      <div class="glow" aria-hidden="true"></div>
-      <div class="laptop">
-        <div class="screen">
-          <img src="imagenes/app-calculo.webp" width="1440" height="900" alt="IEEStudio con el cuadro de cargas de una casa habitación: cada circuito con su corriente, calibre, interruptor, caída de tensión y estado." fetchpriority="high">
-        </div>
-        <div class="base" aria-hidden="true"></div>
+    <aside class="simbologia" aria-labelledby="simb-titulo">
+      <h2 id="simb-titulo">Simbología del tablero</h2>
+      <ol>
+          <li><button type="button" data-pieza="principal" aria-pressed="false" aria-controls="ficha-pieza"><span class="n">1</span>Interruptor principal</button></li>
+          <li><button type="button" data-pieza="derivados" aria-pressed="false" aria-controls="ficha-pieza"><span class="n">2</span>Interruptores derivados</button></li>
+          <li><button type="button" data-pieza="barras" aria-pressed="false" aria-controls="ficha-pieza"><span class="n">3</span>Barras y fases</button></li>
+          <li><button type="button" data-pieza="conductores" aria-pressed="false" aria-controls="ficha-pieza"><span class="n">4</span>Conductores</button></li>
+          <li><button type="button" data-pieza="canalizacion" aria-pressed="false" aria-controls="ficha-pieza"><span class="n">5</span>Canalización</button></li>
+          <li><button type="button" data-pieza="tierra" aria-pressed="false" aria-controls="ficha-pieza"><span class="n">6</span>Puesta a tierra</button></li>
+          <li><button type="button" data-pieza="medicion" aria-pressed="false" aria-controls="ficha-pieza"><span class="n">7</span>Caída de tensión</button></li>
+      </ol>
+      <div class="ficha-pieza" id="ficha-pieza" aria-live="polite" hidden></div>
+      <template data-pieza="principal"><h3>Interruptor principal</h3><p>La carga del alimentador sale del artículo 220 con sus factores de demanda; el interruptor es el normalizado inmediato superior, o el que fijes, y se verifica contra el conductor.</p><p class="ref">NOM-001-SEDE-2012: 220-40, 220-42; 240-6(a), 240-4</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+      <template data-pieza="derivados"><h3>Interruptores derivados</h3><p>Cada circuito lleva el interruptor normalizado inmediato superior a su corriente de diseño. Pasa el puntero sobre uno, o tócalo: es un circuito del proyecto de ejemplo, en la posición que le da su unifilar.</p><p class="ref">NOM-001-SEDE-2012: 210-20(a); 240-6(a); 240-4(d)</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+      <template data-pieza="barras"><h3>Barras y fases</h3><p>Reparte los circuitos de un tablero entre las fases A, B y C, muestra el desbalance y propone el reparto más parejo; se puede deshacer.</p><p class="ref">NOM-001-SEDE-2012: Cuadro de cargas por tablero</p><a href="guia/#paso-4">Ver la herramienta</a></template>
+      <template data-pieza="conductores"><h3>Conductores</h3><p>El menor calibre que cumple por temperatura de terminales, ampacidad corregida por temperatura y agrupamiento, protección y caída de tensión. Paralelos, un juego por tubo.</p><p class="ref">NOM-001-SEDE-2012: 110-14(c); Tabla 310-15(b)(16); 310-10(h)</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+      <template data-pieza="canalizacion"><h3>Canalización</h3><p>Tubo conduit EMT, IMC, RMC y PVC con las dimensiones reales de cada conductor aislado: ocupación de 53, 31 y 40 %, niples al 60 % y atascamiento.</p><p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tablas 1, 4 y 5</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+      <template data-pieza="tierra"><h3>Puesta a tierra</h3><p>Conductor de puesta a tierra de cada circuito y alimentador, con el incremento proporcional si las fases se sobredimensionan, y conductor al electrodo de la acometida.</p><p class="ref">NOM-001-SEDE-2012: Tabla 250-122; 250-122(b); Tabla 250-66</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+      <template data-pieza="medicion"><h3>Caída de tensión</h3><p>Por impedancia, con la resistencia y reactancia de la Tabla 9, por tramo y acumulada desde la fuente. La pantalla no es una medición: muestra lo que IEEStudio calcula para el alimentador de TG-1 del ejemplo, In 20.22 A y %e 0.68, como en su unifilar.</p><p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tabla 9; 210-19(a)(1) nota 4; 215-2(a)(1) nota 2</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+    </aside>
+
+    <dl class="cajetin" aria-label="Datos del modelo">
+      <div><dt>Proyecto</dt><dd>Casa habitación (ejemplo)</dd></div>
+      <div><dt>Tablero</dt><dd>TG-1, 3F-4H 220Y/127 V</dd></div>
+      <div><dt>Norma</dt><dd>NOM-001-SEDE-2012</dd></div>
+      <div><dt>Versión</dt><dd class="version-tag">de prueba</dd></div>
+    </dl>
+  </section>
+
+  <section class="lamina" id="producto" aria-labelledby="t-producto">
+    <div class="wrap">
+      <p class="rotulo"><b>01</b>El programa</p>
+      <div class="cabeza">
+        <h2 id="t-producto">La aplicación, tal como es.</h2>
+        <p class="intro">Capturas del programa con el proyecto de ejemplo que trae: una casa habitación con un tablero y seis circuitos. Lo que ves aquí es lo que abres en el navegador o en Windows.</p>
       </div>
-      <figure class="float float-proc proc" aria-label="Procedimiento del circuito C-04">
-        <div class="proc-head"><b>C-04 Contactos sala</b><span>1,500 W, 35 m, 12 AWG</span></div>
-        <ol>
-          <li>
+      <div class="programa">
+        <div class="vistas" role="tablist" aria-label="Vistas del programa" aria-orientation="vertical">
+            <button type="button" role="tab" id="tab-inicio" aria-controls="ventana-lienzo" aria-selected="false" tabindex="-1" data-vista="inicio"><b>Inicio</b><span>Al abrir eliges entre dos experiencias independientes: Proyecto completo o Cálculo rápido de un circuito.</span></button>
+            <button type="button" role="tab" id="tab-proyecto" aria-controls="ventana-lienzo" aria-selected="false" tabindex="-1" data-vista="proyecto"><b>Proyecto</b><span>Datos de la obra, suministro y la tabla de tableros con su estado. Lo que capturas aquí va a la portada de la memoria.</span></button>
+            <button type="button" role="tab" id="tab-tableros" aria-controls="ventana-lienzo" aria-selected="true" tabindex="0" data-vista="tableros"><b>Tableros y circuitos</b><span>El cuadro de cargas se recalcula con cada cambio: corriente, calibre, tierra, tubo, interruptor, caída de tensión y estado de cada circuito.</span></button>
+            <button type="button" role="tab" id="tab-procedimiento" aria-controls="ventana-lienzo" aria-selected="false" tabindex="-1" data-vista="procedimiento"><b>Procedimiento</b><span>Cada resultado con su fórmula, los valores sustituidos y el artículo de la norma; lo mismo que va en la memoria.</span></button>
+            <button type="button" role="tab" id="tab-unifilar" aria-controls="ventana-lienzo" aria-selected="false" tabindex="-1" data-vista="unifilar"><b>Unifilar</b><span>El diagrama se dibuja desde el proyecto: acometida, alimentadores, tableros y circuitos. Se exporta a DXF.</span></button>
+            <button type="button" role="tab" id="tab-revisar" aria-controls="ventana-lienzo" aria-selected="false" tabindex="-1" data-vista="revisar"><b>Revisar</b><span>Todo lo que falta antes de entregar, en un solo lugar y con su arreglo: lo que no cumple, lo sin evaluar y lo fuera de alcance.</span></button>
+            <button type="button" role="tab" id="tab-memoria" aria-controls="ventana-lienzo" aria-selected="false" tabindex="-1" data-vista="memoria"><b>Memoria</b><span>La vista previa de la memoria de cálculo, con los datos de firma y la lista de lo que conviene revisar antes de entregar.</span></button>
+            <button type="button" role="tab" id="tab-rapido" aria-controls="ventana-lienzo" aria-selected="false" tabindex="-1" data-vista="rapido"><b>Cálculo rápido</b><span>Un circuito suelto, sin crear proyecto: corriente, interruptor, conductor, tierra, tubería y caída, con alternativas si no cumple.</span></button>
+        </div>
+        <div class="mesa">
+          <div class="ventana">
+            <div class="ventana-barra">
+              <span class="ctl" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="titulo"><img src="app/icono.svg" alt="">IEEStudio</span>
+              <button class="ampliar" type="button" data-ampliar="#ventana-lienzo">Ampliar</button>
+            </div>
+            <div class="lienzo" id="ventana-lienzo" role="tabpanel" aria-live="polite">
+              <img src="imagenes/app/inicio.webp" srcset="imagenes/app/inicio.webp 1x, imagenes/app/inicio@2x.webp 2x" width="1440" height="900" alt="Pantalla de inicio de IEEStudio con Proyecto completo y Cálculo rápido." data-vista="inicio" loading="lazy">
+              <img src="imagenes/app/proyecto.webp" srcset="imagenes/app/proyecto.webp 1x, imagenes/app/proyecto@2x.webp 2x" width="1440" height="900" alt="Vista Proyecto con el resumen del proyecto de ejemplo." data-vista="proyecto" loading="lazy">
+              <img src="imagenes/app/tableros.webp" srcset="imagenes/app/tableros.webp 1x, imagenes/app/tableros@2x.webp 2x" width="1440" height="900" alt="Cuadro de cargas del tablero TG-1 con el estado de cada circuito y la ficha del circuito C-04." data-vista="tableros" class="ver" loading="lazy">
+              <img src="imagenes/app/procedimiento.webp" srcset="imagenes/app/procedimiento.webp 1x, imagenes/app/procedimiento@2x.webp 2x" width="1440" height="900" alt="Panel de procedimiento del circuito C-04 con la corriente, la caída de tensión y sus referencias." data-vista="procedimiento" loading="lazy">
+              <img src="imagenes/app/unifilar.webp" srcset="imagenes/app/unifilar.webp 1x, imagenes/app/unifilar@2x.webp 2x" width="1440" height="900" alt="Diagrama unifilar del proyecto de ejemplo dibujado por IEEStudio." data-vista="unifilar" loading="lazy">
+              <img src="imagenes/app/revisar.webp" srcset="imagenes/app/revisar.webp 1x, imagenes/app/revisar@2x.webp 2x" width="1440" height="900" alt="Vista Revisar con lo que no cumple, lo que falta evaluar y lo que queda fuera de alcance." data-vista="revisar" loading="lazy">
+              <img src="imagenes/app/memoria.webp" srcset="imagenes/app/memoria.webp 1x, imagenes/app/memoria@2x.webp 2x" width="1440" height="900" alt="Vista previa de la memoria de cálculo en IEEStudio." data-vista="memoria" loading="lazy">
+              <img src="imagenes/app/rapido.webp" srcset="imagenes/app/rapido.webp 1x, imagenes/app/rapido@2x.webp 2x" width="1440" height="900" alt="Cálculo rápido de un circuito con sus resultados." data-vista="rapido" loading="lazy">
+            </div>
+          </div>
+          <div class="telefono" aria-hidden="true">
+            <img src="imagenes/app/movil-inicio.webp" width="390" height="844" alt="" data-movil="inicio" loading="lazy">
+            <img src="imagenes/app/movil-memoria.webp" width="390" height="844" alt="" data-movil="memoria" loading="lazy">
+            <img src="imagenes/app/movil-proyecto.webp" width="390" height="844" alt="" data-movil="proyecto" loading="lazy">
+            <img src="imagenes/app/movil-rapido.webp" width="390" height="844" alt="" data-movil="rapido" loading="lazy">
+            <img src="imagenes/app/movil-resultados.webp" width="390" height="844" alt="" data-movil="resultados" loading="lazy">
+            <img src="imagenes/app/movil-revisar.webp" width="390" height="844" alt="" data-movil="revisar" loading="lazy">
+            <img src="imagenes/app/movil-tableros.webp" width="390" height="844" alt="" data-movil="tableros" class="ver" loading="lazy">
+            <img src="imagenes/app/movil-unifilar.webp" width="390" height="844" alt="" data-movil="unifilar" loading="lazy">
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lamina clara" id="herramientas" aria-labelledby="t-herramientas">
+    <div class="wrap">
+      <p class="rotulo"><b>02</b>Herramientas</p>
+      <div class="cabeza">
+        <h2 id="t-herramientas">Lo que lleva una instalación de baja tensión.</h2>
+        <p class="intro">Cada herramienta cita el artículo o la tabla de la NOM-001-SEDE-2012 que la respalda. Si falta un dato o la tabla no cubre el caso, no se supone un valor: el resultado queda sin evaluar.</p>
+      </div>
+      <div class="modulos">
+        <article class="modulo m-caida revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 460 250" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<path class="fino" d="M40 60h330"/><text x="40" y="50">V fuente</text>
+<path d="M40 60 L370 108" class="ambar"/><path class="pulso" d="M40 60 L370 108"/>
+<text x="374" y="112" class="a">V carga</text>
+<path class="fino" d="M370 60v48"/><text x="378" y="88">ΔV</text>
+<g transform="translate(0 70)">
+<path d="M40 120h40M80 112h40v16h-40zM120 120h52"/><text x="88" y="104">R</text>
+<path d="M172 120c6-14 12-14 18 0s12 14 18 0 12-14 18 0 12 14 18 0"/><text x="190" y="104">X</text>
+<path d="M244 120h126"/><circle class="relleno" cx="40" cy="120" r="3"/><circle cx="370" cy="120" r="10"/>
+<path class="pulso" d="M40 120h330"/>
+<path class="fino" d="M40 150h330M40 145v10M370 145v10"/><text x="196" y="168">L</text>
+</g>
+<text x="40" y="24" class="valor">ΔV = 2 · I · L · (R cos θ + X sen θ) / n</text></svg></div>
+          <div class="texto">
             <h3>Caída de tensión</h3>
-            <p class="s">ΔV = 2 · 13.12 · 0.0350 · (6.6 · 0.90 + 0.223 · 0.436) = 5.55 V</p>
-            <p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tabla 9</p>
-          </li>
-          <li>
-            <h3>Caída acumulada</h3>
-            <p class="s">0.68 + 4.37 = <span class="bad">5.05 %</span>, límite 5.00 %</p>
-          </li>
-        </ol>
-        <div class="proc-foot">
-          <span class="verdict"><svg class="icon" aria-hidden="true"><use href="iconos.svg#i-fail"/></svg>No cumple</span>
-          <span class="fix">Con <b>10 AWG</b> cumple</span>
-        </div>
-      </figure>
-      <img class="float float-paper" src="imagenes/memoria-1.webp" width="1020" height="1320" alt="Primera hoja de la memoria de cálculo en PDF." loading="lazy">
+            <p>Por impedancia, con la resistencia y la reactancia de la Tabla 9 según el factor de potencia, para circuitos monofásicos y trifásicos, por tramo y acumulada desde la fuente.</p>
+            <p class="beneficio">Te dice la longitud máxima que cumple y qué calibre la resuelve.</p>
+            <p class="ref">Capítulo 10, Tabla 9; 210-19(a)(1), nota 4; 215-2(a)(1), nota 2</p>
+            <a class="doc" href="guia/#paso-5">Documentación<span class="sr"> de caída de tensión</span></a>
+          </div>
+        </article>
+        <article class="modulo m-conductores revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<circle cx="110" cy="100" r="64" class="tenue"/><circle cx="110" cy="100" r="48"/><circle cx="110" cy="100" r="30" class="ambar"/>
+<circle class="relleno-ambar" cx="110" cy="100" r="30" opacity=".18"/>
+<path class="fino" d="M164 60h40M158 100h46M140 125h64"/>
+<text x="210" y="64">aislamiento</text><text x="210" y="104">cobre o aluminio</text><text x="210" y="129">60, 75 o 90 °C</text>
+<text x="40" y="190" class="valor">I ≤ ampacidad × Ft × Fa</text></svg></div>
+          <div class="texto">
+            <h3>Conductores</h3>
+            <p>El menor calibre que cumple por terminales, ampacidad corregida por temperatura ambiente y agrupamiento, protección y caída de tensión. Cobre o aluminio.</p>
+            <p class="beneficio">Te dice cuál de los criterios decidió el calibre.</p>
+            <p class="ref">110-14(c); Tablas 310-15(b)(16), (b)(2)(a) y (b)(3)(a); 310-10(h)</p>
+            <a class="doc" href="funciones/#calculos">Documentación<span class="sr"> de conductores</span></a>
+          </div>
+        </article>
+        <article class="modulo m-protecciones revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<path class="fino" d="M30 120h340"/>
+<g><path d="M40 112v16"/><text x="40" y="146" text-anchor="middle">15</text><path d="M82 112v16"/><text x="82" y="146" text-anchor="middle">20</text><path d="M124 112v16"/><text x="124" y="146" text-anchor="middle">25</text><path d="M166 112v16"/><text x="166" y="146" text-anchor="middle">30</text><path d="M208 112v16"/><text x="208" y="146" text-anchor="middle">35</text><path d="M250 112v16"/><text x="250" y="146" text-anchor="middle">40</text><path d="M292 112v16"/><text x="292" y="146" text-anchor="middle">45</text><path d="M334 112v16"/><text x="334" y="146" text-anchor="middle">50</text></g>
+<path class="ambar" d="M124 70v50"/><text x="124" y="60" text-anchor="middle" class="a">I diseño</text>
+<g class="marca-itm" style="--dx: 0px"><path d="M124 92 L166 92" class="tenue"/><circle cx="166" cy="120" r="7" class="ambar"/><circle class="relleno-ambar" cx="166" cy="120" r="3"/></g>
+<text x="166" y="176" text-anchor="middle" class="valor">inmediato superior</text></svg></div>
+          <div class="texto">
+            <h3>Interruptores termomagnéticos</h3>
+            <p>El valor normalizado inmediato superior a la corriente de diseño, o el que tú fijes, verificado contra el conductor y sus límites para calibres pequeños.</p>
+            <p class="beneficio">Si fijas uno, te dice cuál habría propuesto y por qué.</p>
+            <p class="ref">210-20(a), 215-3; 240-6(a); 240-4, 240-4(d)</p>
+            <a class="doc" href="guia/#paso-5">Documentación<span class="sr"> de interruptores termomagnéticos</span></a>
+          </div>
+        </article>
+        <article class="modulo m-tuberia revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<circle cx="200" cy="100" r="74"/><circle cx="200" cy="100" r="66" class="fino"/>
+<circle cx="176" cy="84" r="20" class="relleno-gris"/><circle cx="222" cy="80" r="20" class="relleno-gris"/><circle cx="200" cy="122" r="20" class="relleno-gris"/>
+<circle cx="236" cy="124" r="11" class="relleno-gris"/>
+<text x="290" y="60">40 %</text><text x="290" y="78" class="a">ocupación</text></svg></div>
+          <div class="texto">
+            <h3>Tubería conduit</h3>
+            <p>EMT, IMC, RMC y PVC con el área real de cada conductor aislado, la ocupación permitida, niples y atascamiento.</p>
+            <p class="beneficio">Diámetro comercial propuesto por circuito.</p>
+            <p class="ref">Capítulo 10, Tablas 1, 4 y 5</p>
+            <a class="doc" href="funciones/#calculos">Documentación<span class="sr"> de tubería conduit</span></a>
+          </div>
+        </article>
+        <article class="modulo m-cuadro revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 190" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<text x="30" y="56">A</text><text x="30" y="96">B</text><text x="30" y="136">C</text>
+<rect class="relleno barra-fase" x="50" y="44" width="250" height="16" rx="3" opacity=".75" style="--bal: .88"/>
+<rect class="relleno barra-fase" x="50" y="84" width="180" height="16" rx="3" opacity=".55" style="--bal: 1.22"/>
+<rect class="relleno barra-fase" x="50" y="124" width="205" height="16" rx="3" opacity=".65" style="--bal: 1.07"/>
+<path class="ambar" d="M270 34v116" stroke-dasharray="3 4"/><text x="276" y="172" class="a">promedio</text></svg></div>
+          <div class="texto">
+            <h3>Cuadro de cargas</h3>
+            <p>Circuitos por tablero con su carga, fases y estado; carga del alimentador por el artículo 220 y desbalance entre fases.</p>
+            <p class="beneficio">Balanceo automático que se puede deshacer; ida y vuelta con Excel.</p>
+            <p class="ref">220-12, 220-40, 220-42, 220-44</p>
+            <a class="doc" href="guia/#paso-4">Documentación<span class="sr"> de cuadro de cargas</span></a>
+          </div>
+        </article>
+        <article class="modulo m-motores revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 190" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<circle cx="120" cy="100" r="46"/><text x="120" y="108" text-anchor="middle" class="valor" style="font-size:22px">M</text>
+<path d="M120 20v34M120 146v24"/><path class="pulso" d="M120 20v34"/>
+<path class="fino" d="M200 70h150M200 100h150M200 130h150"/>
+<text x="200" y="64">I plena carga (tablas)</text><text x="200" y="94" class="a">conductor 125 %</text><text x="200" y="124">protección y sobrecarga</text></svg></div>
+          <div class="texto">
+            <h3>Motores y aire acondicionado</h3>
+            <p>Corriente de las tablas 430-248 y 430-250, conductor al 125 %, protección, relevador de sobrecarga y motocompresores por su placa.</p>
+            <p class="beneficio">El motor mayor se considera en el alimentador.</p>
+            <p class="ref">430-22, 430-24, 430-32, 430-52; 440-22, 440-32</p>
+            <a class="doc" href="funciones/#calculos">Documentación<span class="sr"> de motores y aire acondicionado</span></a>
+          </div>
+        </article>
+        <article class="modulo m-unifilar revela">
+          <div class="dibujo"><img src="imagenes/app/unifilar-detalle.webp" width="1200" height="892" alt="Detalle del diagrama unifilar que dibuja IEEStudio para el proyecto de ejemplo." loading="lazy"></div>
+          <div class="texto">
+            <h3>Diagrama unifilar</h3>
+            <p>Se dibuja desde el proyecto con su simbología: acometida, transformador, alimentadores, tableros y circuitos con interruptor, conductores, tubería y caída.</p>
+            <p class="beneficio">Modos Revisión y Plano, con notas y cajetín; exportación a DXF para AutoCAD.</p>
+            <p class="ref">Generado por el programa</p>
+            <a class="doc" href="guia/#paso-7">Documentación<span class="sr"> de diagrama unifilar</span></a>
+          </div>
+        </article>
+        <article class="modulo m-transformador revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 190" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<circle cx="150" cy="100" r="40"/><circle cx="200" cy="100" r="40"/>
+<path d="M60 100h50M240 100h100"/><path class="pulso" d="M60 100h50"/><path class="pulso" d="M240 100h100"/>
+<text x="60" y="88">primario</text><text x="270" y="88">secundario</text>
+<text x="175" y="170" text-anchor="middle" class="valor">≤ 600 V</text></svg></div>
+          <div class="texto">
+            <h3>Transformadores</h3>
+            <p>Transformadores de 600 V o menos dentro de la instalación: primario y secundario, protección máxima y tensión propia del tablero que alimentan.</p>
+            <p class="beneficio">La caída se cuenta desde el secundario.</p>
+            <p class="ref">450-3(b), Tabla 450-3(b); 240-21(c)</p>
+            <a class="doc" href="guia/#paso-3">Documentación<span class="sr"> de transformadores</span></a>
+          </div>
+        </article>
+        <article class="modulo m-tierra revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<path d="M200 30v80"/><path d="M160 110h80M172 126h56M186 142h28"/>
+<path class="pulso" d="M200 30v80"/>
+<path class="fino" d="M70 60h130"/><text x="70" y="52">equipo</text>
+<text x="250" y="70" class="a">250-122</text><text x="250" y="90">electrodo 250-66</text></svg></div>
+          <div class="texto">
+            <h3>Puesta a tierra</h3>
+            <p>Conductor de puesta a tierra de equipos por la protección del circuito y conductor al electrodo por el mayor conductor de la acometida.</p>
+            <p class="beneficio">Con el incremento proporcional si las fases crecen.</p>
+            <p class="ref">Tabla 250-122, 250-122(b); Tabla 250-66</p>
+            <a class="doc" href="funciones/#calculos">Documentación<span class="sr"> de puesta a tierra</span></a>
+          </div>
+        </article>
+        <article class="modulo m-falla revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 190" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<path d="M60 40h280"/><text x="60" y="30">transformador</text>
+<path d="M120 40v50M120 90h60M240 40v90M240 130h60"/>
+<rect x="104" y="90" width="32" height="20" rx="3"/><rect x="224" y="130" width="32" height="20" rx="3"/>
+<path class="pulso" d="M60 40h280"/>
+<text x="150" y="104" class="a">kA</text><text x="270" y="144" class="a">kA</text>
+<text x="60" y="180">punto a punto, tablero por tablero</text></svg></div>
+          <div class="texto">
+            <h3>Capacidad interruptiva</h3>
+            <p>Con los datos de la fuente, revisa cada tablero con una falla estimada como cota superior, descontando los alimentadores y sumando la aportación de motores. No es un estudio de cortocircuito.</p>
+            <p class="beneficio">Se puede apagar; entonces queda anotada como fuera de alcance.</p>
+            <p class="ref">110-9, 110-10</p>
+            <a class="doc" href="funciones/#calculos">Documentación<span class="sr"> de capacidad interruptiva</span></a>
+          </div>
+        </article>
+        <article class="modulo m-rapido revela">
+          <div class="dibujo"><svg class="dib" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+<rect x="90" y="30" width="220" height="140" rx="8"/><path class="fino" d="M90 58h220"/>
+<path class="fino" d="M110 84h80M110 108h120M110 132h60"/>
+<rect class="relleno-ambar" x="226" y="140" width="70" height="18" rx="4" opacity=".9"/>
+<text x="110" y="49">1 circuito</text><text x="232" y="153" style="fill:#15130c">PDF</text></svg></div>
+          <div class="texto">
+            <h3>Cálculo rápido</h3>
+            <p>Un circuito sin crear proyecto, con su hoja en PDF y alternativas ya calculadas si no cumple.</p>
+            <p class="beneficio">Si te sirve, pasa al tablero seleccionado con un clic.</p>
+            <p class="ref">Mismas reglas que el proyecto</p>
+            <a class="doc" href="guia/#rapido">Documentación<span class="sr"> de cálculo rápido</span></a>
+          </div>
+        </article>
+      </div>
     </div>
   </section>
 
-  <section class="block">
-    <div class="wrap who">
-      <div class="who-photo"><img src="imagenes/fotos/tablero-electricista.webp" width="1024" height="681" alt="Electricista con casco revisando un tablero de distribución." loading="lazy"></div>
+  <section class="lamina" id="flujo" aria-labelledby="t-flujo">
+    <div class="wrap">
+      <p class="rotulo"><b>03</b>Cómo funciona</p>
+      <div class="cabeza">
+        <h2 id="t-flujo">De los datos de la obra a la memoria firmada.</h2>
+        <p class="intro">Un solo modelo del proyecto: el cuadro de cargas, el unifilar y la memoria salen de los mismos datos y se actualizan juntos.</p>
+      </div>
+      <div class="flujo" id="flujo-diagrama">
+        <div class="bus" aria-hidden="true">
+          <svg viewBox="0 0 1000 120" preserveAspectRatio="none">
+            <path class="base" d="M22 82H1000"/>
+            <path class="carga" pathLength="1" d="M22 82H1000"/>
+          </svg>
+        </div>
+        <div class="pasos" role="tablist" aria-label="Pasos del flujo de trabajo">
+          <button class="paso" type="button" role="tab" id="paso-captura" aria-controls="detalle-captura" aria-selected="true" tabindex="0"><span class="nodo">1</span><h3>Introduce los datos</h3><p>Obra, suministro, tableros y circuitos. Cada dato se captura una vez, en el nivel al que pertenece.</p></button>
+          <button class="paso" type="button" role="tab" id="paso-calculo" aria-controls="detalle-calculo" aria-selected="false" tabindex="-1"><span class="nodo">2</span><h3>Ejecuta los cálculos</h3><p>No hay botón de calcular: cada cambio recalcula el proyecto completo.</p></button>
+          <button class="paso" type="button" role="tab" id="paso-revision" aria-controls="detalle-revision" aria-selected="false" tabindex="-1"><span class="nodo">3</span><h3>Revisa los resultados</h3><p>Cada verificación dice si cumple, no cumple o no se pudo evaluar, y por qué.</p></button>
+          <button class="paso" type="button" role="tab" id="paso-documento" aria-controls="detalle-documento" aria-selected="false" tabindex="-1"><span class="nodo">4</span><h3>Genera la documentación</h3><p>La memoria de cálculo en PDF, el cuadro de cargas en Excel y el unifilar en DXF salen del mismo modelo.</p></button>
+        </div>
+        <div class="detalle-paso" role="tabpanel" id="detalle-captura" aria-labelledby="paso-captura">
+          <div><h3>Introduce los datos</h3><p>Agregar circuito pregunta primero qué vas a conectar: alumbrado, contactos, motor, aire acondicionado u otra carga.</p><ul><li>Datos de la obra y del suministro en la vista Proyecto.</li><li>Tableros con su alimentación, conexión, longitud y áreas.</li><li>Circuitos nuevos sin potencia ni longitud: quedan sin evaluar hasta que los capturas.</li></ul></div>
+          <figure><img src="imagenes/app/proyecto.webp" srcset="imagenes/app/proyecto.webp 1x, imagenes/app/proyecto@2x.webp 2x" width="1440" height="900" alt="Vista Proyecto del proyecto de ejemplo." loading="lazy"></figure>
+        </div>
+        <div class="detalle-paso" role="tabpanel" id="detalle-calculo" aria-labelledby="paso-calculo" hidden>
+          <div><h3>Ejecuta los cálculos</h3><p>Corriente, conductor, interruptor, tierra, tubería y caída de tensión de cada tramo, con la carga del alimentador por el artículo 220.</p><ul><li>El motor no redondea: solo se redondea lo que se muestra.</li><li>Si una tabla no cubre el caso, el resultado queda sin evaluar.</li><li>El procedimiento muestra la fórmula, los valores y la referencia.</li></ul></div>
+          <figure><img src="imagenes/app/procedimiento.webp" srcset="imagenes/app/procedimiento.webp 1x, imagenes/app/procedimiento@2x.webp 2x" width="1440" height="900" alt="Panel de procedimiento con las fórmulas y los valores sustituidos." loading="lazy"></figure>
+        </div>
+        <div class="detalle-paso" role="tabpanel" id="detalle-revision" aria-labelledby="paso-revision" hidden>
+          <div><h3>Revisa los resultados</h3><p>La vista Revisar junta lo que falta del proyecto con su arreglo, como «Usar 10 AWG», y separa lo que queda fuera de alcance.</p><ul><li>Ningún resultado se marca conforme si falta un dato.</li><li>Lo que la norma pide y el programa no verifica se anota.</li><li>La aprobación profesional nunca la da el programa.</li></ul></div>
+          <figure><img src="imagenes/app/revisar.webp" srcset="imagenes/app/revisar.webp 1x, imagenes/app/revisar@2x.webp 2x" width="1440" height="900" alt="Vista Revisar del proyecto de ejemplo." loading="lazy"></figure>
+        </div>
+        <div class="detalle-paso" role="tabpanel" id="detalle-documento" aria-labelledby="paso-documento" hidden>
+          <div><h3>Genera la documentación</h3><p>La memoria lleva los datos de la obra, criterios, cuadro de cargas, unifilar, observaciones y el procedimiento de cada tramo.</p><ul><li>Responsable, cédula y revisión en cada hoja.</li><li>Observaciones con todo lo que no cumple o no se evaluó.</li><li>El .iees abre igual en el navegador y en Windows.</li></ul></div>
+          <figure><img src="imagenes/app/memoria.webp" srcset="imagenes/app/memoria.webp 1x, imagenes/app/memoria@2x.webp 2x" width="1440" height="900" alt="Vista Memoria con la vista previa del PDF." loading="lazy"></figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lamina clara" id="memoria" aria-labelledby="t-memoria">
+    <div class="wrap memoria">
       <div>
-        <p class="kicker">Para quién es</p>
-        <h2>Para quien diseña, calcula y firma la instalación</h2>
-        <p class="intro">Ingenieros, contratistas y residentes de obra que preparan la memoria de cálculo de una instalación residencial, comercial o industrial en baja tensión.</p>
-        <ul>
-          <li><svg aria-hidden="true"><use href="iconos.svg#i-check"/></svg><span><b>Un solo modelo del proyecto</b>El cuadro de cargas, el unifilar y la memoria salen de los mismos datos y se actualizan juntos.</span></li>
-          <li><svg aria-hidden="true"><use href="iconos.svg#i-check"/></svg><span><b>La norma, artículo por artículo</b>Cada resultado cita la tabla o el artículo de la NOM-001-SEDE-2012 que lo respalda.</span></li>
-          <li><svg aria-hidden="true"><use href="iconos.svg#i-check"/></svg><span><b>Sin licencias ni cuentas</b>Gratis para uso profesional, en el navegador o en Windows.</span></li>
-        </ul>
+        <p class="rotulo"><b>04</b>Memoria técnica</p>
+        <h2 id="t-memoria">La memoria se arma sola, hoja por hoja.</h2>
+        <p class="intro">Un PDF con lo que pide una revisión: datos de la obra, criterios de diseño, cuadro de cargas, unifilar, observaciones y el procedimiento de cada tramo con su referencia. Estas son hojas reales del proyecto de ejemplo.</p>
+        <ol class="indice-memoria">
+            <li><button type="button" data-hoja="0" aria-pressed="true">Portada, datos y criterios<span class="pg">hoja 1 de 13</span></button></li>
+            <li><button type="button" data-hoja="1" aria-pressed="false">Cuadro de cargas<span class="pg">hoja 2 de 13</span></button></li>
+            <li><button type="button" data-hoja="2" aria-pressed="false">Diagrama unifilar<span class="pg">hoja 3 de 13</span></button></li>
+            <li><button type="button" data-hoja="3" aria-pressed="false">Observaciones<span class="pg">hoja 4 de 13</span></button></li>
+            <li><button type="button" data-hoja="4" aria-pressed="false">Procedimiento de cada tramo<span class="pg">hoja 9 de 13</span></button></li>
+            <li><button type="button" data-hoja="5" aria-pressed="false">Firmas<span class="pg">hoja 13 de 13</span></button></li>
+        </ol>
+      </div>
+      <div class="hojas" id="hojas">
+            <button class="hoja al-frente" type="button" data-hoja="0" style="--i:5;--abs:2.5;z-index:6" aria-label="Ampliar: Portada, datos y criterios"><img src="imagenes/memoria/hoja-1.webp" data-grande="imagenes/memoria/hoja-1-grande.webp" width="1020" height="1320" alt="Primera hoja de la memoria: datos de la obra, criterios de diseño y resumen." loading="lazy"></button>
+            <button class="hoja" type="button" data-hoja="1" style="--i:4;--abs:1.5;z-index:5" aria-label="Ampliar: Cuadro de cargas"><img src="imagenes/memoria/hoja-2.webp" data-grande="imagenes/memoria/hoja-2-grande.webp" width="1020" height="1320" alt="Hoja de la memoria con la carga del alimentador y el cuadro de cargas del tablero TG-1." loading="lazy"></button>
+            <button class="hoja" type="button" data-hoja="2" style="--i:3;--abs:0.5;z-index:4" aria-label="Ampliar: Diagrama unifilar"><img src="imagenes/memoria/hoja-3.webp" data-grande="imagenes/memoria/hoja-3-grande.webp" width="1020" height="1320" alt="Hoja de la memoria con el diagrama unifilar, su simbología, notas y cajetín." loading="lazy"></button>
+            <button class="hoja" type="button" data-hoja="3" style="--i:2;--abs:0.5;z-index:3" aria-label="Ampliar: Observaciones"><img src="imagenes/memoria/hoja-4.webp" data-grande="imagenes/memoria/hoja-4-grande.webp" width="1020" height="1320" alt="Hoja de la memoria con las observaciones y el inicio del procedimiento del alimentador." loading="lazy"></button>
+            <button class="hoja" type="button" data-hoja="4" style="--i:1;--abs:1.5;z-index:2" aria-label="Ampliar: Procedimiento de cada tramo"><img src="imagenes/memoria/hoja-9.webp" data-grande="imagenes/memoria/hoja-9-grande.webp" width="1020" height="1320" alt="Hoja de la memoria con el procedimiento de cálculo de un circuito y sus referencias." loading="lazy"></button>
+            <button class="hoja" type="button" data-hoja="5" style="--i:0;--abs:2.5;z-index:1" aria-label="Ampliar: Firmas"><img src="imagenes/memoria/hoja-13.webp" data-grande="imagenes/memoria/hoja-13-grande.webp" width="1020" height="1320" alt="Última hoja de la memoria con los espacios para firmas." loading="lazy"></button>
+        <p class="leyenda">Memoria del proyecto de ejemplo, generada por IEEStudio</p>
       </div>
     </div>
   </section>
 
-  <section class="block">
+  <section class="lamina" id="filosofia" aria-labelledby="t-filosofia">
     <div class="wrap">
-      <p class="kicker">Conoce IEEStudio</p>
-      <h2>Empieza por donde quieras</h2>
-      <div class="tiles">
-        <a class="tile" href="funciones/">
-          <div class="art"><img src="imagenes/app-unifilar.webp" width="1440" height="900" alt="" loading="lazy"></div>
-          <div class="body"><h3>Funciones</h3><p>Qué calcula, cómo muestra el procedimiento y qué entrega: cuadro de cargas, unifilar y memoria.</p><span class="go">Ver funciones</span></div>
-        </a>
-        <a class="tile" href="guia/">
-          <div class="art"><img src="video/guia.jpg" width="1600" height="900" alt="" loading="lazy"><span class="play"><span><svg aria-hidden="true"><use href="iconos.svg#i-triangle"/></svg></span></span></div>
-          <div class="body"><h3>Guía en video</h3><p>Un recorrido de pocos minutos por un proyecto completo, y la guía paso a paso.</p><span class="go">Ver la guía</span></div>
-        </a>
-        <a class="tile" href="descargar/">
-          <div class="art"><img src="imagenes/app-rapido.webp" width="1440" height="900" alt="" loading="lazy"></div>
-          <div class="body"><h3>En línea o en Windows</h3><p>Úsalo en el navegador sin instalar nada o descarga el instalador para Windows.</p><span class="go">Ver opciones</span></div>
-        </a>
+      <p class="rotulo"><b>05</b>Filosofía</p>
+      <h2 id="t-filosofia" class="sr">Filosofía del proyecto</h2>
+      <div class="filosofia">
+        <p class="manifiesto revela">Un programa de ingeniería tiene que poder revisarse. <span>Por eso IEEStudio muestra cada fórmula, cita cada tabla y dice con claridad lo que no sabe, en lugar de esconderlo detrás de un resultado verde.</span></p>
+        <dl class="principios revela">
+          <div><dt>sin redondeo</dt><dd><b>Calcula con precisión completa</b>Solo redondea lo que se muestra. Cualquier número se puede comprobar a mano.</dd></div>
+          <div><dt>sin suposiciones</dt><dd><b>Nunca inventa un dato</b>Si la tabla no cubre el caso o falta un valor, el resultado queda sin evaluar y dice qué falta.</dd></div>
+          <div><dt>datos abiertos</dt><dd><b>La norma vive en tablas revisables</b>Ningún valor normativo está escrito en el código: las tablas están en archivos CSV y cada regla tiene sus pruebas.</dd></div>
+          <div><dt>firma humana</dt><dd><b>La aprobación es del ingeniero</b>El programa verifica contra la norma, pero nunca marca un proyecto como aprobado.</dd></div>
+        </dl>
       </div>
     </div>
   </section>
 
-  <section class="block" style="padding-top:0">
+  <section class="lamina clara" id="documentacion" aria-labelledby="t-docs">
     <div class="wrap">
-      <div class="photo-band">
-        <img src="imagenes/fotos/clemas.webp" width="1024" height="576" alt="Tablillas de conexión con conductores en un tablero de control." loading="lazy">
-        <div class="content">
-          <p class="kicker">Código abierto</p>
-          <h2>Puedes revisar cómo calcula cada número</h2>
-          <p>El código, las tablas de la norma y los casos de prueba son públicos. El instalador y la versión en línea se compilan a la vista en GitHub.</p>
-          <div class="actions"><a class="btn btn-line" href="codigo-abierto/">Cómo se verifica</a></div>
+      <p class="rotulo"><b>06</b>Documentación</p>
+      <div class="cabeza">
+        <h2 id="t-docs">Aprende a usarlo y revisa cómo calcula.</h2>
+        <p class="intro">La guía explica el uso con capturas y video. La documentación técnica, en el repositorio, explica los criterios de cálculo y sus fuentes.</p>
+      </div>
+      <div class="docs">
+        <div>
+          <h3>Uso del programa</h3>
+          <ul class="indice">
+            <li><a href="guia/#video"><span><span class="t">Guía en video</span><span class="d">Un recorrido de pocos minutos por un proyecto completo.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">guía</span></a></li>
+            <li><a href="guia/#pasos"><span><span class="t">Paso a paso</span><span class="d">De la acometida a la memoria, con capturas de cada vista.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">guía</span></a></li>
+            <li><a href="guia/#rapido"><span><span class="t">Cálculo rápido</span><span class="d">Un circuito suelto sin crear proyecto.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">guía</span></a></li>
+            <li><a href="guia/#atajos"><span><span class="t">Atajos de teclado</span><span class="d">Vistas, guardar, exportar y la paleta de comandos.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">guía</span></a></li>
+            <li><a href="guia/#preguntas"><span><span class="t">Preguntas frecuentes</span><span class="d">Privacidad, archivos, teléfono y aprobación.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">guía</span></a></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Referencia técnica</h3>
+          <ul class="indice">
+            <li><a href="https://github.com/JAAM08/IEEStudio/blob/main/docs/engineering-methodology.md"><span><span class="t">Metodología de ingeniería</span><span class="d">Cómo se calcula, qué se verifica y qué no.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/blob/main/docs/normative-sources.md"><span><span class="t">Fuentes normativas</span><span class="d">Qué tablas y artículos usa el programa y de dónde salen.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/tree/main/data/nom-001-sede-2012"><span><span class="t">Tablas de la norma en datos</span><span class="d">Los CSV que usa el motor, revisables en una hoja de cálculo.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/tree/main/docs/decisions"><span><span class="t">Decisiones de diseño</span><span class="d">El porqué de cada criterio, registro por registro.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/blob/main/docs/architecture.md"><span><span class="t">Arquitectura</span><span class="d">Cómo se organiza el código en crates.</span></span><span class="puntos" aria-hidden="true"></span><span class="dest">GitHub</span></a></li>
+          </ul>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="closing">
+  <section class="lamina" id="comunidad" aria-labelledby="t-comunidad">
     <div class="wrap">
-      <h2>Pruébalo ahora,<br>sin instalar nada.</h2>
-      <p>IEEStudio abre con un proyecto de ejemplo ya cargado: una casa habitación con su cuadro de cargas, su unifilar y su memoria.</p>
-      <div class="actions">
-        <a class="btn btn-volt" href="app/"><svg aria-hidden="true"><use href="iconos.svg#i-play"/></svg>Abrir en el navegador</a>
-          <a class="btn btn-line descargar" href="https://github.com/JAAM08/IEEStudio/releases"><svg aria-hidden="true"><use href="iconos.svg#i-down"/></svg>Descargar para Windows</a>
+      <p class="rotulo"><b>07</b>Comunidad y desarrollo</p>
+      <div class="cabeza">
+        <h2 id="t-comunidad">Un proyecto abierto, en desarrollo.</h2>
+        <p class="intro">El código, las tablas y los casos de prueba son públicos. Las versiones se compilan en GitHub desde ese código; nadie sube un instalador a mano.</p>
+      </div>
+      <div class="comunidad">
+        <div class="panel repo">
+          <h3><svg aria-hidden="true"><use href="iconos.svg#i-git"/></svg>Repositorio</h3>
+          <a class="url" href="https://github.com/JAAM08/IEEStudio">github.com/JAAM08/IEEStudio</a>
+          <dl>
+            <div><dt>Licencia</dt><dd>MIT o Apache-2.0</dd></div>
+            <div><dt>Lenguaje</dt><dd>Rust y egui</dd></div>
+            <div><dt>Plataformas</dt><dd>Windows y navegador</dd></div>
+            <div><dt>Norma</dt><dd>NOM-001-SEDE-2012</dd></div>
+          </dl>
+          <ul class="contribuir">
+            <li><a href="https://github.com/JAAM08/IEEStudio/issues/new?title=Error%3A%20"><svg aria-hidden="true"><use href="iconos.svg#i-fail"/></svg><span><b>Reportar un error</b><span>Si es de cálculo, adjunta el .iees o los datos del circuito.</span></span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/issues/new?title=Propuesta%3A%20"><svg aria-hidden="true"><use href="iconos.svg#i-steps"/></svg><span><b>Proponer una función</b><span>Qué necesitas calcular y con qué referencia.</span></span></a></li>
+            <li><a href="https://github.com/JAAM08/IEEStudio/blob/main/CONTRIBUTING.md"><svg aria-hidden="true"><use href="iconos.svg#i-code"/></svg><span><b>Contribuir</b><span>Cómo preparar un cambio y sus pruebas.</span></span></a></li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3><svg aria-hidden="true"><use href="iconos.svg#i-down"/></svg>Versiones publicadas</h3>
+          <ul class="lista-vivo" id="versiones"><li class="cargando">Consultando GitHub… <a href="https://github.com/JAAM08/IEEStudio/releases">Ver versiones</a></li></ul>
+        </div>
+        <div class="panel">
+          <h3><svg aria-hidden="true"><use href="iconos.svg#i-build"/></svg>Cambios recientes</h3>
+          <ul class="lista-vivo" id="cambios"><li class="cargando">Consultando GitHub… <a href="https://github.com/JAAM08/IEEStudio/commits/main">Ver historial</a></li></ul>
+        </div>
       </div>
     </div>
   </section>
+
+  <section class="cierre" id="descargar" aria-labelledby="t-descargar">
+    <div class="wrap cierre-grid">
+      <div>
+        <p class="rotulo"><b>08</b>Descarga</p>
+        <h2 id="t-descargar">Calcula tu siguiente instalación. <span>En el navegador o en Windows.</span></h2>
+        <p class="version">Versión de prueba: revisa los resultados antes de usarlos en un proyecto.</p>
+        <div class="acciones">
+          <a class="btn btn-ambar" href="app/"><svg aria-hidden="true"><use href="iconos.svg#i-play"/></svg>Abrir en el navegador</a>
+          <a class="btn btn-linea descargar" href="https://github.com/JAAM08/IEEStudio/releases"><svg aria-hidden="true"><use href="iconos.svg#i-down"/></svg>Descargar para Windows</a>
+        </div>
+        <div class="plataformas">
+          <div><h3>Navegador</h3><p>Chrome, Edge o Firefox recientes. Se instala como app y funciona sin internet.</p></div>
+          <div><h3>Windows</h3><p>Windows 10 u 11 de 64 bits. Instalador con la línea de comandos incluida.</p></div>
+          <div><h3>Linux y otros</h3><p>Se compila desde el <a href="https://github.com/JAAM08/IEEStudio">código fuente</a> con Rust.</p></div>
+        </div>
+      </div>
+      <div class="alzado"><svg class="plano-tablero " viewBox="0 0 440 600" role="img" aria-label="Alzado frontal del tablero de la portada, con sus cotas en milímetros">
+  <title>Alzado frontal del tablero de la portada, con sus cotas en milímetros</title>
+  <g>
+    <rect class="g" x="70" y="60" width="280" height="410" rx="3"/>
+    <rect class="f" x="86" y="76" width="248" height="378"/>
+    <rect x="194" y="0" width="32" height="60"/>
+    <path class="f" d="M190 52h40M190 58h40"/>
+    <rect x="132" y="470" width="26" height="110"/><rect x="197" y="470" width="26" height="110"/><rect x="262" y="470" width="26" height="110"/>
+    <path class="f" d="M128 472h34M193 472h34M258 472h34"/>
+    <rect x="172.5" y="97.5" width="75" height="50" rx="4"/>
+    <rect class="rc" x="197.5" y="117" width="25" height="11" rx="2"/>
+    <text x="210" y="92" text-anchor="middle">3P-25</text>
+    <rect x="276" y="101" width="37.5" height="42.5" rx="3"/>
+    <rect class="c" x="281" y="106" width="27.5" height="20" rx="1"/>
+    <rect x="198" y="165" width="5.5" height="180"/><rect x="207.25" y="165" width="5.5" height="180"/><rect x="216.5" y="165" width="5.5" height="180"/>
+    <rect x="149" y="181.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="189" y="185.5" width="4" height="7.5" rx="1"/>
+    <text x="143" y="192.75" text-anchor="end">C-01</text>
+    <rect x="149" y="198.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="189" y="202.5" width="4" height="7.5" rx="1"/>
+    <text x="143" y="209.75" text-anchor="end">C-02</text>
+    <rect x="149" y="215.5" width="47.5" height="32.5" rx="2"/>
+    <rect class="c" x="189" y="219.5" width="4" height="24.5" rx="1"/>
+    <text x="143" y="235.25" text-anchor="end">C-03</text>
+    <rect x="223.5" y="215.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="219.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="226.75" text-anchor="start">C-04</text>
+    <rect x="223.5" y="198.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="202.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="209.75" text-anchor="start">C-05</text>
+    <rect x="223.5" y="181.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="185.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="192.75" text-anchor="start">C-06</text>
+    <rect class="f" x="223.5" y="233.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="250.5" width="47.5" height="14"/>
+    <rect class="f" x="223.5" y="250.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="267.5" width="47.5" height="14"/>
+    <rect class="f" x="223.5" y="267.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="284.5" width="47.5" height="14"/>
+    <rect class="f" x="223.5" y="284.5" width="47.5" height="14"/>
+    <rect x="117.5" y="389" width="85" height="7"/><rect x="237.5" y="389" width="65" height="7"/>
+    <text x="160" y="410" text-anchor="middle">N</text><text x="270" y="410" text-anchor="middle">T</text>
+  </g>
+  <g class="cota">
+    <path d="M70 34v20M350 34v20M70 40h280M380 60h20M380 470h20M394 60v410"/>
+    <path d="M74 37l-4 3 4 3M346 37l4 3-4 3M391 64l3-4 3 4M391 466l3 4 3-4"/>
+  </g>
+  <text x="210" y="34" text-anchor="middle">560</text>
+  <text x="404" y="268" transform="rotate(90 404 268)" text-anchor="middle">820</text>
+  <text x="70" y="596">TG-1  3F-4H  220Y/127 V</text>
+</svg></div>
+    </div>
+  </section>
+
+  <dialog class="visor" id="visor" aria-label="Imagen ampliada">
+    <div class="visor-barra"><span id="visor-texto"></span><button type="button" data-cerrar>Cerrar</button></div>
+    <img id="visor-img" alt="">
+  </dialog>
 </main>
 
 <footer>
   <div class="wrap">
-    <a class="brand" href="./"><img src="app/icono.svg" alt="" width="26" height="26">IEEStudio</a>
-    <nav aria-label="Enlaces">
+    <a class="marca" href="./"><img src="app/icono.svg" alt="" width="26" height="26">IEEStudio</a>
+    <nav aria-label="Pie">
       <a href="app/">Abrir la app</a>
-      <a href="funciones/">Funciones</a>
-      <a href="guia/">Guía</a>
+      <a href="funciones/">Herramientas</a>
+      <a href="guia/">Documentación</a>
       <a href="descargar/">Descargar</a>
-      <a href="codigo-abierto/">Código abierto</a>
+      <a href="codigo-abierto/">Comunidad</a>
       <a href="https://github.com/JAAM08/IEEStudio/issues">Reportar un problema</a>
     </nav>
-    <p>Software libre bajo licencias MIT o Apache-2.0. IEEStudio no está afiliado a la Secretaría de Energía ni a ningún organismo de normalización; la NOM-001-SEDE-2012 se cita por artículo y su texto no se reproduce. Fotografías de dominio público; ver <a href="codigo-abierto/#creditos">créditos</a>.</p>
+    <p>Software libre bajo licencias MIT o Apache-2.0. IEEStudio no está afiliado a la Secretaría de Energía, a la CFE ni a ningún organismo de normalización; la NOM-001-SEDE-2012 se cita por artículo y su texto no se reproduce. Las imágenes del programa son capturas y documentos reales de IEEStudio; el modelo 3D de la portada es un dibujo propio.</p>
   </div>
 </footer>
 
-<script src="sitio.js"></script>
+<script src="sitio.js" defer></script>
+<script type="module" src="portada.js"></script>
 </body>
 </html>
