@@ -53,7 +53,20 @@ pub struct Check {
     pub references: Vec<RuleReference>,
 }
 
+/// Inicio del detalle de la verificación «Tubería» de una tubería compartida
+/// (decisión 0035).
+const SHARED_RACEWAY: &str = "la tubería es compartida";
+
 impl Check {
+    /// La ocupación quedó sin evaluar porque la tubería es compartida con
+    /// conductores de otros circuitos (decisión 0035). Cambiar el calibre del
+    /// tramo no la resuelve.
+    pub fn is_shared_raceway(&self) -> bool {
+        self.name == "Tubería"
+            && self.status == Status::NotEvaluated
+            && self.detail.starts_with(SHARED_RACEWAY)
+    }
+
     /// Agrega las referencias normativas de las reglas que verifica.
     fn cite(mut self, profile: &Profile, rules: &[Rule]) -> Self {
         self.references = rules.iter().map(|&r| profile.reference(r)).collect();
@@ -480,11 +493,67 @@ fn governing_label(g: Governing) -> &'static str {
 /// Conductores por fase que se prueban al buscar paralelos.
 const MAX_PARALLEL: u32 = 8;
 
-/// Dimensiona un tramo. Si el usuario no fijó el calibre ni los conductores
-/// por fase y un solo conductor no sirve (ninguno cumple, no cabe en ningún
-/// tubo o rebasa el calibre máximo de los criterios), propone el menor número
-/// de conductores en paralelo que sí.
+/// Dimensiona un tramo y, si su tubería es compartida, deja su ocupación sin
+/// evaluar (decisión 0035).
 fn size_run(
+    profile: &Profile,
+    settings: &Settings,
+    system: &System,
+    spec: &RunSpec,
+) -> Result<(Run, Vec<Check>), Error> {
+    choose_run(profile, settings, system, spec).map(|sized| shared_raceway(spec, sized))
+}
+
+/// Tubería compartida con conductores de otros circuitos (decisión 0035).
+///
+/// El número de portadores de otros circuitos sirve para el factor de
+/// agrupamiento, que ya se aplicó y no cambia. La ocupación necesita el
+/// calibre y el aislamiento de **todos** los conductores de la tubería,
+/// incluidos neutros y conductores de puesta a tierra, y el programa no los
+/// tiene: la verificación queda sin evaluar y no se publica ninguna tubería.
+/// Si los conductores del propio circuito ya no caben, el «No cumple» se
+/// conserva. Se aplica después de elegir los conductores por fase, para que
+/// la tubería compartida no haga proponer paralelos.
+fn shared_raceway(spec: &RunSpec, (mut run, mut checks): (Run, Vec<Check>)) -> (Run, Vec<Check>) {
+    let others = spec.overrides.other_current_carrying_conductors;
+    if others == 0 {
+        return (run, checks);
+    }
+    let Some(own) = run.conduit.take() else {
+        return (run, checks);
+    };
+    let conductors = if others == 1 {
+        "1 conductor portador".to_string()
+    } else {
+        format!("{others} conductores portadores")
+    };
+    if let Some(check) = checks
+        .iter_mut()
+        .find(|c| c.name == "Tubería" && c.status == Status::Complies)
+    {
+        check.status = Status::NotEvaluated;
+        check.detail = format!(
+            "{SHARED_RACEWAY} con {conductors} de otros circuitos. Su ocupación se calcula con el calibre y el aislamiento de todos los conductores que lleva, incluidos neutros y conductores de puesta a tierra, y el programa no los tiene. Para los conductores de este circuito solos bastaría {}, que no es la tubería a instalar",
+            own.label()
+        );
+    }
+    if let Some(step) = run.steps.iter_mut().find(|s| s.title == "Tubería conduit") {
+        let note = format!(
+            "Solo los conductores de este circuito: es un mínimo, no es la tubería a instalar. La tubería es compartida con {conductors} de otros circuitos y su ocupación queda sin evaluar."
+        );
+        step.note = Some(match step.note.take() {
+            Some(previous) => format!("{previous} {note}"),
+            None => note,
+        });
+    }
+    (run, checks)
+}
+
+/// Elige los conductores de un tramo. Si el usuario no fijó el calibre ni los
+/// conductores por fase y un solo conductor no sirve (ninguno cumple, no cabe
+/// en ningún tubo o rebasa el calibre máximo de los criterios), propone el
+/// menor número de conductores en paralelo que sí.
+fn choose_run(
     profile: &Profile,
     settings: &Settings,
     system: &System,
@@ -991,9 +1060,26 @@ struct PanelLoad {
     unknown: Vec<String>,
     /// Alguno de `unknown` tiene una potencia inválida, no solo faltante.
     unknown_invalid: Vec<String>,
+    /// Circuitos capturados en este tablero y en los que alimenta, con o sin
+    /// potencia. Cero es un tablero vacío: le faltan sus circuitos.
+    circuits: usize,
 }
 
 impl PanelLoad {
+    /// Un tablero sin carga no tiene alimentador que dimensionar. Si ni él ni
+    /// sus subtableros tienen circuitos, falta capturarlos (dato que falta,
+    /// decisión 0027); si los tiene y todos suman 0 W, se conserva el dato
+    /// inválido de siempre (decisión D-3 de la fase 0.1).
+    fn no_load(&self, panel: &str) -> Error {
+        if self.circuits == 0 {
+            Error::MissingData(format!(
+                "falta capturar los circuitos del tablero {panel}: ni él ni sus subtableros tienen circuitos"
+            ))
+        } else {
+            Error::InvalidInput("el tablero no tiene carga".into())
+        }
+    }
+
     /// Qué potencia falta o es inválida: «falta la potencia del circuito C-07
     /// de TG-1». `None` si se conoce la carga de todos los circuitos.
     fn unknown_reason(&self) -> Option<String> {
@@ -1122,6 +1208,7 @@ impl<'a> Context<'a> {
             ..PanelLoad::default()
         };
         load.groups.areas = panel.areas.clone();
+        load.circuits = panel.circuits.len();
         for (k, c) in panel.circuits.iter().enumerate() {
             let CircuitLoad { power_w, va } = match self.circuit_load(index, k) {
                 Ok(l) => l,
@@ -1184,6 +1271,7 @@ impl<'a> Context<'a> {
             load.phases_assigned &= sub.phases_assigned;
             load.unknown.extend(sub.unknown);
             load.unknown_invalid.extend(sub.unknown_invalid);
+            load.circuits += sub.circuits;
             if let Some(m) = sub.largest_motor {
                 if load.largest_motor.as_ref().map_or(true, |l| m.va > l.va) {
                     load.largest_motor = Some(m);
@@ -1356,7 +1444,7 @@ impl<'a> Context<'a> {
                 &panel.id,
                 "Alimentador",
                 Some(0.0),
-                Err(Error::InvalidInput("el tablero no tiene carga".into())),
+                Err(load.no_load(&panel.id)),
                 vec![],
             )
         };
@@ -1432,7 +1520,7 @@ impl<'a> Context<'a> {
                         )
                     })
             } else {
-                Err(Error::InvalidInput("el tablero no tiene carga".into()))
+                Err(load.no_load(&panel.id))
             };
             let mut extra = Vec::new();
             if let Ok((run, _)) = &mut outcome {

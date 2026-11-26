@@ -837,7 +837,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             ("Factor de potencia", format!("{:.2}", input.power_factor)),
             ("Carga continua", yes_no(input.continuous).to_string()),
             ("Longitud", format!("{} m", input.length_m)),
-            ("Conductor", conductor),
+            ("Conductor de fase", conductor),
             ("Canalización", input.conduit.to_string()),
             ("Temperatura ambiente", format!("{} °C", input.ambient_c)),
             (
@@ -854,7 +854,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             rows.push(("Corriente de diseño", format!("{:.2} A", p.design_a)));
             rows.push(("Interruptor", format!("{}P-{:.0} A", p.poles, p.breaker_a)));
             rows.push((
-                "Conductor",
+                "Conductor de fase",
                 format!(
                     "{}: {:.2} A permitidos, {}",
                     size_label(&input.size),
@@ -865,8 +865,14 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             if let Some(ground) = &p.grounding_size {
                 rows.push(("Puesta a tierra", size_label(ground)));
             }
+            if let Some(why) = &p.grounding_error {
+                rows.push(("Puesta a tierra", format!("Sin evaluar: {why}")));
+            }
             if let Some(conduit) = &p.conduit {
                 rows.push(("Tubería", conduit.clone()));
+            }
+            if let Some(why) = &p.conduit_error {
+                rows.push(("Tubería", format!("Sin evaluar: {why}")));
             }
         }
         Err(e) => {

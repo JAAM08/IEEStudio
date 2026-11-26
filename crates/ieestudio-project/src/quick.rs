@@ -127,26 +127,46 @@ pub struct Protection {
     pub protected: bool,
     /// Menor calibre que cumple ampacidad y protección con estos conductores por fase.
     pub minimum_size: Option<Size>,
+    /// Por qué no se pudo determinar `minimum_size`, solo cuando es por
+    /// falta del conductor de puesta a tierra.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minimum_size_error: Option<String>,
     /// Conductor de puesta a tierra de equipos (250-122).
     pub grounding_size: Option<Size>,
+    /// Por qué no se pudo determinar `grounding_size`. Sin conductor de
+    /// puesta a tierra el circuito queda sin evaluar, nunca conforme.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grounding_error: Option<String>,
     /// Tubería para las fases, el neutro y la tierra desnuda.
     pub conduit: Option<String>,
+    /// Por qué no se calculó la tubería, cuando es por falta del conductor
+    /// de puesta a tierra: nunca se calcula una tubería sin él.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conduit_error: Option<String>,
     pub status: Status,
 }
 
 impl QuickResult {
-    /// Veredicto del circuito: calculado si se pudo evaluar la protección, y
-    /// conforme solo si la protección y la caída de tensión cumplen.
+    /// Veredicto del circuito: calculado si se pudo evaluar la protección y se
+    /// determinó el conductor de puesta a tierra, y conforme solo si la
+    /// protección y la caída de tensión cumplen.
     pub fn verdict(&self) -> Verdict {
         let protection = match &self.protection {
             Ok(p) => p.status,
             Err(_) => Status::NotEvaluated,
         };
+        // El conductor de puesta a tierra es parte del circuito: sin él, el
+        // cálculo y el dictamen quedan incompletos (fase 0.1, C-2).
+        let grounding = match &self.protection {
+            Ok(p) if p.grounding_error.is_some() => Status::NotEvaluated,
+            _ => Status::Complies,
+        };
+        let uncalculated = self.protection.is_err() || grounding == Status::NotEvaluated;
         let mut verdict = Verdict::new(
             1,
-            usize::from(self.protection.is_err()),
+            usize::from(uncalculated),
             0,
-            [protection, self.status].map(crate::verdict::Outcome::from),
+            [protection, self.status, grounding].map(crate::verdict::Outcome::from),
         );
         verdict.out_of_scope = self.out_of_scope.clone();
         verdict
@@ -259,19 +279,29 @@ fn protection(
     let (design_a, breaker_a) = design_and_breaker(profile, &sizing)?;
     let check =
         check_conductor(profile, &sizing, &input.size, breaker_a).map_err(|e| e.to_string())?;
-    let minimum_size = select_conductor(profile, &sizing)
-        .ok()
-        .map(|r| r.conductor.size);
-    let grounding_size = equipment_grounding(
+    // Lo que no se puede determinar por falta del conductor de puesta a
+    // tierra se conserva con su causa, nunca se descarta en silencio (fase
+    // 0.1, C-2).
+    let selected = select_conductor(profile, &sizing);
+    let minimum_size = selected.as_ref().ok().map(|r| r.conductor.size.clone());
+    let grounding = equipment_grounding(
         profile,
         breaker_a,
         input.material,
         true,
         minimum_size.as_ref().unwrap_or(&input.size),
         &input.size,
-    )
-    .ok()
-    .map(|g| g.size);
+    );
+    // El calibre mínimo lleva causa solo si falta por la tierra: si ningún
+    // calibre de fase cumple la carga, se queda como antes, sin causa.
+    let minimum_size_error = match (&selected, &grounding) {
+        (Err(e), Err(g)) if e == g => Some(e.to_string()),
+        _ => None,
+    };
+    let (grounding_size, grounding_error) = match grounding {
+        Ok(g) => (Some(g.size), None),
+        Err(e) => (None, Some(e.to_string())),
+    };
     let mut steps = conductor_steps(&ConductorData {
         profile,
         continuous_a: sizing.continuous_a,
@@ -295,28 +325,35 @@ fn protection(
     // paralelos, un juego completo por tubo.
     let has_neutral = input.kind == CircuitKind::LineToNeutral
         || (input.has_neutral && input.system.line_to_neutral_v.is_some());
-    let mut groups = vec![ConductorGroup {
-        count: poles(input.kind) + u32::from(has_neutral),
-        size: input.size.clone(),
-        covering: Covering::Insulated(input.insulation.dimension_group()),
-    }];
-    if let Some(ground) = &grounding_size {
-        groups.push(ConductorGroup {
-            count: 1,
-            size: ground.clone(),
-            covering: Covering::Bare,
-        });
-    }
-    let conduit = size_conduit(
-        profile,
-        &ConduitInput {
-            groups,
-            conduit: input.conduit,
-            nipple: false,
-        },
-    )
-    .ok()
-    .map(|c| {
+    // Sin conductor de puesta a tierra no se calcula la tubería: sería la de
+    // un circuito incompleto (fase 0.1, C-2).
+    let conduit_error = grounding_size
+        .is_none()
+        .then(|| "no se calculó porque falta el conductor de puesta a tierra".to_string());
+    let conduit = grounding_size.as_ref().and_then(|ground| {
+        let groups = vec![
+            ConductorGroup {
+                count: poles(input.kind) + u32::from(has_neutral),
+                size: input.size.clone(),
+                covering: Covering::Insulated(input.insulation.dimension_group()),
+            },
+            ConductorGroup {
+                count: 1,
+                size: ground.clone(),
+                covering: Covering::Bare,
+            },
+        ];
+        size_conduit(
+            profile,
+            &ConduitInput {
+                groups,
+                conduit: input.conduit,
+                nipple: false,
+            },
+        )
+        .ok()
+    });
+    let conduit = conduit.map(|c| {
         let mut step = conduit_step(profile, &c, input.conduit, false);
         if n > 1 {
             step.substitution = format!("{n} tubos: {}", step.substitution);
@@ -355,8 +392,11 @@ fn protection(
         meets_ampacity,
         protected: check.protected,
         minimum_size,
+        minimum_size_error,
         grounding_size,
+        grounding_error,
         conduit,
+        conduit_error,
         status: if meets_ampacity && check.protected {
             Status::Complies
         } else {
