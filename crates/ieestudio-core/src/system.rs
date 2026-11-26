@@ -32,14 +32,6 @@ impl Topology {
         }
     }
 
-    pub fn wires(self) -> u32 {
-        match self {
-            Topology::SinglePhaseTwoWire => 2,
-            Topology::SinglePhaseThreeWire | Topology::ThreePhaseDelta => 3,
-            Topology::ThreePhaseWye => 4,
-        }
-    }
-
     /// `1F-3H`.
     pub fn code(self) -> &'static str {
         match self {

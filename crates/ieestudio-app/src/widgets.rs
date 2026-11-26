@@ -249,13 +249,8 @@ pub fn number(
 }
 
 /// Dato opcional que empieza vacío y se escribe directo; nunca se propone un
-/// valor (antes «Capturar» ponía uno). `_example` queda por compatibilidad.
-pub fn optional_number(
-    ui: &mut egui::Ui,
-    value: &mut Option<f64>,
-    _example: f64,
-    suffix: &str,
-) -> bool {
+/// valor.
+pub fn optional_number(ui: &mut egui::Ui, value: &mut Option<f64>, suffix: &str) -> bool {
     let id = ui.next_auto_id();
     blank_number_at(ui, id, value, suffix, false)
 }

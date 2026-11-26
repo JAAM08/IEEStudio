@@ -308,7 +308,7 @@ impl QuickView {
                         ui.end_row();
                     }
                     ui.label(muted("Corriente de placa"));
-                    changed |= optional_number(ui, &mut motor.nameplate_a, 10.0, " A");
+                    changed |= optional_number(ui, &mut motor.nameplate_a, " A");
                     ui.end_row();
                     ui.label(muted("Factor de servicio"));
                     changed |= ui

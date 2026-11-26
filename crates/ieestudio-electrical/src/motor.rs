@@ -34,16 +34,6 @@ pub struct MotorCurrent {
     pub full_load_a: f64,
 }
 
-/// Potencias de la tabla de motores, en orden creciente.
-pub fn motor_ratings(profile: &Profile, three_phase: bool) -> Vec<(String, f64)> {
-    let rows = if three_phase {
-        &profile.three_phase_motors
-    } else {
-        &profile.single_phase_motors
-    };
-    rows.iter().map(|r| (r.hp.clone(), r.kw)).collect()
-}
-
 /// Corriente a plena carga de la Tabla 430-248 o 430-250 (430-6(a)(1)).
 pub fn full_load_current(
     profile: &Profile,

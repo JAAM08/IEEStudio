@@ -1,8 +1,8 @@
 # 0036. Rediseño de ieestudio.com: sitio estático, escena 3D propia y solo imágenes reales
 
-**Estado:** propuesta (26 de noviembre de 2026), en revisión en su PR. No cambia
-la aplicación ni el motor de cálculo: solo `website/` y las herramientas que lo
-generan.
+**Estado:** aceptada (26 de noviembre de 2026); implementada en el PR #33. No
+cambia la aplicación ni el motor de cálculo: solo `website/` y las herramientas
+que lo generan.
 
 ## Contexto
 
