@@ -1,0 +1,15 @@
+# Lenguajes que GitHub muestra en el repositorio (Linguist).
+# IEEStudio es un programa en Rust. El sitio de ieestudio.com, la envoltura web
+# de la aplicación, las herramientas de apoyo (Python, shell, JavaScript) y el
+# instalador de Windows no son el programa: no cuentan en la estadística.
+website/** linguist-vendored
+crates/ieestudio-app/web/** linguist-vendored
+tools/** linguist-vendored
+installer/** linguist-vendored
+docs/** linguist-documentation
+
+# El paquete de la escena 3D se genera con `npm run build` en tools/escena:
+# se marca como generado y sin diferencias de texto, para que los PR muestren
+# solo su fuente (tools/escena/escena.js).
+website/escena.js linguist-generated -diff
+tools/escena/package-lock.json linguist-generated -diff

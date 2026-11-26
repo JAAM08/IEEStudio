@@ -61,11 +61,6 @@ const PROJECT_FILTER: Filter<'static> = Filter {
 #[derive(Serialize, Deserialize)]
 struct Prefs {
     dark: bool,
-    /// Antes se elegía el color de acento. El amarillo es ahora el único
-    /// acento (R2); el campo se conserva para leer preferencias viejas.
-    #[serde(default)]
-    #[allow(dead_code)]
-    accent: usize,
     columns: schedule::Columns,
     /// Juego de columnas del cuadro.
     #[serde(default)]
@@ -2219,7 +2214,6 @@ impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         let prefs = Prefs {
             dark: self.dark,
-            accent: 0,
             columns: self.shared.columns.clone(),
             column_set: self.shared.column_set,
             diagram_zoom: self.shared.diagram_zoom,
@@ -2323,7 +2317,6 @@ mod tests {
     fn the_view_and_the_split_are_remembered() {
         let prefs = Prefs {
             dark: true,
-            accent: 0,
             columns: schedule::Columns::default(),
             column_set: schedule::ColumnSet::Complete,
             diagram_zoom: 1.3,

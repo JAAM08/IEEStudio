@@ -775,7 +775,6 @@ fn interrupting_card(
                         if crate::widgets::optional_number(
                             ui,
                             &mut doc.project.panels[i].board.interrupting_ka,
-                            10.0,
                             " kA",
                         ) {
                             action = Some(CardAction::Changed);
@@ -801,7 +800,6 @@ fn interrupting_card(
                                     .overrides
                                     .breaker
                                     .interrupting_ka,
-                                10.0,
                                 " kA",
                             ) {
                                 action = Some(CardAction::Changed);

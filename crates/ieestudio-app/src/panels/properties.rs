@@ -957,21 +957,9 @@ pub(crate) fn occupancy_combo(
     changed
 }
 
+/// Datos de un circuito: identificador, carga, conexión, instalación,
+/// interruptor de catálogo y decisiones de diseño.
 fn circuit_inputs(ui: &mut egui::Ui, doc: &mut Doc, p: &Palette, i: usize, c: usize) -> bool {
-    circuit_form(ui, doc, p, i, c, false)
-}
-
-/// Datos de un circuito. En la vista guiada solo quedan a la vista los
-/// esenciales; el identificador, el factor de potencia, la carga continua,
-/// el neutro y las decisiones de diseño van en «Opciones avanzadas».
-pub(crate) fn circuit_form(
-    ui: &mut egui::Ui,
-    doc: &mut Doc,
-    p: &Palette,
-    i: usize,
-    c: usize,
-    guided: bool,
-) -> bool {
     let mut changed = false;
     let settings = doc.project.settings.clone();
     let current_size = doc
@@ -1001,12 +989,8 @@ pub(crate) fn circuit_form(
     let focus = take_focus_description(ui.ctx());
     let board_ka = doc.project.panels[i].board.interrupting_ka;
     let circuit = &mut doc.project.panels[i].circuits[c];
-    if !guided {
-        section(ui, p, "Circuito");
-        changed |= id_field(ui, p, &mut circuit.id, id_problem);
-    } else if let Some(problem) = &id_problem {
-        ui.label(RichText::new(format!("{} {problem}", icon::WARNING)).color(p.warn));
-    }
+    section(ui, p, "Circuito");
+    changed |= id_field(ui, p, &mut circuit.id, id_problem);
     property(ui, p, "Descripción", |ui| {
         let response = ui.text_edit_singleline(&mut circuit.name);
         if focus {
@@ -1118,9 +1102,7 @@ pub(crate) fn circuit_form(
             changed |= blank_number_or_zero(ui, ("potencia", i, c), &mut circuit.load.power_w, "W");
         });
     }
-    if !guided {
-        changed |= load_details(ui, p, &mut circuit.load, equipment);
-    }
+    changed |= load_details(ui, p, &mut circuit.load, equipment);
     section(ui, p, "Conexión");
     property(ui, p, "Conexión", |ui| {
         if connection_picker(ui, p, &mut circuit.kind, system, &allowed_kinds) {
@@ -1137,7 +1119,7 @@ pub(crate) fn circuit_form(
     property(ui, p, "Fases", |ui| {
         changed |= phase_picker(ui, &mut circuit.phases, panel_kind, circuit.kind);
     });
-    if !guided && circuit.kind != ieestudio_core::CircuitKind::LineToNeutral && has_neutral {
+    if circuit.kind != ieestudio_core::CircuitKind::LineToNeutral && has_neutral {
         changed |= ui
             .checkbox(&mut circuit.has_neutral, "Lleva neutro")
             .changed();
@@ -1146,53 +1128,16 @@ pub(crate) fn circuit_form(
     property(ui, p, "Longitud", |ui| {
         changed |= blank_number(ui, ("longitud-circuito", i, c), &mut circuit.length_m, "m");
     });
-    if !guided {
-        section(ui, p, "Interruptor (catálogo)");
-        changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
-        changed |= decisions(
-            ui,
-            p,
-            &mut circuit.overrides,
-            &format!("c{c}"),
-            &settings,
-            current_size.as_ref(),
-        );
-        return changed;
-    }
-    ui.add_space(crate::theme::SP2);
-    egui::CollapsingHeader::new(
-        RichText::new("Opciones avanzadas").color(p.ink2),
-    )
-    .id_salt(("avanzadas", i, c))
-    .show(ui, |ui| {
-        ui.label(
-            muted(
-                p,
-                "Identificador, factor de potencia, carga continua, neutro, cable o interruptor fijados, material y tubería.",
-            )
-            .size(crate::theme::FOOT),
-        );
-        changed |= id_field(ui, p, &mut circuit.id, None);
-        changed |= load_details(ui, p, &mut circuit.load, equipment);
-        if circuit.kind != ieestudio_core::CircuitKind::LineToNeutral && has_neutral {
-            changed |= ui
-                .checkbox(&mut circuit.has_neutral, "Lleva neutro")
-                .changed();
-        }
-        changed |= decisions(ui, p, &mut circuit.overrides, &format!("c{c}"), &settings, current_size.as_ref());
-    });
-    egui::CollapsingHeader::new(RichText::new("Interruptor (catálogo)").color(p.ink2))
-        .id_salt(("catalogo", i, c))
-        .show(ui, |ui| {
-            ui.label(
-                muted(
-                    p,
-                    "Marco, capacidad interruptiva, modelo, marca y posición: aparecen en el unifilar.",
-                )
-                .size(crate::theme::FOOT),
-            );
-            changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
-        });
+    section(ui, p, "Interruptor (catálogo)");
+    changed |= breaker_inputs(ui, p, &format!("c{c}"), &mut circuit.overrides, board_ka);
+    changed |= decisions(
+        ui,
+        p,
+        &mut circuit.overrides,
+        &format!("c{c}"),
+        &settings,
+        current_size.as_ref(),
+    );
     changed
 }
 
@@ -1260,7 +1205,7 @@ pub(crate) fn source_inputs(
     let mut changed = false;
     changed |= text_property(ui, p, "Suministradora", &mut source.supplier, "CFE");
     property(ui, p, "Frecuencia", |ui| {
-        changed |= optional_number(ui, &mut source.frequency_hz, 60.0, " Hz");
+        changed |= optional_number(ui, &mut source.frequency_hz, " Hz");
     });
     changed |= ui
         .checkbox(&mut source.meter, "Medidor en el punto de conexión")
@@ -1554,11 +1499,11 @@ pub(crate) fn breaker_inputs(
     let mut changed = false;
     let data = &mut ov.breaker;
     property(ui, p, "Marco", |ui| {
-        changed |= optional_number(ui, &mut data.frame_a, 100.0, " A");
+        changed |= optional_number(ui, &mut data.frame_a, " A");
     })
     .on_hover_text("Amperes de marco (AM). Los de disparo (AD) son los del interruptor que propone o verifica IEEStudio.");
     property(ui, p, "Cap. interruptiva", |ui| {
-        changed |= optional_number(ui, &mut data.interrupting_ka, 10.0, " kA");
+        changed |= optional_number(ui, &mut data.interrupting_ka, " kA");
         if data.interrupting_ka.is_none() {
             if let Some(ka) = board_ka {
                 ui.label(muted(p, format!("{ka} kA del tablero")).size(crate::theme::FOOT));
@@ -1598,10 +1543,10 @@ pub(crate) fn breaker_inputs(
 fn board_inputs(ui: &mut egui::Ui, p: &Palette, board: &mut ieestudio_project::Board) -> bool {
     let mut changed = false;
     property(ui, p, "Barras", |ui| {
-        changed |= optional_number(ui, &mut board.bus_a, 225.0, " A");
+        changed |= optional_number(ui, &mut board.bus_a, " A");
     });
     property(ui, p, "Cap. interruptiva", |ui| {
-        changed |= optional_number(ui, &mut board.interrupting_ka, 10.0, " kA");
+        changed |= optional_number(ui, &mut board.interrupting_ka, " kA");
     })
     .on_hover_text(
         "La de sus interruptores. La toma cada interruptor del tablero que no tiene la suya.",
@@ -1675,7 +1620,7 @@ fn motor_inputs(
         });
     }
     property(ui, p, "Corriente de placa", |ui| {
-        changed |= optional_number(ui, &mut motor.nameplate_a, 10.0, " A");
+        changed |= optional_number(ui, &mut motor.nameplate_a, " A");
     })
     .on_hover_text("Para ajustar el relevador de sobrecarga. Conductores y protección usan la corriente de la tabla.");
     changed |= ui
@@ -1699,34 +1644,30 @@ fn compressor_inputs(ui: &mut egui::Ui, p: &Palette, plate: &mut CompressorLoad)
         )
         .size(crate::theme::FOOT),
     );
-    for (label, value, default, tip) in [
+    for (label, value, tip) in [
         (
             "Nominal (RLA)",
             &mut plate.rated_load_a,
-            10.0,
             "Corriente de carga nominal del motocompresor",
         ),
         (
             "Selección (BCSC)",
             &mut plate.branch_selection_a,
-            10.0,
             "Corriente de selección del circuito derivado, si la placa la trae",
         ),
         (
             "Mínima (MCA)",
             &mut plate.minimum_circuit_a,
-            15.0,
             "Ampacidad mínima del circuito marcada en el equipo",
         ),
         (
             "Máxima (MOP)",
             &mut plate.maximum_protection_a,
-            20.0,
             "Protección máxima marcada en el equipo",
         ),
     ] {
         property(ui, p, label, |ui| {
-            changed |= optional_number(ui, value, default, " A");
+            changed |= optional_number(ui, value, " A");
         })
         .on_hover_text(tip);
     }

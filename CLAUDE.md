@@ -23,6 +23,9 @@ xvfb-run -a cargo run -p ieestudio-app -- --captura captura.png   # revisar la i
 # tableta), --rapido (la experiencia de cálculo rápido) y --agregar («¿Qué vas a conectar?»)
 tools/capturas.sh                                    # vistas × cinco tamaños × dos temas; falla si alguna se cierra
 tools/sitio-web.sh                                   # ieestudio.com con la app en el navegador, en target/sitio
+python3 tools/paginas.py website                     # regenera las páginas del sitio
+python3 tools/verificar-sitio.py                     # enlaces, recursos y metadatos del sitio, y la escena 3D contra el programa
+(cd tools/escena && npm install && npm run build)    # vuelve a empaquetar la escena 3D en website/escena.js
 cargo clippy --target wasm32-unknown-unknown -p ieestudio-app -- -D warnings
 ```
 

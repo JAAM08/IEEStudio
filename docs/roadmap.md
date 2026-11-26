@@ -151,6 +151,12 @@
   propio, flujo de trabajo, hojas reales de la memoria, documentación,
   comunidad con versiones y cambios de GitHub, y descarga. Sin fotografías de
   stock. Sin cambios en la aplicación ni en el cálculo.
+- Mantenimiento después del rediseño del sitio: capturas del README al día
+  (escritorio y teléfono), código sin uso retirado (dos funciones públicas que
+  nadie llamaba, la rama de la vista guiada que quedaba en la ficha del
+  circuito, un parámetro y un campo de preferencias de etapas anteriores) y
+  `.gitattributes` para que GitHub cuente solo el Rust del programa. Sin
+  cambios en el cálculo ni en lo que muestra la interfaz.
 
 ## Pendiente, en orden
 

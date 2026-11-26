@@ -46,10 +46,8 @@ pub const FOOT: f32 = 11.0;
 /// Excepción: el título principal de una vista (uno por pantalla).
 pub const VIEW_TITLE: f32 = 28.0;
 /// Excepción en teléfono: texto de renglones y botones de 44 px.
-#[allow(dead_code)] // Lo usan las pantallas de teléfono (R6).
 pub const TOUCH: f32 = 15.0;
 /// Excepción en teléfono: cifras del resumen.
-#[allow(dead_code)] // Lo usan las pantallas de teléfono (R6).
 pub const TOUCH_FIGURE: f32 = 17.0;
 
 /// Íconos dentro de texto, tablas y fichas.
@@ -72,7 +70,6 @@ pub const BAR_CONTROL_H: f32 = 28.0;
 /// Alto de un renglón de tabla o de grupo de campos con ratón.
 pub const ROW_H: f32 = 28.0;
 /// Alto de un control táctil.
-#[allow(dead_code)] // Lo usan las pantallas de teléfono (R6).
 pub const TOUCH_H: f32 = 44.0;
 
 /// Paleta de un tema.

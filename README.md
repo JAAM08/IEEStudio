@@ -27,18 +27,18 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 | Puesta a tierra | Tabla 250-122, con el incremento proporcional cuando el conductor de fase se sobredimensiona; conductor al electrodo de la acometida por la Tabla 250-66 |
 | Transformadores | Un tablero puede alimentarse por un transformador de 600 V o menos: primario y secundario dimensionados con su capacidad, protección de la Tabla 450-3(b), tensión propia del tablero y caída desde el secundario |
 | Balanceo de fases | Un botón reparte las fases de los circuitos de un tablero para dejarlo lo más balanceado posible |
-| Tubería conduit | EMT, IMC, RMC y PVC cédula 40 y 80; ocupación de 53, 31 y 40 % según el número de conductores, niples al 60 % y verificación de atascamiento |
-
+| Tubería conduit | EMT, IMC, RMC y PVC cédula 40 y 80; ocupación de 53, 31 y 40 % según el número de conductores, niples al 60 % y verificación de atascamiento. Si la tubería lleva conductores de otros circuitos, la ocupación queda sin evaluar y no se propone diámetro (decisión 0035) |
+| Capacidad interruptiva | Revisión de seguridad por tablero, no un estudio de cortocircuito: con los datos de la fuente, la falla se estima como cota superior punto a punto, descontando los alimentadores y sumando la aportación de motores. Se puede apagar por proyecto; entonces queda anotada como fuera de alcance (decisiones 0031 y 0032) |
 | Proyecto | Fuente, tableros y subtableros, circuitos y cargas en un archivo JSON |
 | Cuadro de cargas | Cada circuito y alimentador con su estado, carga por fase, desbalance y caída de tensión acumulada desde la fuente |
-| Interfaz gráfica | Un solo marco con cinco vistas (Proyecto, Tableros y circuitos, Unifilar, Revisar, Memoria), con lo que no cumple explicado en palabras y su arreglo a un clic; navegador del proyecto y ficha del elemento fijos a los lados, procedimiento en un panel inferior, dos vistas a la vez en ventanas anchas; cuadro de cargas con filtros y columnas configurables; propiedades separadas en Datos, Resultados y Normativa, con el artículo que respalda cada resultado a la vista; barra contextual del circuito seleccionado; pantalla de inicio; paleta de comandos (Ctrl+K); vista previa de la memoria. Recalcula con cada cambio y recuerda la vista en la que quedaste |
+| Interfaz gráfica | Un solo marco con cinco vistas (Proyecto, Tableros y circuitos, Unifilar, Revisar, Memoria), con lo que no cumple explicado en palabras y su arreglo a un clic; navegador del proyecto y ficha del elemento fijos a los lados, procedimiento en un panel inferior, dos vistas a la vez en ventanas anchas; cuadro de cargas con filtros y columnas configurables; propiedades separadas en Datos, Resultados y Normativa, con el artículo que respalda cada resultado a la vista; barra contextual del circuito seleccionado; pantalla de inicio; paleta de comandos (Ctrl+K); vista previa de la memoria. Recalcula con cada cambio y recuerda la vista en la que quedaste. En tableta y teléfono la misma aplicación cambia de forma: barra inferior con las cinco vistas, listas que se tocan y la ficha a pantalla completa (decisión 0034) |
 | Procedimiento | Cada circuito y alimentador del proyecto muestra su procedimiento paso a paso: fórmula, valores sustituidos y la tabla o artículo de la norma |
 | Diagrama unifilar | Se dibuja solo a partir del proyecto: fuente, alimentadores, tableros, subtableros y circuitos con interruptor, conductores, tubería y caída de tensión. En la pestaña Unifilar, en la memoria y en DXF para AutoCAD u otro programa de CAD (`ieestudio dxf`) |
 | Excel | El cuadro de cargas se exporta a un libro con tableros, circuitos y resultados, y se importa de vuelta: agrega o actualiza por ID, informa las filas con errores y se puede deshacer. Desde el menú Archivo o con `ieestudio excel` y `ieestudio importar` |
 | Memoria de cálculo | PDF con datos de la obra (cliente, ubicación, revisión, responsable y cédula), datos y criterios, cuadro de cargas, diagrama unifilar, observaciones, el procedimiento de cada tramo y espacio para firmas; también la hoja de un cálculo rápido. Desde el menú Archivo o con `ieestudio memoria` |
 | Cálculo rápido | Un solo circuito, sin proyecto: corriente nominal y de diseño, interruptor, verificación del conductor, puesta a tierra, tubería y caída de tensión; fórmula y procedimiento con los valores sustituidos, comprobación exacta y, si no cumple, alternativas ya calculadas (calibre mayor, conductores en paralelo, longitud máxima) que se aplican con un clic |
 
-![Pantalla principal de IEEStudio](docs/pantalla-principal.png)
+![Cuadro de cargas del proyecto de ejemplo con la ficha del circuito C-04](docs/pantalla-principal.png)
 
 ![Cálculo rápido de un circuito](docs/calculo-rapido.png)
 
@@ -46,7 +46,12 @@ El perfil normativo inicial es la NOM-001-SEDE-2012.
 
 ![Vista previa de la memoria](docs/memoria.png)
 
-Cada elemento queda como **cumple**, **no cumple** o **no evaluado**. 
+![La aplicación en el teléfono: circuitos, revisión y unifilar](docs/telefono.png)
+
+Cada verificación queda como **cumple**, **no cumple** o **sin evaluar**, y
+nada se marca conforme si falta un dato. El proyecto completo queda como
+«Conforme en lo evaluado» o «No conforme en lo evaluado»; la aprobación
+profesional siempre queda pendiente, porque es de quien firma. 
 
 Lo siguiente en el plan está en [docs/roadmap.md](docs/roadmap.md).
 
@@ -111,15 +116,18 @@ crates/ieestudio-core/         tipos, unidades, errores y validación; sin depen
 crates/ieestudio-rules/        perfiles normativos: tablas, parámetros y referencias
 crates/ieestudio-electrical/   fórmulas: corriente, caída, conductor, protección, tierra, tubería
 crates/ieestudio-project/      proyecto, cuadro de cargas, procedimiento, cálculo rápido, veredicto
-crates/ieestudio-diagrams/     diagrama unifilar
+crates/ieestudio-diagrams/     diagrama unifilar y DXF
 crates/ieestudio-reports/      memoria de cálculo en PDF (Typst)
-crates/ieestudio-cli/          línea de comandos
-crates/ieestudio-app/          aplicación de escritorio (egui)
+crates/ieestudio-exchange/     cuadro de cargas de ida y vuelta con Excel
+crates/ieestudio-cli/          línea de comandos y servidor MCP
+crates/ieestudio-app/          aplicación (egui) para escritorio y navegador
 data/nom-001-sede-2012/        tablas, parámetros y cláusulas de la norma en CSV
-fixtures/engineering-cases/    casos de referencia en CSV, revisables por un ingeniero
-docs/                          arquitectura, metodología, fuentes normativas y decisiones
-assets/fonts/                  tipografía IBM Plex de la interfaz y de la memoria
-tools/                         extracción y validación de las tablas desde el texto de la norma
+fixtures/                      casos de referencia en CSV y proyectos de las auditorías
+docs/                          arquitectura, metodología, fuentes normativas, decisiones y plan
+assets/                        tipografía IBM Plex de la interfaz y de la memoria, e ícono
+website/                       sitio ieestudio.com (HTML estático; ver website/README.md)
+installer/                     instalador de Windows (Inno Setup)
+tools/                         tablas de la norma, capturas, sitio, escena 3D y video
 ```
 
 Detalles en [`docs/architecture.md`](docs/architecture.md). Para contribuir,
