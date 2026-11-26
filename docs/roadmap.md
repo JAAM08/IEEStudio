@@ -145,6 +145,12 @@
   antes y el aviso de «pantallas grandes»; repaso final del sistema visual;
   capturas y texto nuevos de la guía del sitio; tabla final de rendimiento.
   Con esto termina el rediseño 2026.
+- Rediseño de ieestudio.com (decisión 0036): portada con un tablero en 3D
+  del proyecto de ejemplo y su simbología, presentación del programa con
+  capturas reales nuevas en escritorio y teléfono, herramientas con dibujo
+  propio, flujo de trabajo, hojas reales de la memoria, documentación,
+  comunidad con versiones y cambios de GitHub, y descarga. Sin fotografías de
+  stock. Sin cambios en la aplicación ni en el cálculo.
 
 ## Pendiente, en orden
 
