@@ -615,29 +615,9 @@ impl QuickView {
     fn recommendations(&mut self, ui: &mut egui::Ui, p: &Palette) -> bool {
         let muted = |t: &str| RichText::new(t).color(p.ink2);
         let mut apply = None;
-        let (title, intro) = match &self.result {
-            // Sin conductor de puesta a tierra el circuito no se puede dar
-            // por bueno, aunque el conductor y la caída cumplan (fase 0.1, C-2).
-            Ok(r) if matches!(&r.protection, Ok(pr) if pr.grounding_error.is_some()) => (
-                "Resultado",
-                "El conductor y la caída de tensión cumplen, pero falta el conductor de puesta a tierra: el circuito queda sin evaluar.",
-            ),
-            Ok(r)
-                if r.status == Status::Complies
-                    && !matches!(&r.protection, Ok(pr) if pr.status == Status::Fails) =>
-            {
-                (
-                    "Resultado",
-                    "La selección actual cumple; no hace falta cambiarla.",
-                )
-            }
-            _ => (
-                "Recomendaciones",
-                "Alternativas ya calculadas. Ninguna se aplica sin que la elijas.",
-            ),
-        };
+        let (title, intro) = result_heading(&self.result);
         ui.label(caption(p, title));
-        ui.label(muted(intro));
+        ui.label(muted(&intro));
         ui.add_space(crate::theme::SP2);
 
         if let Ok(r) = &self.result {
@@ -682,5 +662,107 @@ impl QuickView {
             }
             None => false,
         }
+    }
+}
+
+/// Título y texto con que abre la sección de resultado o recomendaciones.
+/// Sin conductor de puesta a tierra el circuito no se puede dar por bueno
+/// (fase 0.1, C-2); el texto nunca afirma que algo cumple sin comprobar su
+/// estado.
+fn result_heading(result: &Result<QuickResult, String>) -> (&'static str, String) {
+    match result {
+        Ok(r) if matches!(&r.protection, Ok(pr) if pr.grounding_error.is_some()) => {
+            let phase = match &r.protection {
+                Ok(pr) => pr.status,
+                Err(_) => Status::NotEvaluated,
+            };
+            let mut text = String::from(
+                "La puesta a tierra no pudo evaluarse: el dictamen del circuito queda incompleto.",
+            );
+            if phase == Status::Complies && r.status == Status::Complies {
+                text.push_str(" El conductor de fase y la caída de tensión cumplen.");
+                ("Resultado", text)
+            } else {
+                text.push_str(" Abajo están las alternativas ya calculadas.");
+                ("Recomendaciones", text)
+            }
+        }
+        Ok(r)
+            if r.status == Status::Complies
+                && !matches!(&r.protection, Ok(pr) if pr.status == Status::Fails) =>
+        {
+            (
+                "Resultado",
+                "La selección actual cumple; no hace falta cambiarla.".to_string(),
+            )
+        }
+        _ => (
+            "Recomendaciones",
+            "Alternativas ya calculadas. Ninguna se aplica sin que la elijas.".to_string(),
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ieestudio_core::Material;
+    use ieestudio_rules::Profile;
+
+    fn aluminum(size: &str, power_w: f64, length_m: f64) -> QuickResult {
+        quick_circuit(
+            Profile::nom_001_sede_2012(),
+            &QuickInput {
+                material: Material::Aluminum,
+                size: Size::new(size),
+                power_w,
+                length_m,
+                ..QuickInput::default()
+            },
+        )
+        .expect("el cálculo rápido corre")
+    }
+
+    fn heading(r: QuickResult) -> (&'static str, String) {
+        assert!(
+            matches!(&r.protection, Ok(p) if p.grounding_error.is_some()),
+            "el caso debe quedar sin tierra"
+        );
+        result_heading(&Ok(r))
+    }
+
+    /// Sin tierra, con conductor de fase y caída conformes: puede decirlo.
+    #[test]
+    fn without_ground_and_everything_else_complying() {
+        let r = aluminum("4", 12_000.0, 20.0);
+        assert_eq!(r.status, Status::Complies);
+        assert!(matches!(&r.protection, Ok(p) if p.status == Status::Complies));
+        let (title, text) = heading(r);
+        assert_eq!(title, "Resultado");
+        assert!(text.contains("no pudo evaluarse"), "{text}");
+        assert!(text.contains("incompleto"), "{text}");
+        assert!(text.contains("conductor de fase y la caída de tensión cumplen"));
+    }
+
+    /// Sin tierra y con el conductor de fase que no cumple: no afirma que cumple.
+    #[test]
+    fn without_ground_and_failing_phase_conductor() {
+        let r = aluminum("6", 20_000.0, 20.0);
+        assert!(matches!(&r.protection, Ok(p) if p.status == Status::Fails));
+        let (title, text) = heading(r);
+        assert_eq!(title, "Recomendaciones");
+        assert!(text.contains("no pudo evaluarse"), "{text}");
+        assert!(!text.contains("cumplen"), "{text}");
+    }
+
+    /// Sin tierra y con la caída de tensión que no cumple: no afirma que cumple.
+    #[test]
+    fn without_ground_and_failing_voltage_drop() {
+        let r = aluminum("4", 12_000.0, 400.0);
+        assert_eq!(r.status, Status::Fails);
+        let (title, text) = heading(r);
+        assert_eq!(title, "Recomendaciones");
+        assert!(text.contains("no pudo evaluarse"), "{text}");
+        assert!(!text.contains("cumplen"), "{text}");
     }
 }

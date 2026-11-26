@@ -89,6 +89,8 @@ fn c2_la_memoria_del_calculo_rapido_lo_dice() {
     let result = quick_circuit(Profile::nom_001_sede_2012(), &input).unwrap();
     let source = ieestudio_reports::quick_source(&input, &result);
     assert!(source.contains("Puesta a tierra"), "{source}");
+    // El conductor de las fases se distingue del de puesta a tierra.
+    assert!(source.contains("\"Conductor de fase\""), "{source}");
     assert!(source.contains("Sin evaluar: Tabla 250-122"), "{source}");
     assert!(
         source.contains("no se calculó porque falta el conductor de puesta a tierra"),

@@ -837,7 +837,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             ("Factor de potencia", format!("{:.2}", input.power_factor)),
             ("Carga continua", yes_no(input.continuous).to_string()),
             ("Longitud", format!("{} m", input.length_m)),
-            ("Conductor", conductor),
+            ("Conductor de fase", conductor),
             ("Canalización", input.conduit.to_string()),
             ("Temperatura ambiente", format!("{} °C", input.ambient_c)),
             (
@@ -854,7 +854,7 @@ pub fn quick_source(input: &QuickInput, result: &QuickResult) -> String {
             rows.push(("Corriente de diseño", format!("{:.2} A", p.design_a)));
             rows.push(("Interruptor", format!("{}P-{:.0} A", p.poles, p.breaker_a)));
             rows.push((
-                "Conductor",
+                "Conductor de fase",
                 format!(
                     "{}: {:.2} A permitidos, {}",
                     size_label(&input.size),
