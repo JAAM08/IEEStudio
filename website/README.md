@@ -54,12 +54,12 @@ capturas no se retocan.
 
 | Recurso | Origen | Versión |
 | --- | --- | --- |
-| `imagenes/app/*.webp`, `*@2x.webp` | `ieestudio-app --captura` a escala 2, tema oscuro, 1440×900 | `main` después de la fase 0 (R7) |
-| `imagenes/app/movil-*.webp` | lo mismo a 390×844 | `main` después de la fase 0 (R7) |
-| `imagenes/app/unifilar-detalle.webp` | recorte de `unifilar@2x` | `main` después de la fase 0 (R7) |
-| `imagenes/memoria/hoja-*.webp` | `ieestudio memoria` del ejemplo, hojas 1, 2, 3, 4, 9 y 13 | `main` después de la fase 0 (R7) |
-| `imagenes/guia/*.webp` | capturas con la zona de cada paso resaltada | anterior cercana a R7 |
-| `video/` | guía en video (`tools/video/README.md`) | anterior a R7; el sitio lo dice |
+| `imagenes/app/*.webp`, `*@2x.webp` | `ieestudio-app --captura` a escala 2, tema oscuro, 1440×900 | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/app/movil-*.webp` | lo mismo a 390×844; `movil-resultados` es la ficha de C-04 en Resultados | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/app/unifilar-detalle.webp` | recorte de `unifilar@2x` | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/memoria/hoja-*.webp` | `ieestudio memoria` del ejemplo, hojas 1, 2, 3, 4, 9 y 13 | `main` en d81ec34 (R7 y fase 0) |
+| `imagenes/guia/*.webp` | capturas con la zona de cada paso resaltada | R7 (commit 05e3106) |
+| `video/` | guía en video (`tools/video/README.md`) | R4.5, anterior a R5–R7; el sitio lo dice |
 | `imagenes/compartir.jpg` | portada del sitio con la escena 3D | este rediseño |
 
 Para volver a generar las capturas de `imagenes/app/` (Linux, con xvfb):
@@ -70,6 +70,7 @@ cap() { out=$1; shift; WINIT_X11_SCALE_FACTOR=2 xvfb-run -a -s "-screen 0 3200x2
   target/release/ieestudio-app --captura "$out" "$@"; }
 cap proyecto.png --vista proyecto --tamano 1440x900
 cap tableros.png --vista tableros --seleccion C-04 --tamano 1440x900
+cap movil-resultados.png --vista tableros --seleccion C-04 --ficha --propiedades resultados --tamano 390x844
 cap procedimiento.png --vista tableros --seleccion C-04 --procedimiento --tamano 1440x900
 cap unifilar.png --vista unifilar --tamano 1440x900
 cap revisar.png --vista revisar --tamano 1440x900
@@ -78,6 +79,10 @@ cap rapido.png --rapido --tamano 1440x900
 cap inicio.png --inicio --tamano 1440x900
 # y las mismas a --tamano 390x844 con el prefijo movil-
 ```
+
+`python3 tools/verificar-sitio.py` revisa enlaces, recursos sin usar,
+metadatos y que la escena coincida con el programa; la integración continua lo
+ejecuta en cada cambio.
 
 Cada PNG de 2880×1800 se guarda como `nombre@2x.webp` y reducido a 1440×900
 como `nombre.webp`. Las hojas de la memoria salen de

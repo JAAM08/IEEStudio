@@ -98,7 +98,31 @@ async function cargarEscena() {
     console.warn("IEEStudio: la escena 3D no se pudo cargar; se muestra el dibujo estático.", e);
   }
 }
-const arrancar = () => ("requestIdleCallback" in window ? requestIdleCallback(cargarEscena, { timeout: 1200 }) : setTimeout(cargarEscena, 200));
+// Se descarga después del evento load, en un momento libre, y solo cuando la
+// portada está en pantalla (o cerca): quien entra directo a otra sección no la baja.
+const enReposo = (fn) => ("requestIdleCallback" in window ? requestIdleCallback(fn, { timeout: 1200 }) : setTimeout(fn, 200));
+function arrancar() {
+  const cont = $("#escena");
+  if (!cont) return;
+  if (!("IntersectionObserver" in window)) return enReposo(cargarEscena);
+  const observar = () => {
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { io.disconnect(); enReposo(cargarEscena); }
+    }, { rootMargin: "200px 0px" });
+    io.observe(cont);
+  };
+  // Si se entra con un ancla (#memoria), el navegador todavía está desplazándose
+  // al cargar: se espera a que termine antes de decidir.
+  const destino = location.hash.length > 1 && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if (destino && destino.id !== "inicio") {
+    let hecho = false;
+    const seguir = () => { if (!hecho) { hecho = true; observar(); } };
+    addEventListener("scrollend", seguir, { once: true });
+    setTimeout(seguir, 1500);
+  } else {
+    observar();
+  }
+}
 if (document.readyState === "complete") arrancar();
 else addEventListener("load", arrancar, { once: true });
 
@@ -126,7 +150,7 @@ function pestanas(lista, alElegir) {
 }
 
 // Vistas del programa: cambia la captura de la ventana y la del teléfono.
-const MOVIL = { inicio: "inicio", proyecto: "proyecto", tableros: "tableros", procedimiento: "tableros", unifilar: "unifilar", revisar: "revisar", memoria: "memoria", rapido: "rapido" };
+const MOVIL = { inicio: "inicio", proyecto: "proyecto", tableros: "tableros", procedimiento: "resultados", unifilar: "unifilar", revisar: "revisar", memoria: "memoria", rapido: "rapido" };
 const vistas = $(".vistas");
 if (vistas) {
   pestanas(vistas, (t) => {

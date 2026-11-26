@@ -41,7 +41,10 @@ continua en GitHub Pages junto con la aplicación en `/app`.
 ## Consecuencias
 
 - Al cambiar la interfaz hay que volver a generar las capturas (ver
-  `website/README.md`). Las de la guía (`imagenes/guia/`) y el video son de una
-  versión cercana anterior y quedan señaladas como tales.
+  `website/README.md`). Las de la guía (`imagenes/guia/`) son de R7; el video,
+  de R4.5, y la guía lo dice.
+- `tools/verificar-sitio.py` (en la integración continua) revisa enlaces,
+  recursos, metadatos, y que las posiciones de los interruptores y los valores
+  del medidor de la escena sean los que calcula el programa para el ejemplo.
 - La escena agrega unos 150 kB comprimidos que solo se descargan con WebGL y
   después de la carga inicial.

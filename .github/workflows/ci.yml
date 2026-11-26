@@ -36,6 +36,11 @@ jobs:
         run: cargo test
       - name: Compilar los ejecutables
         run: cargo build --release -p ieestudio-cli -p ieestudio-app
+      - name: Revisar el sitio contra el programa
+        if: runner.os == 'Linux'
+        # Enlaces, recursos y metadatos del sitio, y que la escena 3D de la
+        # portada tenga las posiciones y los valores que calcula el programa.
+        run: python3 tools/verificar-sitio.py --cli target/release/ieestudio
       - name: Instalador de Windows
         if: runner.os == 'Windows'
         shell: pwsh
@@ -146,6 +151,8 @@ jobs:
           if ! wasm-bindgen --version 2>/dev/null | grep -q "$version"; then
             cargo install wasm-bindgen-cli --version "$version" --locked --force
           fi
+      - name: Revisar el sitio
+        run: python3 tools/verificar-sitio.py
       - name: Armar el sitio
         run: tools/sitio-web.sh
       - name: Publicar el sitio

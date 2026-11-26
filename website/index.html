@@ -79,21 +79,21 @@
     <rect x="149" y="215.5" width="47.5" height="32.5" rx="2"/>
     <rect class="c" x="189" y="219.5" width="4" height="24.5" rx="1"/>
     <text x="143" y="235.25" text-anchor="end">C-03</text>
-    <rect x="223.5" y="181.5" width="47.5" height="15.5" rx="2"/>
-    <rect class="c" x="227.0" y="185.5" width="4" height="7.5" rx="1"/>
-    <text x="277.0" y="192.75" text-anchor="start">C-06</text>
-    <rect x="223.5" y="198.5" width="47.5" height="15.5" rx="2"/>
-    <rect class="c" x="227.0" y="202.5" width="4" height="7.5" rx="1"/>
-    <text x="277.0" y="209.75" text-anchor="start">C-05</text>
     <rect x="223.5" y="215.5" width="47.5" height="15.5" rx="2"/>
     <rect class="c" x="227.0" y="219.5" width="4" height="7.5" rx="1"/>
     <text x="277.0" y="226.75" text-anchor="start">C-04</text>
-    <rect class="f" x="149" y="250.5" width="47.5" height="14"/>
-    <rect class="f" x="149" y="267.5" width="47.5" height="14"/>
-    <rect class="f" x="149" y="284.5" width="47.5" height="14"/>
+    <rect x="223.5" y="198.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="202.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="209.75" text-anchor="start">C-05</text>
+    <rect x="223.5" y="181.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="185.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="192.75" text-anchor="start">C-06</text>
     <rect class="f" x="223.5" y="233.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="250.5" width="47.5" height="14"/>
     <rect class="f" x="223.5" y="250.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="267.5" width="47.5" height="14"/>
     <rect class="f" x="223.5" y="267.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="284.5" width="47.5" height="14"/>
     <rect class="f" x="223.5" y="284.5" width="47.5" height="14"/>
     <rect x="117.5" y="389" width="85" height="7"/><rect x="237.5" y="389" width="65" height="7"/>
     <text x="160" y="410" text-anchor="middle">N</text><text x="270" y="410" text-anchor="middle">T</text>
@@ -133,12 +133,12 @@
       </ol>
       <div class="ficha-pieza" id="ficha-pieza" aria-live="polite" hidden></div>
       <template data-pieza="principal"><h3>Interruptor principal</h3><p>La carga del alimentador sale del artículo 220 con sus factores de demanda; el interruptor es el normalizado inmediato superior, o el que fijes, y se verifica contra el conductor.</p><p class="ref">NOM-001-SEDE-2012: 220-40, 220-42; 240-6(a), 240-4</p><a href="funciones/#calculos">Ver la herramienta</a></template>
-      <template data-pieza="derivados"><h3>Interruptores derivados</h3><p>Cada circuito lleva el interruptor normalizado inmediato superior a su corriente de diseño. Pasa el puntero sobre uno: es un circuito del proyecto de ejemplo.</p><p class="ref">NOM-001-SEDE-2012: 210-20(a); 240-6(a); 240-4(d)</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+      <template data-pieza="derivados"><h3>Interruptores derivados</h3><p>Cada circuito lleva el interruptor normalizado inmediato superior a su corriente de diseño. Pasa el puntero sobre uno, o tócalo: es un circuito del proyecto de ejemplo, en la posición que le da su unifilar.</p><p class="ref">NOM-001-SEDE-2012: 210-20(a); 240-6(a); 240-4(d)</p><a href="funciones/#calculos">Ver la herramienta</a></template>
       <template data-pieza="barras"><h3>Barras y fases</h3><p>Reparte los circuitos de un tablero entre las fases A, B y C, muestra el desbalance y propone el reparto más parejo; se puede deshacer.</p><p class="ref">NOM-001-SEDE-2012: Cuadro de cargas por tablero</p><a href="guia/#paso-4">Ver la herramienta</a></template>
       <template data-pieza="conductores"><h3>Conductores</h3><p>El menor calibre que cumple por temperatura de terminales, ampacidad corregida por temperatura y agrupamiento, protección y caída de tensión. Paralelos, un juego por tubo.</p><p class="ref">NOM-001-SEDE-2012: 110-14(c); Tabla 310-15(b)(16); 310-10(h)</p><a href="funciones/#calculos">Ver la herramienta</a></template>
       <template data-pieza="canalizacion"><h3>Canalización</h3><p>Tubo conduit EMT, IMC, RMC y PVC con las dimensiones reales de cada conductor aislado: ocupación de 53, 31 y 40 %, niples al 60 % y atascamiento.</p><p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tablas 1, 4 y 5</p><a href="funciones/#calculos">Ver la herramienta</a></template>
       <template data-pieza="tierra"><h3>Puesta a tierra</h3><p>Conductor de puesta a tierra de cada circuito y alimentador, con el incremento proporcional si las fases se sobredimensionan, y conductor al electrodo de la acometida.</p><p class="ref">NOM-001-SEDE-2012: Tabla 250-122; 250-122(b); Tabla 250-66</p><a href="funciones/#calculos">Ver la herramienta</a></template>
-      <template data-pieza="medicion"><h3>Caída de tensión</h3><p>Por impedancia, con la resistencia y reactancia de la Tabla 9, por tramo y acumulada desde la fuente. La pantalla muestra la corriente y la caída del alimentador del ejemplo.</p><p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tabla 9; 210-19(a)(1) nota 4; 215-2(a)(1) nota 2</p><a href="funciones/#calculos">Ver la herramienta</a></template>
+      <template data-pieza="medicion"><h3>Caída de tensión</h3><p>Por impedancia, con la resistencia y reactancia de la Tabla 9, por tramo y acumulada desde la fuente. La pantalla no es una medición: muestra lo que IEEStudio calcula para el alimentador de TG-1 del ejemplo, In 20.22 A y %e 0.68, como en su unifilar.</p><p class="ref">NOM-001-SEDE-2012: Capítulo 10, Tabla 9; 210-19(a)(1) nota 4; 215-2(a)(1) nota 2</p><a href="funciones/#calculos">Ver la herramienta</a></template>
     </aside>
 
     <dl class="cajetin" aria-label="Datos del modelo">
@@ -190,6 +190,7 @@
             <img src="imagenes/app/movil-memoria.webp" width="390" height="844" alt="" data-movil="memoria" loading="lazy">
             <img src="imagenes/app/movil-proyecto.webp" width="390" height="844" alt="" data-movil="proyecto" loading="lazy">
             <img src="imagenes/app/movil-rapido.webp" width="390" height="844" alt="" data-movil="rapido" loading="lazy">
+            <img src="imagenes/app/movil-resultados.webp" width="390" height="844" alt="" data-movil="resultados" loading="lazy">
             <img src="imagenes/app/movil-revisar.webp" width="390" height="844" alt="" data-movil="revisar" loading="lazy">
             <img src="imagenes/app/movil-tableros.webp" width="390" height="844" alt="" data-movil="tableros" class="ver" loading="lazy">
             <img src="imagenes/app/movil-unifilar.webp" width="390" height="844" alt="" data-movil="unifilar" loading="lazy">
@@ -564,21 +565,21 @@
     <rect x="149" y="215.5" width="47.5" height="32.5" rx="2"/>
     <rect class="c" x="189" y="219.5" width="4" height="24.5" rx="1"/>
     <text x="143" y="235.25" text-anchor="end">C-03</text>
-    <rect x="223.5" y="181.5" width="47.5" height="15.5" rx="2"/>
-    <rect class="c" x="227.0" y="185.5" width="4" height="7.5" rx="1"/>
-    <text x="277.0" y="192.75" text-anchor="start">C-06</text>
-    <rect x="223.5" y="198.5" width="47.5" height="15.5" rx="2"/>
-    <rect class="c" x="227.0" y="202.5" width="4" height="7.5" rx="1"/>
-    <text x="277.0" y="209.75" text-anchor="start">C-05</text>
     <rect x="223.5" y="215.5" width="47.5" height="15.5" rx="2"/>
     <rect class="c" x="227.0" y="219.5" width="4" height="7.5" rx="1"/>
     <text x="277.0" y="226.75" text-anchor="start">C-04</text>
-    <rect class="f" x="149" y="250.5" width="47.5" height="14"/>
-    <rect class="f" x="149" y="267.5" width="47.5" height="14"/>
-    <rect class="f" x="149" y="284.5" width="47.5" height="14"/>
+    <rect x="223.5" y="198.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="202.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="209.75" text-anchor="start">C-05</text>
+    <rect x="223.5" y="181.5" width="47.5" height="15.5" rx="2"/>
+    <rect class="c" x="227.0" y="185.5" width="4" height="7.5" rx="1"/>
+    <text x="277.0" y="192.75" text-anchor="start">C-06</text>
     <rect class="f" x="223.5" y="233.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="250.5" width="47.5" height="14"/>
     <rect class="f" x="223.5" y="250.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="267.5" width="47.5" height="14"/>
     <rect class="f" x="223.5" y="267.5" width="47.5" height="14"/>
+    <rect class="f" x="149" y="284.5" width="47.5" height="14"/>
     <rect class="f" x="223.5" y="284.5" width="47.5" height="14"/>
     <rect x="117.5" y="389" width="85" height="7"/><rect x="237.5" y="389" width="65" height="7"/>
     <text x="160" y="410" text-anchor="middle">N</text><text x="270" y="410" text-anchor="middle">T</text>

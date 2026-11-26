@@ -17,7 +17,6 @@ import {
   CylinderGeometry,
   DirectionalLight,
   Group,
-  MathUtils,
   Mesh,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
@@ -41,17 +40,28 @@ const AMBAR = new Color("#E5B84B");
 const AZUL = new Color("#5489C7");
 
 // Proyecto de ejemplo de IEEStudio: tablero TG-1, 3F-4H 220Y/127 V.
-// [id, descripción, polos, interruptor (A), fase, columna, renglón]; las
-// posiciones son las que propone el programa en el unifilar (nones a la
-// izquierda, pares a la derecha).
+// [id, descripción, polos, interruptor (A), fases, posiciones en el tablero]
+// Las posiciones son las que propone el programa y escribe en el unifilar
+// (crates/ieestudio-project/src/positions.rs): nones a la izquierda y pares a
+// la derecha, y cada renglón es de una fase (A, B, C, A…). Por eso C-03 (A y C)
+// ocupa los espacios 5 y 7, y la columna derecha queda C-06, C-05, C-04.
+// Comprobado con `ieestudio dxf` del ejemplo: tools/verificar-sitio.py.
 const CIRCUITOS = [
-  ["C-01", "Alumbrado planta baja", 1, 15, "A", -1, 0],
-  ["C-02", "Contactos cocina", 1, 20, "B", -1, 1],
-  ["C-03", "Aire acondicionado", 2, 25, "AC", -1, 2],
-  ["C-06", "Bomba de agua", 1, 25, "A", 1, 0],
-  ["C-05", "Alumbrado exterior", 1, 15, "B", 1, 1],
-  ["C-04", "Contactos sala", 1, 15, "C", 1, 2],
+  ["C-01", "Alumbrado planta baja", 1, 15, "A", [1]],
+  ["C-02", "Contactos cocina", 1, 20, "B", [3]],
+  ["C-03", "Aire acondicionado", 2, 25, "AC", [5, 7]],
+  ["C-04", "Contactos sala", 1, 15, "C", [6]],
+  ["C-05", "Alumbrado exterior", 1, 15, "B", [4]],
+  ["C-06", "Bomba de agua", 1, 25, "A", [2]],
 ];
+// Lo que muestra el medidor: corriente
+// nominal y caída del alimentador de TG-1 tal como las escribe el unifilar
+// («In: 20.22 A», «%e: 0.68»). No es una medición: es el resultado del cálculo.
+const ALIMENTADOR = { corriente: "20.22", caida: "0.68" };
+const ESPACIOS_POR_LADO = 7;
+// Lado (-1 izquierda, 1 derecha) y renglón de un espacio numerado.
+const ladoDe = (n) => (n % 2 === 1 ? -1 : 1);
+const renglonDe = (n) => Math.floor((n - 1) / 2);
 
 const COLOR_FASE = { A: "#1d1f23", B: "#a8443a", C: "#3f6ea8" };
 const NEUTRO = "#d6d3cb";
@@ -154,20 +164,21 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
 
   const medidor = new Group();
   tablero.add(medidor);
-  const mCaja = new Mesh(new RoundedBoxGeometry(0.075, 0.085, 0.05, 2, 0.006), cuerpo);
+  const mCaja = new Mesh(new RoundedBoxGeometry(0.096, 0.1, 0.05, 2, 0.006), cuerpo);
   medidor.add(mCaja);
-  const pantalla = new Mesh(new PlaneGeometry(0.058, 0.044), new MeshStandardMaterial({
+  const pantalla = new Mesh(new PlaneGeometry(0.08, 0.06), new MeshStandardMaterial({
     color: "#000", emissive: "#ffffff", emissiveMap: textoMedidor(), emissiveIntensity: 1.1, roughness: 0.25,
   }));
-  pantalla.position.set(0, 0.012, 0.0252);
+  pantalla.position.set(0, 0.008, 0.0252);
   medidor.add(pantalla);
-  medidor.position.set(0.17, 0.285, 0.04);
+  medidor.position.set(0.172, 0.285, 0.04);
 
   // ---------------------------------------------------------------- interruptores
   const interruptores = [];
   const yEspacio = (k) => Y0 - k * PASO;
-  CIRCUITOS.forEach(([id, desc, polos, amp, fase, lado, pos]) => {
-    const k = lado < 0 ? [0, 1, 2][pos] : pos; // espacio inicial
+  CIRCUITOS.forEach(([id, desc, polos, amp, fase, posiciones]) => {
+    const lado = ladoDe(posiciones[0]);
+    const k = renglonDe(posiciones[0]); // primer renglón que ocupa
     const y = yEspacio(k) - ((polos - 1) * PASO) / 2;
     const g = new Group();
     const c = new Mesh(new RoundedBoxGeometry(0.095, polos * PASO - 0.003, 0.064, 2, 0.005), cuerpo);
@@ -181,7 +192,7 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     p.position.set(lado * 0.012, 0, 0.04);
     g.add(p);
     g.position.set(lado * 0.0745, y, 0.07);
-    g.userData = { id, desc, polos, amp, fase, lado, base: g.position.z, palanca: pm, alto: 0, tipo: "interruptor" };
+    g.userData = { id, desc, polos, amp, fase, lado, posiciones, base: g.position.z, palanca: pm, alto: 0, tipo: "interruptor" };
     c.userData.interruptor = g;
     cara.userData.interruptor = g;
     p.userData.interruptor = g;
@@ -189,13 +200,12 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     interruptores.push(g);
   });
   // Espacios libres con su tapa.
-  for (let lado of [-1, 1]) {
-    const ocupados = lado < 0 ? 4 : 3;
-    for (let k = ocupados; k < 7; k++) {
-      const t = new Mesh(new BoxGeometry(0.095, PASO - 0.004, 0.006), tapa);
-      t.position.set(lado * 0.0745, yEspacio(k), 0.1);
-      tablero.add(t);
-    }
+  const ocupado = new Set(CIRCUITOS.flatMap((c) => c[5]));
+  for (let n = 1; n <= ESPACIOS_POR_LADO * 2; n++) {
+    if (ocupado.has(n)) continue;
+    const t = new Mesh(new BoxGeometry(0.095, PASO - 0.004, 0.006), tapa);
+    t.position.set(ladoDe(n) * 0.0745, yEspacio(renglonDe(n)), 0.1);
+    tablero.add(t);
   }
 
   // ---------------------------------------------------------------- neutro y tierra
@@ -270,7 +280,8 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     cable([[dx * 0.6, 1.6, D / 2], [dx * 0.6, H / 2 - 0.02, D / 2], [dx, 0.36, zc], [dx * 2.4, 0.335, 0.05]], COLOR_FASE[f], 0.0065, "alimentador", "ALIM");
     cable([[dx * 2.4, 0.235, 0.05], [dx, 0.2, 0.04], [(f === "A" ? -1 : f === "B" ? 0 : 1) * 0.019, Y0 + 0.02, zBarra]], COLOR_FASE[f], 0.0055, "alimentador", "ALIM");
   });
-  cable([[0.03, 1.6, D / 2], [0.03, H / 2 - 0.02, D / 2], [0.12, 0.33, 0.06], [0.2, 0.1, 0.06], [0.2, -0.2, 0.06], [0.0, yBarrasBajas + 0.012, 0.05], [-0.03, yBarrasBajas, 0.05]], NEUTRO, 0.0055, "neutro", "ALIM");
+  // El neutro baja por el canal izquierdo para no tapar el medidor.
+  cable([[-0.03, 1.6, D / 2], [-0.03, H / 2 - 0.02, D / 2], [-0.12, 0.33, 0.06], [-0.212, 0.1, 0.06], [-0.212, -0.2, 0.06], [-0.12, yBarrasBajas + 0.014, 0.05], [-0.09, yBarrasBajas, 0.05]], NEUTRO, 0.0055, "neutro", "ALIM");
 
   // Derivados: salen del extremo exterior de cada interruptor, bajan por el canal lateral y entran al tubo.
   interruptores.forEach((g, i) => {
@@ -323,7 +334,7 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     conductores: { punto: new Vector3(-0.2, -0.18, 0.07), objetos: conductores, foco: new Vector3(-0.08, -0.12, 0.05) },
     canalizacion: { punto: new Vector3(0.13, -0.52, D / 2 + 0.026), objetos: [tubos], foco: new Vector3(0.02, -0.35, 0.05) },
     tierra: { punto: new Vector3(0.12, yBarrasBajas + 0.008, 0.048), objetos: [tierra], foco: new Vector3(0.06, -0.2, 0.05) },
-    medicion: { punto: new Vector3(0.17, 0.3, 0.066), objetos: [medidor], foco: new Vector3(0.1, 0.24, 0.05) },
+    medicion: { punto: new Vector3(0.2, 0.335, 0.05), objetos: [medidor], foco: new Vector3(0.15, 0.27, 0.05), dist: 1.25 },
   };
 
   // ---------------------------------------------------------------- cámara e interacción
@@ -363,6 +374,7 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
 
   const elemento = renderer.domElement;
   const onMove = (e) => {
+    if (e.pointerType === "touch") return;
     const r = elemento.getBoundingClientRect();
     puntero.set(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1));
     ndc.copy(puntero);
@@ -380,12 +392,16 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     if (!g) elemento.style.cursor = info ? "pointer" : "";
     pedir();
   };
-  const onLeave = () => {
+  const onLeave = (e) => {
+    if (e && e.pointerType === "touch") return;
     puntero.set(0, 0);
     sobre = null;
     alPasar && alPasar(null);
     pedir();
   };
+  // Un toque o clic elige la pieza. En pantallas táctiles no hay «pasar el
+  // puntero»: el toque sobre un interruptor también muestra su circuito unos segundos.
+  let ocultar = 0;
   const onClick = (e) => {
     const r = elemento.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1));
@@ -393,7 +409,17 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     const hit = ray.intersectObjects(seleccionables, false)[0];
     const info = hit ? piezaDe(hit.object) : null;
     if (info) alSeleccionar && alSeleccionar(info.pieza);
+    if (e.pointerType === "touch" || tactil) {
+      const g = info && info.interruptor ? info.interruptor : null;
+      sobre = g;
+      alPasar && alPasar(g ? { id: g.userData.id, desc: g.userData.desc, polos: g.userData.polos, amp: g.userData.amp, x: e.clientX - r.left, y: e.clientY - r.top } : null);
+      clearTimeout(ocultar);
+      ocultar = setTimeout(() => { sobre = null; alPasar && alPasar(null); pedir(); }, 2500);
+      pedir();
+    }
   };
+  let tactil = false;
+  elemento.addEventListener("pointerdown", (e) => { tactil = e.pointerType === "touch"; });
   elemento.addEventListener("pointermove", onMove);
   elemento.addEventListener("pointerleave", onLeave);
   elemento.addEventListener("click", onClick);
@@ -499,7 +525,8 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     seleccionar(id) {
       seleccion = id && piezas[id] ? id : null;
       vista.destino.copy(seleccion ? piezas[seleccion].foco : objetivo);
-      vista.distDestino = seleccion ? (ancho > 900 ? 2.1 : 2.5) : ancho > 900 ? 3.0 : ancho > 600 ? 2.9 : 3.3;
+      const cerca = seleccion && piezas[seleccion].dist;
+      vista.distDestino = seleccion ? (cerca || 2.1) * (ancho > 900 ? 1 : 1.2) : ancho > 900 ? 3.0 : ancho > 600 ? 2.9 : 3.3;
       pedir();
     },
     alColocar(fn) { escuchaGlobos = fn; colocarGlobos(); },
@@ -507,6 +534,7 @@ export function iniciar({ contenedor, reducido = false, compacto = false, alSele
     destruir() {
       activo = false;
       ro.disconnect(); io.disconnect();
+      clearTimeout(ocultar);
       document.removeEventListener("visibilitychange", onVis);
       renderer.dispose();
       elemento.remove();
@@ -572,24 +600,29 @@ function textoDirectorio() {
   return t;
 }
 
-// Pantalla del medidor con datos del alimentador del ejemplo.
+// Pantalla del medidor: el resultado del alimentador de TG-1 con la misma
+// notación del unifilar (In corriente nominal, %e caída del tramo).
 function textoMedidor() {
   const c = document.createElement("canvas");
   c.width = 256; c.height = 192;
   const g = c.getContext("2d");
   g.fillStyle = "#07090b";
   g.fillRect(0, 0, 256, 192);
+  g.fillStyle = "#858b94";
+  g.font = "22px 'Plex Mono', monospace";
+  g.fillText("ALIM. TG-1", 20, 38);
   g.fillStyle = "#E5B84B";
-  g.font = "56px 'Plex Mono', monospace";
-  g.fillText("20.22", 20, 82);
-  g.font = "28px 'Plex Mono', monospace";
-  g.fillText("A", 206, 82);
+  g.font = "26px 'Plex Mono', monospace";
+  g.fillText("In", 20, 96);
+  g.font = "48px 'Plex Mono', monospace";
+  g.fillText(ALIMENTADOR.corriente, 64, 98);
+  g.font = "24px 'Plex Mono', monospace";
+  g.fillText("A", 214, 98);
   g.fillStyle = "#5489C7";
-  g.font = "28px 'Plex Mono', monospace";
-  g.fillText("ΔV 0.68 %", 20, 148);
+  g.font = "26px 'Plex Mono', monospace";
+  g.fillText(`%e ${ALIMENTADOR.caida}`, 20, 158);
   const t = new CanvasTexture(c);
   t.colorSpace = SRGBColorSpace;
   return t;
 }
 
-export const _sinUso = MathUtils; // evita que el empaquetador quite MathUtils si se usa en depuración

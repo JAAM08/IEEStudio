@@ -56,6 +56,10 @@ p { margin: 0; text-wrap: pretty; }
 code, kbd, .mono { font-family: var(--mono); font-size: 0.88em; letter-spacing: 0; }
 kbd { padding: 1px 6px; border: 1px solid var(--linea-2); border-bottom-width: 2px; border-radius: 5px; background: var(--carbon-3); font-size: 0.8em; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+a.sr:focus { position: fixed; z-index: 100; top: 12px; left: 12px; width: auto; height: auto; clip: auto; padding: 10px 14px; border-radius: 8px; background: var(--ambar); color: #15130c; font-weight: 650; text-decoration: none; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
 .wrap { width: min(1240px, 100% - 48px); margin-inline: auto; }
 @media (max-width: 600px) { .wrap { width: calc(100% - 32px); } }
 
@@ -218,6 +222,9 @@ kbd { padding: 1px 6px; border: 1px solid var(--linea-2); border-bottom-width: 2
   .simbologia { order: 3; position: relative; inset: auto; width: auto; margin: 0 24px 40px; backdrop-filter: none; }
   .simbologia ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@media (pointer: coarse) {
+  .simbologia button { min-height: 44px; }
+}
 @media (max-width: 600px) {
   .simbologia { margin: 0 16px 32px; }
   .hero .acciones .btn { flex: 1 1 100%; }
@@ -287,6 +294,11 @@ kbd { padding: 1px 6px; border: 1px solid var(--linea-2); border-bottom-width: 2
   .vistas button[aria-selected="true"] { border-color: var(--ambar); }
   .telefono { right: 8px; width: 26%; }
   .mesa { padding-bottom: 56px; }
+}
+/* En el teléfono la captura de teléfono va debajo de la ventana, sin taparla. */
+@media (max-width: 600px) {
+  .mesa { padding-bottom: 0; }
+  .telefono { position: relative; right: auto; bottom: auto; width: 62%; min-width: 0; margin: 24px auto 0; }
 }
 
 /* ------------------------------------------------------------ D. herramientas */

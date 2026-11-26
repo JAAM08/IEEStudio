@@ -123,13 +123,20 @@ def write(rel, html):
 
 
 # ---------------------------------------------------------------- dibujo del tablero
+# Posiciones de los interruptores del proyecto de ejemplo, como las propone el
+# programa en el unifilar (nones a la izquierda, pares a la derecha). Son las
+# mismas de tools/escena/escena.js; tools/verificar-sitio.py las compara con
+# `ieestudio dxf`.
+POSICIONES = [("C-01", 1, [1]), ("C-02", 1, [3]), ("C-03", 2, [5, 7]), ("C-04", 1, [6]), ("C-05", 1, [4]), ("C-06", 1, [2])]
+
 # Alzado frontal del mismo tablero de la escena 3D (escala 1:2, cotas en mm).
 # Sirve de respaldo mientras carga la escena, cuando no hay WebGL y en el cierre.
 def plano_tablero(cls="", titulo="Alzado frontal del tablero TG-1 del proyecto de ejemplo"):
     rows = []
-    # interruptores: (lado, espacio inicial, polos, etiqueta)
-    brk = [(-1, 0, 1, "C-01"), (-1, 1, 1, "C-02"), (-1, 2, 2, "C-03"), (1, 0, 1, "C-06"), (1, 1, 1, "C-05"), (1, 2, 1, "C-04")]
-    for lado, k, polos, et in brk:
+    for et, polos, pos in POSICIONES:
+        n = pos[0]
+        lado = -1 if n % 2 else 1
+        k = (n - 1) // 2
         x = 149 if lado < 0 else 223.5
         y = 181.5 + k * 17
         h = polos * 17 - 1.5
@@ -139,10 +146,12 @@ def plano_tablero(cls="", titulo="Alzado frontal del tablero TG-1 del proyecto d
         tx = x - 6 if lado < 0 else x + 53.5
         anchor = "end" if lado < 0 else "start"
         rows.append(f'<text x="{tx}" y="{y + h / 2 + 3.5}" text-anchor="{anchor}">{et}</text>')
-    for lado, desde in ((-1, 4), (1, 3)):
-        x = 149 if lado < 0 else 223.5
-        for k in range(desde, 7):
-            rows.append(f'<rect class="f" x="{x}" y="{181.5 + k * 17 + 1}" width="47.5" height="14"/>')
+    ocupados = {n for _, _, pos in POSICIONES for n in pos}
+    for n in range(1, 15):
+        if n in ocupados:
+            continue
+        x = 149 if n % 2 else 223.5
+        rows.append(f'<rect class="f" x="{x}" y="{181.5 + (n - 1) // 2 * 17 + 1}" width="47.5" height="14"/>')
     brk_svg = "\n    ".join(rows)
     return f"""<svg class="plano-tablero {cls}" viewBox="0 0 440 600" role="img" aria-label="{titulo}">
   <title>{titulo}</title>
@@ -181,7 +190,7 @@ PIEZAS = [
      "La carga del alimentador sale del artículo 220 con sus factores de demanda; el interruptor es el normalizado inmediato superior, o el que fijes, y se verifica contra el conductor.",
      "220-40, 220-42; 240-6(a), 240-4", "funciones/#calculos"),
     ("derivados", "Interruptores derivados",
-     "Cada circuito lleva el interruptor normalizado inmediato superior a su corriente de diseño. Pasa el puntero sobre uno: es un circuito del proyecto de ejemplo.",
+     "Cada circuito lleva el interruptor normalizado inmediato superior a su corriente de diseño. Pasa el puntero sobre uno, o tócalo: es un circuito del proyecto de ejemplo, en la posición que le da su unifilar.",
      "210-20(a); 240-6(a); 240-4(d)", "funciones/#calculos"),
     ("barras", "Barras y fases",
      "Reparte los circuitos de un tablero entre las fases A, B y C, muestra el desbalance y propone el reparto más parejo; se puede deshacer.",
@@ -196,7 +205,7 @@ PIEZAS = [
      "Conductor de puesta a tierra de cada circuito y alimentador, con el incremento proporcional si las fases se sobredimensionan, y conductor al electrodo de la acometida.",
      "Tabla 250-122; 250-122(b); Tabla 250-66", "funciones/#calculos"),
     ("medicion", "Caída de tensión",
-     "Por impedancia, con la resistencia y reactancia de la Tabla 9, por tramo y acumulada desde la fuente. La pantalla muestra la corriente y la caída del alimentador del ejemplo.",
+     "Por impedancia, con la resistencia y reactancia de la Tabla 9, por tramo y acumulada desde la fuente. La pantalla no es una medición: muestra lo que IEEStudio calcula para el alimentador de TG-1 del ejemplo, In 20.22 A y %e 0.68, como en su unifilar.",
      "Capítulo 10, Tabla 9; 210-19(a)(1) nota 4; 215-2(a)(1) nota 2", "funciones/#calculos"),
 ]
 
@@ -225,7 +234,7 @@ vistas_btn = "\n".join(
 vistas_img = "\n".join(
     f'              <img src="imagenes/app/{k}.webp" srcset="imagenes/app/{k}.webp 1x, imagenes/app/{k}@2x.webp 2x" width="1440" height="900" alt="{a}" data-vista="{k}"{" class=\"ver\"" if k == "tableros" else ""} loading="lazy">'
     for i, (k, n, d, a) in enumerate(VISTAS))
-MOVIL = {"inicio": "inicio", "proyecto": "proyecto", "tableros": "tableros", "procedimiento": "tableros", "unifilar": "unifilar", "revisar": "revisar", "memoria": "memoria", "rapido": "rapido"}
+MOVIL = {"inicio": "inicio", "proyecto": "proyecto", "tableros": "tableros", "procedimiento": "resultados", "unifilar": "unifilar", "revisar": "revisar", "memoria": "memoria", "rapido": "rapido"}
 movil_img = "\n".join(
     f'            <img src="imagenes/app/movil-{m}.webp" width="390" height="844" alt="" data-movil="{m}"{" class=\"ver\"" if m == "tableros" else ""} loading="lazy">'
     for m in sorted(set(MOVIL.values())))
@@ -397,7 +406,7 @@ for i, (k, t, s, d, lis, img, alt) in enumerate(PASOS):
         </div>
 """
 
-# Hojas reales de la memoria del proyecto de ejemplo (tools/sitio-capturas.sh).
+# Hojas reales de la memoria del proyecto de ejemplo (cómo se generan: website/README.md).
 HOJAS = [
     ("1", "Portada, datos y criterios", "Primera hoja de la memoria: datos de la obra, criterios de diseño y resumen."),
     ("2", "Cuadro de cargas", "Hoja de la memoria con la carga del alimentador y el cuadro de cargas del tablero TG-1."),
